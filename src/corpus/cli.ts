@@ -215,8 +215,9 @@ function convertAll(): void {
     updated.push(synthetic.entry);
   }
 
-  writeManifest({ ...snapshot, entries: mergeEntries(snapshot.entries, updated) });
-  report(updated);
+  const entries = mergeEntries(snapshot.entries, updated);
+  writeManifest({ ...snapshot, entries });
+  report(entries);
 }
 
 function report(entries: ManifestEntry[]): void {

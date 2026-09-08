@@ -1172,6 +1172,79 @@ Generation is different. The chunks are already retrieved and are passed in the 
 
 ---
 
+## Decision D-035 - Contextual prefixes derived from headings, generated only for orphans
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Full ingest (P1 Stage 4) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+D-006 requires a short generated blurb prepended to each chunk before embedding and lexical indexing. Taken literally that is one model call per chunk. The full corpus is 1476 chunks, so every ingest would cost 1476 calls and roughly twenty minutes, repeated on every re-ingest.
+
+The purpose of D-006 is that a chunk reading "The copay is $0." is not context-free. Most chunks already sit under a heading path that states exactly that: `Chapter: Medical Benefits Chart > Your medical benefits`, or `ANALGESICS > OPIOID ANALGESICS, LONG-ACTING`.
+
+### Options considered
+
+1. A model call for every chunk, D-006 as written.
+2. Deterministic prefix from document kind, plan and heading path; the model only for chunks with no heading to inherit.
+3. Deterministic only, with no model call at all.
+
+### Decision
+
+Option 2. The prefix is `{kind}, {contract}-{plan}, plan year {year}. {heading path}.` built without a model. Chunks whose heading path is empty are flagged and sent to the model for a one-sentence description. Measured on the real corpus, that is 28 of 1476 chunks, 1.7%.
+
+### Rationale
+
+The headings already carry what D-006 wants, and they carry it deterministically, which matters more than it first appears: a generated prefix differs every run, so ingest reports unchanged chunks as changed and re-embeds the entire corpus forever. Option 1 is therefore not only expensive but incompatible with NFR-OPS-01's idempotency requirement. Option 3 leaves the orphan case, which is the one D-006 was written for, unsolved.
+
+### Consequences
+
+- Ingest costs 28 model calls rather than 1476.
+- Generated prefixes are frozen to `data/snapshots/<id>/context-prefixes.json` and reused, so a second ingest reports zero changes. This was discovered by ingest reporting a permanently changed chunk, not by reasoning.
+- The prefix quality now depends on heading detection quality per document kind, which moves the risk into the chunker where it is testable.
+- A failed generation falls back to the deterministic prefix plus "Context could not be generated", so ingest is never blocked and the gap is visible rather than silent.
+
+---
+
+## Decision D-036 - Pharmacy directory excluded from the index
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Full ingest (P1 Stage 4) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The 2026 NJ pharmacy directory is 133 pages of pharmacy names, addresses and phone numbers. Chunked as prose it produces roughly 175 near-identical rows. D-007 already decided that a structured lookup beats semantic search where the source is a table, and deferred that work to P2.
+
+### Options considered
+
+1. Index both formulary and pharmacy directory as prose.
+2. Index the formulary, exclude the pharmacy directory.
+3. Exclude both, deferring all tabular sources to P2.
+
+### Decision
+
+Option 2. The formulary is indexed; the pharmacy directory is excluded, and the exclusion is recorded as a rejection with its reason on every ingest run.
+
+### Rationale
+
+Drug tier is a high-volume bucket A call driver and the formulary answers it in prose that retrieval handles well, demonstrated by ORSERDU ranking first under fusion. A pharmacy directory answers "which pharmacy near me", which is a proximity query over addresses. Semantic search cannot answer it correctly, and hundreds of near-identical address rows dilute lexical scoring for every other question.
+
+### Consequences
+
+- "Which pharmacies are in network near me" is unanswerable in v1 and must refuse. It is a bucket A driver that v1 does not cover, and that gap is now explicit rather than dressed up as a wrong answer.
+- Removes roughly 175 low-value chunks that would otherwise compete in every lexical query.
+- The exclusion lives in one named constant, `EXCLUDED_KINDS`, so reversing it when P2 adds structured lookup is a one-line change.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

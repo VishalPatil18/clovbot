@@ -1,53 +1,84 @@
-import { readFileSync } from "node:fs";
 import { redactIdentifiers } from "../logging.ts";
-import { latestSnapshotId, markdownPath } from "../corpus/snapshot.ts";
-import { chunkSummaryOfBenefits, type CorpusChunk } from "./chunk.ts";
+import { latestSnapshotId, readSnapshot } from "../corpus/snapshot.ts";
+import { planIngest, readSnapshotMarkdown } from "./ingest.ts";
+import { describeChunk, readGeneratedContext, writeGeneratedContext } from "./context.ts";
 import { buildPrompt, findUncitedIds, parseCitations } from "./prompt.ts";
 import { embed, generate } from "./providers.ts";
-import { connect, replaceChunks, searchByVector, writeTurn } from "./store.ts";
+import { connect, existingChunkContent, pruneChunks, searchHybrid, upsertChunks, writeTurn, type RetrievalMode } from "./store.ts";
 
 const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
 const PLAN_IDS = (process.env["CORPUS_PLAN_IDS"] ?? "004,007").split(",");
 const PLAN_YEAR = Number(process.env["CORPUS_PLAN_YEAR"] ?? "2026");
 const TOP_K = 5;
-const EMBED_BATCH = 64;
+/** Azure embeddings are capped per minute by tokens, not requests. */
+const TOKENS_PER_MINUTE = Number(process.env["AZURE_EMBEDDING_TPM"] ?? "29000");
+const BATCH_TOKEN_BUDGET = 5_000;
+const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
 
 async function ingest(): Promise<void> {
   const snapshotId = latestSnapshotId();
-  const chunks: CorpusChunk[] = PLAN_IDS.flatMap((planId) => {
-    const documentId = `${CONTRACT_ID}-${planId}-${PLAN_YEAR}-summary_of_benefits`;
-    const text = readFileSync(markdownPath(snapshotId, documentId), "utf8");
-    return chunkSummaryOfBenefits(text, {
-      documentId,
-      contractId: CONTRACT_ID,
-      planId,
-      planYear: PLAN_YEAR,
-      snapshotId,
-    });
-  });
+  const snapshot = readSnapshot(snapshotId);
+  const { chunks, rejected } = planIngest(snapshot, PLAN_YEAR, readSnapshotMarkdown(snapshotId));
 
-  const vectors: number[][] = [];
-  for (let start = 0; start < chunks.length; start += EMBED_BATCH) {
-    const batch = chunks.slice(start, start + EMBED_BATCH);
-    vectors.push(...(await embed(batch.map((chunk) => chunk.content))));
-    console.log(`embedded ${vectors.length}/${chunks.length}`);
+  for (const skip of rejected) console.log(`  skipped ${skip.documentId}: ${skip.reason}`);
+
+  // D-006: headings carry context for most chunks; only the orphans need the model,
+  // and their generated text is frozen so a second run does not churn.
+  const orphans = chunks.filter((chunk) => chunk.needsGeneratedContext);
+  const generated = readGeneratedContext(snapshotId);
+  const missing = orphans.filter((chunk) => generated[chunk.id] === undefined);
+
+  if (missing.length > 0) {
+    console.log(`generating context for ${missing.length} chunks with no heading`);
+    for (const chunk of missing) generated[chunk.id] = await describeChunk(chunk);
+    writeGeneratedContext(snapshotId, generated);
+  }
+  for (const chunk of orphans) {
+    const described = generated[chunk.id];
+    if (described === undefined) continue;
+    chunk.contextPrefix = described;
+    chunk.embedText = `${described}\n\n${chunk.content}`;
   }
 
   const client = connect();
   await client.connect();
   try {
-    await replaceChunks(client, snapshotId, chunks, vectors);
+    const existing = await existingChunkContent(client, snapshotId);
+    const changed = chunks.filter(
+      (chunk) => existing.get(chunk.id) !== `${chunk.contextPrefix}\n${chunk.content}`,
+    );
+    console.log(`${chunks.length} chunks, ${changed.length} new or changed`);
+
+    // Persist each batch, so a rate-limit failure costs one batch rather than all of them.
+    let done = 0;
+    for (const batch of batchByTokens(changed, BATCH_TOKEN_BUDGET)) {
+      const tokens = batch.reduce((sum, chunk) => sum + estimateTokens(chunk.embedText), 0);
+      const vectors = await embed(batch.map((chunk) => chunk.embedText));
+      const embeddings = new Map<string, number[]>();
+      for (const [index, chunk] of batch.entries()) {
+        const vector = vectors[index];
+        if (vector !== undefined) embeddings.set(chunk.id, vector);
+      }
+      await upsertChunks(client, batch, embeddings);
+      done += batch.length;
+      console.log(`  embedded and stored ${done}/${changed.length}`);
+
+      // Stay under the per-minute token budget rather than retrying into it.
+      if (done < changed.length) await sleep((tokens / TOKENS_PER_MINUTE) * 60_000);
+    }
+
+    const pruned = await pruneChunks(client, snapshotId, chunks.map((chunk) => chunk.id));
+    if (pruned > 0) console.log(`pruned ${pruned} chunks no longer produced`);
   } finally {
     await client.end();
   }
-  console.log(`indexed ${chunks.length} chunks from snapshot ${snapshotId}`);
+  console.log(`snapshot ${snapshotId}: ${chunks.length} chunks indexed`);
 }
 
 async function ask(): Promise<void> {
-  const args = process.argv.slice(3);
-  const planFlag = args.indexOf("--plan");
-  const planId = planFlag === -1 ? PLAN_IDS[0] : args[planFlag + 1];
-  const question = args.filter((_, i) => i !== planFlag && i !== planFlag + 1).join(" ").trim();
+  const { flags, words } = parseArgs(process.argv.slice(3));
+  const planId = flags["plan"] ?? PLAN_IDS[0];
+  const question = words.join(" ").trim();
 
   if (question.length === 0 || planId === undefined) {
     throw new Error('usage: npm run ask -- "your question" --plan 004');
@@ -68,7 +99,8 @@ async function ask(): Promise<void> {
     const embeddedAt = Date.now();
 
     const scope = { contractId: CONTRACT_ID, planId, planYear: PLAN_YEAR };
-    const retrieved = await searchByVector(client, queryVector, scope, TOP_K);
+    const mode = (flags["mode"] ?? "hybrid") as RetrievalMode;
+    const retrieved = await searchHybrid(client, queryVector, redacted, scope, TOP_K, mode);
     const retrievedAt = Date.now();
 
     if (retrieved.length === 0) {
@@ -134,6 +166,50 @@ async function ask(): Promise<void> {
   } finally {
     await client.end();
   }
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Batches sized by estimated tokens, because the quota is measured in tokens. */
+function batchByTokens<T extends { embedText: string }>(items: T[], budget: number): T[][] {
+  const batches: T[][] = [];
+  let batch: T[] = [];
+  let tokens = 0;
+
+  for (const item of items) {
+    const cost = estimateTokens(item.embedText);
+    if (batch.length > 0 && tokens + cost > budget) {
+      batches.push(batch);
+      batch = [];
+      tokens = 0;
+    }
+    batch.push(item);
+    tokens += cost;
+  }
+  if (batch.length > 0) batches.push(batch);
+  return batches;
+}
+
+/** Flags are `--name value`; everything else is the question. */
+function parseArgs(argv: string[]): { flags: Record<string, string>; words: string[] } {
+  const flags: Record<string, string> = {};
+  const words: string[] = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (token === undefined) continue;
+    if (token.startsWith("--")) {
+      const value = argv[i + 1];
+      if (value !== undefined && !value.startsWith("--")) {
+        flags[token.slice(2)] = value;
+        i += 1;
+        continue;
+      }
+      flags[token.slice(2)] = "true";
+      continue;
+    }
+    words.push(token);
+  }
+  return { flags, words };
 }
 
 const commands: Record<string, () => Promise<void>> = { ingest, ask };

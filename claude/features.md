@@ -261,3 +261,81 @@ Stage 2, the voice latency spike, was skipped at the user's instruction. It is a
 | 3e | Store and retrieval | Plan filtered in SQL before ranking, idempotent re-ingest |
 | 3f | CLI and turn log | Cited answer at a terminal, turn row written |
 
+
+### Phase 6 - Writing Code (Stage 3)
+
+- **Files touched:** `src/rag/{chunk,prompt,providers,store,cli}.ts`, `src/logging.ts`, `certs/supabase-ca.crt`, `.env.example`, `migrations/`.
+- **Tests added:** 35. **Dependencies added:** `pg@8.23.0`, `@types/pg`.
+- **Result:** `npm run ask -- "what is the specialist copay" --plan 004` returns $10 in-network and $20 out, cited to document, contract, plan, plan year and section, in about 1.4s. Plan 007 returns $2 and $15 from the same source PDF.
+
+**Defects surfaced and fixed:** the refusal outcome logged `answered` because `retrieved.length === 0` never fires when vector search always returns top-k; TLS verification was initially disabled and was replaced with a pinned Supabase CA.
+
+---
+
+## Feature: Full ingest and hybrid retrieval (Stage 4)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | 2026-09-08           |
+| Cycle            | 3                    |
+| Stage of plan.md | `plan-p1.md` Stage 4 |
+| Owner            | user + claude        |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | The pre-written stubs encode `contractId: "H5141-001"`, merging contract and plan | Rewrite stubs and tests to reality |
+| 2 | D-006 contextual prefixes would cost one model call per chunk | Deterministic from headings; model only where no heading exists |
+| 3 | Formulary and pharmacy directory are 41% of chunks and are tables | Index the formulary, exclude the pharmacy directory |
+| 4 | What "snapshot id unchanged" means for idempotency | Ingest reuses the corpus snapshot id |
+| 5 | Migration | Applied by hand in the Supabase dashboard |
+| 6 | The pre-existing integration tests | Delete |
+
+### Phase 2 - Architecting
+
+**Options considered:**
+
+1. **Rewrite the stale stubs and tests to reality** - one code path, identifiers matching the real corpus.
+2. **Two tracks** - in-memory fixture retrieval for tests, Postgres for production. Two paths that drift.
+3. **Delete and start fresh** - loses the adversarial fixture cases, which `docs/testing-strategy.md` section 4 calls the linchpin.
+
+**Chosen:** 1. The stubs predated Stage 1 and could not be implemented as written without reintroducing cross-plan leakage. The adversarial cases were kept and their identifiers corrected.
+
+### Phase 3 - Product Specs
+
+- **UI:** None. `npm run ingest`, and `npm run ask -- "<question>" --plan <004|007> [--mode hybrid|dense|lexical]`.
+- **Backend entities:** `ChunkInput`, `CorpusChunk` (now carrying `contextPrefix`, `embedText`, `needsGeneratedContext`), `PlannedIngest`, `RejectedDocument`.
+- **DB schema:** `chunks` gains `context_prefix` and a generated `search_vector tsvector` with a GIN index. `search_hybrid()` performs plan-scoped RRF over both halves.
+
+### Phase 4 - Tech Specs
+
+- **Lexical half:** Postgres `tsvector` with `websearch_to_tsquery`, generated column so the index cannot drift from the text. *Rejected:* an external search service, which is neither zero-cost nor a single datastore.
+- **Fusion:** one SQL function, mirrored by `fuseRrf` in TypeScript so ranking is testable without a database.
+- **Pacing:** token-budget batching against the measured 29,000 tokens-per-minute quota, with `Retry-After` honoured.
+
+### Phase 5 - Planning
+
+| Sub-stage | Goal | Acceptance |
+| --- | --- | --- |
+| 4a | Remove the stale layer | Nothing imports `pipeline.ts` or `corpus.ts`; suite still green |
+| 4b | Provenance and plan-year gate | Raises rather than defaulting; 2025 rejected |
+| 4c | RRF | Both-list chunk ranks first; ties deterministic |
+| 4d | Chunker for all kinds | Headings per kind; table of contents ignored |
+| 4e | Migration and hybrid search | Plan filtered before ranking |
+| 4f | Idempotent ingest | Two runs, 0 changed, same snapshot id |
+
+### Phase 6 - Writing Code
+
+- **Files touched:** created `src/rag/{provenance,ingest,context}.ts`, `migrations/002_hybrid_retrieval.sql`, `scripts/stage4-check.ts`; rewrote `src/rag/{chunk,store,cli}.ts`, `src/retrieval.ts`, `src/types.ts`; deleted `src/pipeline.ts`, `src/corpus.ts`, `tests/integration/`.
+- **Tests added:** 39 (chunker 17, ingest 12, provenance 11, fusion 5 now passing).
+- **Measured results:** 1476 chunks. Idempotency 0 changed across two runs. Smoke set 10/10. ORSERDU dense rank 9 versus hybrid rank 1. Paraphrase absent from lexical, hybrid rank 2.
+
+**Defects the live run surfaced, all fixed:**
+
+1. **Duplicate chunk ids caused silent content loss.** Corporate pages share headings, and the id omitted the document, so twelve chunks overwrote each other on upsert.
+2. **Generated context broke idempotency**, because the model is not deterministic. Frozen to `context-prefixes.json`.
+3. **The Azure quota is 29,000 tokens per minute, not requests.** Retry alone could not clear it; pacing and per-batch persistence could.
+4. **The first fusion check could not fail**, because it matched any chunk from the right document rather than the chunk containing the term.
+5. Corporate chunks fell from 342 to 67 once web-page furniture stopped being treated as headings, and HTML entity decoding was widened to numeric entities.
+

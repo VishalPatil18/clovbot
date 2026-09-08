@@ -23,34 +23,47 @@ export function connect(): pg.Client {
 
 const toVector = (values: number[]): string => `[${values.join(",")}]`;
 
-/** Replaces the snapshot's rows, so re-running ingest does not duplicate chunks. */
-export async function replaceChunks(
+/** What the snapshot already holds, so unchanged chunks are never re-embedded. */
+export async function existingChunkContent(
   client: pg.Client,
   snapshotId: string,
+): Promise<Map<string, string>> {
+  const { rows } = await client.query(
+    "select id, context_prefix || chr(10) || content as body from chunks where snapshot_id = $1",
+    [snapshotId],
+  );
+  return new Map(rows.map((row: Record<string, unknown>) => [String(row["id"]), String(row["body"])]));
+}
+
+/**
+ * Upserts the snapshot's chunks and deletes any that no longer exist, so a second
+ * run over unchanged sources changes nothing and duplicates nothing. NFR-OPS-01.
+ */
+export async function upsertChunks(
+  client: pg.Client,
   chunks: CorpusChunk[],
-  embeddings: number[][],
+  embeddings: Map<string, number[]>,
 ): Promise<void> {
   await client.query("begin");
   try {
-    await client.query("delete from chunks where snapshot_id = $1", [snapshotId]);
-    for (const [index, chunk] of chunks.entries()) {
-      const vector = embeddings[index];
-      if (vector === undefined) throw new Error(`no embedding for chunk ${chunk.id}`);
+    for (const chunk of chunks) {
+      const vector = embeddings.get(chunk.id);
+      if (vector === undefined) continue;
       await client.query(
         `insert into chunks
-           (id, snapshot_id, document_id, kind, contract_id, plan_id, plan_year, section, content, embedding)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+           (id, snapshot_id, document_id, kind, contract_id, plan_id, plan_year,
+            section, content, context_prefix, embedding)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         on conflict (id) do update set
+           snapshot_id = excluded.snapshot_id, document_id = excluded.document_id,
+           kind = excluded.kind, contract_id = excluded.contract_id,
+           plan_id = excluded.plan_id, plan_year = excluded.plan_year,
+           section = excluded.section, content = excluded.content,
+           context_prefix = excluded.context_prefix, embedding = excluded.embedding`,
         [
-          chunk.id,
-          chunk.snapshotId,
-          chunk.documentId,
-          chunk.kind,
-          chunk.contractId,
-          chunk.planId,
-          chunk.planYear,
-          chunk.section,
-          chunk.content,
-          toVector(vector),
+          chunk.id, chunk.snapshotId, chunk.documentId, chunk.kind, chunk.contractId,
+          chunk.planId, chunk.planYear, chunk.section, chunk.content,
+          chunk.contextPrefix, toVector(vector),
         ],
       );
     }
@@ -61,25 +74,40 @@ export async function replaceChunks(
   }
 }
 
+/** Removes chunks the current plan no longer produces. Runs once, after every upsert. */
+export async function pruneChunks(
+  client: pg.Client,
+  snapshotId: string,
+  keepIds: string[],
+): Promise<number> {
+  const { rowCount } = await client.query(
+    "delete from chunks where snapshot_id = $1 and not (id = any($2::text[]))",
+    [snapshotId, keepIds],
+  );
+  return rowCount ?? 0;
+}
+
+export type RetrievalMode = "hybrid" | "dense" | "lexical";
+
 /**
- * Plan is filtered in SQL, before ranking. Two plans share near-identical prose
- * with different amounts, so ranking first and filtering after would let the
- * wrong plan's copay win on similarity. D-033.
+ * Plan is filtered in SQL, before ranking, inside search_hybrid. Two plans share
+ * near-identical prose with different amounts, so ranking first and filtering
+ * after would let the wrong plan's copay win on similarity. D-033.
  */
-export async function searchByVector(
+export async function searchHybrid(
   client: pg.Client,
   embedding: number[],
+  queryText: string,
   scope: { contractId: string; planId: string; planYear: number },
   limit: number,
+  mode: RetrievalMode = "hybrid",
 ): Promise<RetrievedChunk[]> {
   const { rows } = await client.query(
-    `select id, document_id, contract_id, plan_id, plan_year, section, content,
-            embedding <=> $1 as distance
-       from chunks
-      where contract_id = $2 and plan_id = $3 and plan_year = $4
-      order by embedding <=> $1
-      limit $5`,
-    [toVector(embedding), scope.contractId, scope.planId, scope.planYear, limit],
+    "select * from search_hybrid($1,$2,$3,$4,$5,$6,60,$7)",
+    [
+      toVector(embedding), queryText, scope.contractId, scope.planId,
+      scope.planYear, limit, mode,
+    ],
   );
 
   return rows.map((row: Record<string, unknown>) => ({
@@ -90,7 +118,7 @@ export async function searchByVector(
     planYear: Number(row["plan_year"]),
     section: String(row["section"]),
     content: String(row["content"]),
-    distance: Number(row["distance"]),
+    distance: 1 - Number(row["score"]),
   }));
 }
 

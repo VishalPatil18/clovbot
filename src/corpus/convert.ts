@@ -31,7 +31,23 @@ const ENTITIES: Record<string, string> = {
   "&quot;": '"',
   "&#39;": "'",
   "&rsquo;": "’",
+  "&lsquo;": "‘",
+  "&ldquo;": "“",
+  "&rdquo;": "”",
+  "&mdash;": "-",
+  "&ndash;": "-",
+  "&times;": "",
+  "&hellip;": "...",
   "&nbsp;": " ",
+};
+
+/** Numeric entities are open-ended, so decode them by code point rather than by table. */
+const decodeNumeric = (entity: string): string | null => {
+  const decimal = /^&#(\d+);$/.exec(entity);
+  if (decimal?.[1] !== undefined) return String.fromCodePoint(Number(decimal[1]));
+  const hex = /^&#x([0-9a-f]+);$/i.exec(entity);
+  if (hex?.[1] !== undefined) return String.fromCodePoint(Number.parseInt(hex[1], 16));
+  return null;
 };
 
 /** Plain text from a Clover page. Prose only, so markdown structure buys nothing. */
@@ -43,7 +59,10 @@ export function extractHtmlText(html: string): string {
     .replace(/<(p|div|h[1-6]|li|tr|br)\b[^>]*>/gi, "\n")
     .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
     .replace(/<[^>]+>/g, "")
-    .replace(/&[a-z#0-9]+;/gi, (entity) => ENTITIES[entity.toLowerCase()] ?? entity)
+    .replace(
+      /&[a-z#0-9]+;/gi,
+      (entity) => ENTITIES[entity.toLowerCase()] ?? decodeNumeric(entity) ?? entity,
+    )
     .split("\n")
     .map((line) => line.replace(/[ \t ]+/g, " ").trim())
     .join("\n")

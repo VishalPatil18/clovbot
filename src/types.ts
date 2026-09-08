@@ -1,16 +1,19 @@
 export type DocumentKind =
   | "evidence_of_coverage"
   | "summary_of_benefits"
+  | "annual_notice_of_change"
   | "formulary"
   | "provider_directory"
   | "pharmacy_directory"
-  | "supplemental_benefits";
+  | "corporate";
 
 /** A citation without a plan year is not a valid citation. FR-06. */
 export interface Provenance {
   document: DocumentKind;
   planYear: number;
   contractId: string;
+  /** Contract alone does not identify a plan, and two plans differ on price. D-033. */
+  planId: string;
   section: string;
 }
 

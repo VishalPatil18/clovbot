@@ -13,6 +13,30 @@ const required = (name: string): string => {
   return value;
 };
 
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const MAX_ATTEMPTS = 6;
+
+/**
+ * Azure returns 429 with a Retry-After when the per-minute quota is spent, which
+ * a full-corpus ingest hits routinely. Honour the header rather than guessing.
+ */
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let wait = 2_000;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const response = await fetch(url, init);
+    if (response.status !== 429 && response.status < 500) return response;
+    if (attempt === MAX_ATTEMPTS) return response;
+
+    const header = Number(response.headers.get("retry-after"));
+    const delay = Number.isFinite(header) && header > 0 ? header * 1_000 : wait;
+    console.warn(`  HTTP ${response.status}, retrying in ${Math.round(delay / 1000)}s`);
+    await sleep(delay + 500);
+    wait = Math.min(wait * 2, 60_000);
+  }
+  throw new Error("unreachable");
+}
+
 const azureUrl = (deployment: string, path: string): string =>
   `${required("AZURE_OPENAI_ENDPOINT").replace(/\/$/, "")}/openai/deployments/` +
   `${deployment}/${path}?api-version=${required("AZURE_OPENAI_API_VERSION")}`;
@@ -23,7 +47,7 @@ const azureUrl = (deployment: string, path: string): string =>
  * semantically meaningless chunks rather than failing. D-034.
  */
 export async function embed(texts: string[]): Promise<number[][]> {
-  const response = await fetch(
+  const response = await fetchWithRetry(
     azureUrl(required("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"), "embeddings"),
     {
       method: "POST",
@@ -58,7 +82,7 @@ export async function generate(prompt: Prompt): Promise<GeneratedAnswer> {
 }
 
 async function azureChat(prompt: Prompt): Promise<string> {
-  const response = await fetch(azureUrl(required("AZURE_OPENAI_DEPLOYMENT"), "chat/completions"), {
+  const response = await fetchWithRetry(azureUrl(required("AZURE_OPENAI_DEPLOYMENT"), "chat/completions"), {
     method: "POST",
     headers: { "api-key": required("AZURE_OPENAI_API_KEY"), "content-type": "application/json" },
     body: JSON.stringify({

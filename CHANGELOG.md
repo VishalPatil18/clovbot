@@ -8,6 +8,8 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- **Answers now come from the whole plan library, not one document.** Questions can be answered from the Evidence of Coverage, the Summary of Benefits, the Annual Notice of Change, the drug formulary and Clover's public pages, for both indexed plans.
+- **Drug questions work.** Asking about a specific medication finds it by name, including uncommon brand names, and returns its tier and any restrictions.
 - **Ask a question, get a cited answer.** `npm run ask -- "what is the specialist copay" --plan 004` returns the amount from the plan's own Summary of Benefits, with the document, contract, plan, plan year and section it came from. Asking the same question against plan 007 returns that plan's different amount, because the two plans are indexed separately.
 - **Answers say when they do not know.** A question the plan documents do not cover gets a plain statement that it was not found, rather than a guessed amount.
 - **Identifiers are removed before anything is stored.** Typing a member id, date of birth or social security number into a question leaves the question intact and the identifier gone.
