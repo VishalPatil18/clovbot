@@ -22,6 +22,8 @@ export type AskEvent =
   | {
       type: "answer";
       answer: string;
+      /** The answer without citation markers or the source list. Read aloud. */
+      spokenAnswer?: string;
       outcome: "answered" | "refused" | "upstream_failure";
       claims: Claim[];
       unanswered: string[];

@@ -149,6 +149,27 @@ export function buildStructuredPrompt(question: string, chunks: CitableChunk[]):
   return { system: SYSTEM, user: `<sources>\n${sources}\n</sources>\n\nQuestion: ${question}` };
 }
 
+/**
+ * What gets read aloud. The written answer carries citation markers and the
+ * source list; both are there to be read, not listened to, and speaking them
+ * buries the answer under provenance. FR-19 requires the spoken and written
+ * answers to carry the same content, which the claims do.
+ */
+export function spokenAnswer(payload: AnswerPayload): string {
+  if (payload.refusal !== null) {
+    return `${payload.refusal.explanation} To speak with a person, call Member Services at ${MEMBER_SERVICES}.`;
+  }
+
+  const parts = payload.claims.map((claim) => claim.text);
+
+  // A gap is answer content rather than provenance, so it is still spoken.
+  if (payload.unanswered.length > 0) {
+    parts.push(`I could not find this in the plan documents I searched: ${payload.unanswered.join("; ")}.`);
+    parts.push(`For that, call Member Services at ${MEMBER_SERVICES}.`);
+  }
+  return parts.join(" ");
+}
+
 /** Prose is rendered by the application, never by the model. FR-32. */
 export function renderAnswer(payload: AnswerPayload, chunks: CitableChunk[]): string {
   const byId = new Map(chunks.map((chunk) => [chunk.id, chunk]));

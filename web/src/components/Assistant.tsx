@@ -120,8 +120,10 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
           return;
         }
         // FR-19: spoken and written together. Audio is never the only copy.
-        if (mode === "voice" && event.answer.trim().length > 0) {
-          void speak(event.answer)
+        // The source list is on screen to be read, not listened to.
+        const toSpeak = (event.spokenAnswer ?? event.answer).trim();
+        if (mode === "voice" && toSpeak.length > 0) {
+          void speak(toSpeak)
             .then((audio) => {
               setSpoken(audio);
               setVoiceNotice(audio.notice);

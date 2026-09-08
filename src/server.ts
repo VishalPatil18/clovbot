@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { latestSnapshotId } from "./corpus/snapshot.ts";
 import { redactIdentifiers } from "./logging.ts";
 import { answerTurn } from "./rag/answer-turn.ts";
-import { citationLabel, citationNumbers, numberCitations } from "./rag/payload.ts";
+import { citationLabel, citationNumbers, numberCitations, spokenAnswer } from "./rag/payload.ts";
 import { needsPlanContext } from "./rag/plan-scope.ts";
 import {
   checkRate,
@@ -347,6 +347,8 @@ async function handleAsk(
     send(res, {
       type: "answer",
       answer: turn.answer,
+      // The written answer carries the source list; the spoken one must not.
+      spokenAnswer: turn.payload === null ? turn.answer : spokenAnswer(turn.payload),
       outcome: turn.outcome,
       claims: turn.payload?.claims ?? [],
       unanswered: turn.payload?.unanswered ?? [],
