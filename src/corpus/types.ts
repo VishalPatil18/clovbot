@@ -54,6 +54,8 @@ export type FetchStatus = "ok" | "failed" | "blocked" | "synthetic";
 export interface ManifestEntry {
   documentId: string;
   kind: DocumentKind;
+  contractId: string;
+  planId: string;
   status: FetchStatus;
   url: string;
   retrievedAt: string;

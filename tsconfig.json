@@ -12,6 +12,7 @@
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
+    "types": ["node"],
     "noEmit": true
   },
   "include": ["src", "tests", "vitest.config.ts"]

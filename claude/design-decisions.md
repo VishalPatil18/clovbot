@@ -1131,6 +1131,47 @@ Option 3 was rejected for what it adds rather than what it costs to fetch. Valor
 
 ---
 
+## Decision D-034 - Gemini as generation fallback, never for embeddings
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-07 |
+| Cycle / Feature | Stack (P1 Stage 3) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+D-018 chose Azure OpenAI for generation and embeddings and explicitly rejected Gemini, on two grounds: the free tier is capped near 10 requests per minute, and Google may use free-tier inputs and outputs to improve their models. D-018's stated consequence was "single vendor for both model calls; no second SDK."
+
+FR-25 requires an upstream failure to produce an explicit error state rather than a silent one, and FR-09 forbids answering from parametric knowledge under any circumstance. Neither requires a second provider. A live demonstration with a single generation provider fails completely if that provider is unavailable.
+
+### Options considered
+
+1. Azure only. An outage ends the demonstration; FR-25 shows the error state.
+2. Azure primary, Gemini fallback for generation only.
+3. Azure primary, Gemini fallback for both generation and embeddings.
+
+### Decision
+
+Azure OpenAI primary. Gemini as a generation fallback only. Embeddings stay on Azure `text-embedding-3-small` with no fallback.
+
+### Rationale
+
+Option 3 is unsafe in a way that is easy to miss. Embeddings from two providers occupy different vector spaces, so a query embedded by Gemini and compared against a corpus embedded by Azure returns results that are numerically valid and semantically meaningless. Retrieval would not error; it would quietly return the wrong chunks, which under cite-or-refuse produces a confidently cited wrong answer. If Azure embeddings are unavailable there is nothing to retrieve against, so the correct behaviour is refusal per FR-09, not a second embedding space.
+
+Generation is different. The chunks are already retrieved and are passed in the prompt, so a fallback generator is reading from the same evidence and citing the same chunk identifiers. FR-32's structural validation applies to its output exactly as it does to Azure's.
+
+### Consequences
+
+- **Google may train on free-tier inputs.** FR-31 redacts identifier-shaped strings before they reach a log or store, but that redaction protects persistence, not the model call. A member typing a member id while Azure is down sends that text to Google. Redaction must therefore run before the model call, not only before logging, and that is now a requirement rather than an implementation detail.
+- The corpus is public documents, so the retrieved context carries no protected information. The exposure is confined to member-typed question text.
+- Gemini's free tier is capped near 10 requests per minute, so the fallback degrades under load rather than restoring full service.
+- Contradicts D-018's "no second SDK" consequence. Mitigated by calling both providers over raw `fetch` against their REST endpoints rather than adding either vendor SDK.
+- The member must be told which provider answered when the fallback is in use, consistent with FR-20's rule for the voice chain that a degraded path is disclosed rather than hidden.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

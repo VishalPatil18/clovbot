@@ -8,9 +8,14 @@
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "corpus:discover": "node --experimental-strip-types src/corpus/cli.ts discover",
+    "corpus:fetch": "node --experimental-strip-types src/corpus/cli.ts fetch",
+    "corpus:convert": "node --experimental-strip-types src/corpus/cli.ts convert",
+    "corpus:report": "node --experimental-strip-types src/corpus/cli.ts report"
   },
   "devDependencies": {
+    "@types/node": "26.5.0",
     "typescript": "7.0.2",
     "vitest": "5.0.0"
   }
