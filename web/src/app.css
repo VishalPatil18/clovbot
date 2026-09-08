@@ -108,6 +108,11 @@
   font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); margin: 0 0 var(--spacing-12);
 }
 .turn__pending { font-size: var(--text-message); line-height: var(--leading-message); margin: 0; font-style: italic; }
+.turn__answer {
+  /* Held transparent so switching the reading state on cannot shift the layout. */
+  border: 3px solid transparent; border-radius: var(--radius-md);
+  padding: var(--spacing-12);
+}
 .turn__answer p { font-size: var(--text-message); line-height: var(--leading-message); margin: 0 0 var(--spacing-12); max-width: 68ch; }
 .turn__answer--refused, .turn__answer--upstream_failure { background: var(--color-slate-hush); padding: var(--spacing-16); border-radius: var(--radius-md); }
 
@@ -302,3 +307,79 @@
 
 .empty__icon { vertical-align: -3px; margin-right: var(--spacing-4); }
 .notice p { display: flex; align-items: center; gap: var(--spacing-8); }
+
+/*
+ * The answer being read aloud. A gradient travels around the border so the eye
+ * can find which paragraph the voice is on, which matters once a thread has
+ * several answers in it. Painted into the border box, so nothing reflows when
+ * it starts or stops.
+ */
+.turn__answer--speaking {
+  background:
+    linear-gradient(var(--color-cream-paper), var(--color-cream-paper)) padding-box,
+    linear-gradient(
+      90deg,
+      var(--color-forest-ink), var(--color-sage-mist), var(--color-mint-veil),
+      var(--color-sage-mist), var(--color-forest-ink)
+    ) border-box;
+  background-size: 100% 100%, 300% 100%;
+  background-position: 0 0, 0 0;
+  animation: read-sweep 3.5s linear infinite;
+}
+@keyframes read-sweep {
+  to { background-position: 0 0, 300% 0; }
+}
+
+.turn__reading {
+  display: flex; align-items: center; gap: var(--spacing-8);
+  margin: 0 0 var(--spacing-12) !important;
+  font-size: var(--text-body) !important; font-weight: var(--font-weight-semibold);
+  color: var(--color-forest-ink);
+}
+
+/*
+ * The assistant speaking. Deliberately not the listening rings: those travel
+ * outward from the member's voice, these are bars rising and falling plus a
+ * slow halo sweep. If the two read alike, the member cannot tell whose turn it is.
+ */
+.mic--responding { background: var(--color-forest-ink); cursor: default; opacity: 1; }
+
+.mic-halo { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.mic-halo__sweep {
+  position: absolute; width: 148px; height: 148px; border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 200deg,
+    var(--color-sage-mist) 300deg,
+    var(--color-forest-ink) 350deg,
+    transparent 360deg
+  );
+  mask: radial-gradient(circle, transparent 60px, #000 62px, #000 72px, transparent 74px);
+  animation: halo-spin 2.6s linear infinite;
+}
+@keyframes halo-spin { to { transform: rotate(1turn); } }
+
+.equaliser { display: flex; align-items: center; justify-content: center; gap: 5px; height: 44px; }
+.equaliser span {
+  width: 6px; border-radius: 999px;
+  background: var(--color-cream-paper);
+  animation: equalise 900ms ease-in-out infinite;
+}
+.equaliser span:nth-child(1) { height: 16px; animation-delay: 0ms; }
+.equaliser span:nth-child(2) { height: 34px; animation-delay: 140ms; }
+.equaliser span:nth-child(3) { height: 24px; animation-delay: 280ms; }
+.equaliser span:nth-child(4) { height: 40px; animation-delay: 420ms; }
+@keyframes equalise {
+  0%, 100% { transform: scaleY(0.35); }
+  50%      { transform: scaleY(1); }
+}
+
+/*
+ * All of this is decoration. Under reduced motion the states are still readable
+ * from colour, icon and the text beside them, so the movement simply stops.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .turn__answer--speaking { animation: none; background-position: 0 0, 50% 0; }
+  .mic-halo__sweep { animation: none; }
+  .equaliser span { animation: none; transform: scaleY(0.8); }
+}

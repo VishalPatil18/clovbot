@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { IoCheckmark, IoMic, IoRefresh, IoStop } from "react-icons/io5";
+import { IoCheckmark, IoMic, IoRefresh, IoStop, IoVolumeHigh } from "react-icons/io5";
 import { isTap, startRecording, transcribe, type Recording } from "../voice.ts";
 
 type Phase = "idle" | "listening" | "processing" | "review";
 
 interface Props {
   busy: boolean;
+  /** True while the assistant is reading an answer aloud. */
+  responding: boolean;
   onSend: (question: string) => void;
 }
 
@@ -15,7 +17,7 @@ interface Props {
  * FR-18 as amended by D-045: no live partial transcript, so the listening and
  * processing states carry the wait, and the transcript is editable before sending.
  */
-export function VoiceComposer({ busy, onSend }: Props): React.JSX.Element {
+export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
   const [level, setLevel] = useState(0);
@@ -85,12 +87,18 @@ export function VoiceComposer({ busy, onSend }: Props): React.JSX.Element {
     if (phase === "listening") void finish();
   };
 
-  const spoken =
-    phase === "listening"
+  const spoken = responding
+    ? "Reading the answer aloud"
+    : phase === "listening"
       ? "Listening. Tap to stop."
       : phase === "processing"
         ? "Writing down what you said"
         : "Hold to talk, or tap to start";
+
+  // Three states, three visual languages. Rings travel outward while the member
+  // speaks; bars rise and fall while the assistant does. They must not be
+  // confusable, or the member cannot tell whose turn it is.
+  const state = responding ? "responding" : phase;
 
   return (
     <div className="voice">
@@ -99,18 +107,23 @@ export function VoiceComposer({ busy, onSend }: Props): React.JSX.Element {
           <div className="mic-well">
             {/* Rings read as sound leaving the microphone. Scaled by the measured
                 level so they respond to the voice rather than looping blindly. */}
-            {phase === "listening" && (
+            {phase === "listening" && !responding && (
               <span className="mic-rings" aria-hidden="true" style={{ ["--level" as string]: level.toFixed(2) }}>
                 <span className="mic-ring" />
                 <span className="mic-ring" />
                 <span className="mic-ring" />
               </span>
             )}
+            {responding && (
+              <span className="mic-halo" aria-hidden="true">
+                <span className="mic-halo__sweep" />
+              </span>
+            )}
             <button
               type="button"
-              className={`mic mic--${phase}`}
+              className={`mic mic--${state}`}
               aria-pressed={phase === "listening"}
-              disabled={busy || phase === "processing"}
+              disabled={busy || phase === "processing" || responding}
               onPointerDown={onPointerDown}
               onPointerUp={onPointerUp}
               onKeyDown={(event) => {
@@ -120,7 +133,11 @@ export function VoiceComposer({ busy, onSend }: Props): React.JSX.Element {
                 else void begin();
               }}
             >
-              {phase === "listening" ? (
+              {responding ? (
+                <span className="equaliser" aria-hidden="true">
+                  <span /><span /><span /><span />
+                </span>
+              ) : phase === "listening" ? (
                 <IoStop className="mic__icon" aria-hidden="true" />
               ) : (
                 <IoMic className="mic__icon" aria-hidden="true" />
@@ -129,7 +146,9 @@ export function VoiceComposer({ busy, onSend }: Props): React.JSX.Element {
             </button>
           </div>
 
-          <p className="voice__state">{spoken}</p>
+          <p className="voice__state">
+            {responding && <IoVolumeHigh aria-hidden="true" />} {spoken}
+          </p>
           <p className="voice__hint">
             Hold to talk, or tap to start and tap to stop. You can change the words before they are
             sent.
@@ -179,7 +198,7 @@ export function VoiceComposer({ busy, onSend }: Props): React.JSX.Element {
       )}
 
       <p className="voice__status" role="status">
-        {phase === "listening" || phase === "processing" ? spoken : ""}
+        {responding || phase === "listening" || phase === "processing" ? spoken : ""}
       </p>
 
       {notice !== null && (

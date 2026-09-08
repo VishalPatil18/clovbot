@@ -88,6 +88,8 @@ export async function transcribe(audio: Blob): Promise<Transcription> {
 export interface Spoken {
   play: () => void;
   stop: () => void;
+  /** Fires when playback finishes or is stopped, so the interface can settle. */
+  onStateChange: (handler: (speaking: boolean) => void) => void;
   notice: string | null;
 }
 
@@ -111,27 +113,45 @@ export async function speak(text: string): Promise<Spoken> {
   if (type.includes("application/json")) {
     const body = (await response.json()) as { notice?: string | null };
     const utterance = new SpeechSynthesisUtterance(text);
+    let notify: (speaking: boolean) => void = () => {};
+    utterance.addEventListener("end", () => notify(false));
     return {
       notice: body.notice ?? null,
+      onStateChange: (handler) => {
+        notify = handler;
+      },
       play: () => {
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
+        notify(true);
       },
-      stop: () => window.speechSynthesis.cancel(),
+      stop: () => {
+        window.speechSynthesis.cancel();
+        notify(false);
+      },
     };
   }
 
   const encoded = response.headers.get("x-voice-notice");
   const audio = new Audio(URL.createObjectURL(await response.blob()));
+  let notify: (speaking: boolean) => void = () => {};
+  audio.addEventListener("ended", () => notify(false));
+  audio.addEventListener("pause", () => notify(false));
+
   return {
     notice: encoded === null ? null : decodeURIComponent(encoded),
+    onStateChange: (handler) => {
+      notify = handler;
+    },
     play: () => {
       audio.currentTime = 0;
       void audio.play();
+      notify(true);
     },
     stop: () => {
       audio.pause();
       audio.currentTime = 0;
+      notify(false);
     },
   };
 }

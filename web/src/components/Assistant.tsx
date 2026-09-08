@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, type AskEvent, type CallbackDraft, type Citation, type Claim, type PlanOption } from "../api.ts";
 import {
   IoCall, IoChatbubbleEllipses, IoClose, IoExpand, IoMic, IoMicOff,
-  IoPlay, IoSend, IoStop, IoThumbsDown, IoThumbsUp, IoWarning,
+  IoPlay, IoSend, IoStop, IoThumbsDown, IoThumbsUp, IoVolumeHigh, IoWarning,
 } from "react-icons/io5";
 import { AnswerBody } from "./AnswerBody.tsx";
 import { DictateButton } from "./DictateButton.tsx";
@@ -54,6 +54,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
   const [spoken, setSpoken] = useState<Spoken | null>(null);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [dictateError, setDictateError] = useState<string | null>(null);
+  const [speakingTurn, setSpeakingTurn] = useState<number | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
 
@@ -124,6 +125,9 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
             .then((audio) => {
               setSpoken(audio);
               setVoiceNotice(audio.notice);
+              // The border on the answer follows the audio, so it is always the
+              // paragraph being read that is marked, never a stale one.
+              audio.onStateChange((speaking) => setSpeakingTurn(speaking ? id : null));
               audio.play();
             })
             .catch((caught: unknown) => {
@@ -189,6 +193,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
             onClick={() => {
               const next: VoiceMode = mode === "voice" ? "text" : "voice";
               spoken?.stop();
+              setSpeakingTurn(null);
               setMode(next);
               writeMode(next);
             }}
@@ -246,7 +251,14 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
             {turn.outcome === "pending" ? (
               <p className="turn__pending">{status || "Working on it"}</p>
             ) : (
-              <div className={`turn__answer turn__answer--${turn.outcome}`}>
+              <div
+                className={`turn__answer turn__answer--${turn.outcome}${speakingTurn === turn.id ? " turn__answer--speaking" : ""}`}
+              >
+                {speakingTurn === turn.id && (
+                  <p className="turn__reading" role="status">
+                    <IoVolumeHigh aria-hidden="true" /> Reading this answer aloud
+                  </p>
+                )}
                 <AnswerBody
                   turnId={turn.id}
                   claims={turn.claims}
@@ -318,7 +330,11 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
 
       {mode === "voice" ? (
         <>
-          <VoiceComposer busy={busy} onSend={(question) => void submit(question, plan?.id ?? null)} />
+          <VoiceComposer
+            busy={busy}
+            responding={speakingTurn !== null}
+            onSend={(question) => void submit(question, plan?.id ?? null)}
+          />
           {spoken !== null && (
             <div className="voice__playback">
               <button type="button" className="button button--quiet" onClick={() => spoken.play()}>

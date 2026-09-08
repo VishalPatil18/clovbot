@@ -242,6 +242,55 @@ describe("required surfaces", () => {
     expect(dictate).not.toMatch(/onSend|submit\(/);
   });
 
+  // Two different actors, two different visual languages: rings travel outward
+  // while the member speaks, bars rise and fall while the assistant does.
+  it("distinguishes the assistant speaking from the member speaking", () => {
+    const css = readFileSync("web/src/app.css", "utf8");
+    expect(css).toMatch(/@keyframes mic-ripple/);
+    expect(css).toMatch(/@keyframes equalise/);
+    expect(css).toMatch(/@keyframes halo-spin/);
+    const voice = readFileSync("web/src/components/VoiceComposer.tsx", "utf8");
+    expect(voice).toMatch(/phase === "listening" && !responding/);
+    expect(voice).toMatch(/\{responding && \(/);
+  });
+
+  it("marks the answer being read aloud", () => {
+    const css = readFileSync("web/src/app.css", "utf8");
+    expect(css).toMatch(/@keyframes read-sweep/);
+    const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
+    expect(assistant).toMatch(/turn__answer--speaking/);
+    expect(assistant).toMatch(/Reading this answer aloud/);
+  });
+
+  // Colour and motion alone would leave the state unreadable to anyone who
+  // cannot see it, or who has motion turned off.
+  it("states in words which answer is being read", () => {
+    const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
+    expect(assistant).toMatch(/className="turn__reading" role="status"/);
+  });
+
+  it("holds the answer border transparent so starting playback cannot reflow it", () => {
+    const css = readFileSync("web/src/app.css", "utf8");
+    const rule = /\.turn__answer \{([^}]*)\}/s.exec(css)?.[1] ?? "";
+    expect(rule).toMatch(/border: 3px solid transparent/);
+  });
+
+  it("stops every speaking animation under reduced motion", () => {
+    const css = readFileSync("web/src/app.css", "utf8");
+    const reduced = css.slice(css.lastIndexOf("prefers-reduced-motion"));
+    expect(reduced).toMatch(/\.turn__answer--speaking \{ animation: none/);
+    expect(reduced).toMatch(/\.mic-halo__sweep \{ animation: none/);
+    expect(reduced).toMatch(/\.equaliser span \{ animation: none/);
+  });
+
+  it("clears the reading state when playback ends", () => {
+    const voice = readFileSync("web/src/voice.ts", "utf8");
+    expect(voice).toMatch(/addEventListener\("ended"/);
+    expect(voice).toMatch(/addEventListener\("end"/);
+    const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
+    expect(assistant).toMatch(/onStateChange\(\(speaking\) => setSpeakingTurn\(speaking \? id : null\)\)/);
+  });
+
   it("labels the composer for screen readers", () => {
     expect(tsx).toMatch(/htmlFor="composer-input"/);
   });
