@@ -207,6 +207,7 @@
 ## Stage 7 - Chat surface and accessibility
 
 - **Goal:** Put the working answer path behind a member-facing interface that meets the accessibility floor.
+- **Reference:** `design/mock/Landing Page.dc.html` and `design/mock/Chatbot Page.dc.html`, via `design/mock/README.md`. **Read the conflicts section first** - the mock's type scale is below NFR-A11Y-03 and building it as drawn fails this stage's acceptance criteria.
 - **Scope in:**
   - Clover-styled host page with the unaffiliated-case-study disclaimer.
   - Launcher at bottom right; panel at 40% viewport width; full-page route; full width on mobile.
@@ -239,6 +240,7 @@
 ## Stage 8 - Guardrails and escalation
 
 - **Goal:** Make every failure path a designed surface rather than an error, and enforce the regulatory boundary.
+- **Reference:** the refusal block and callback panel in `design/mock/Chatbot Page.dc.html`. Its phone number is real-shaped and must be replaced per D-026; its stated support hours are unsourced. See `design/mock/README.md` conflicts 2 and 3.
 - **Scope in:**
   - All ten bucket C triggers from `docs/call-drivers.md` §6, per FR-21.
   - Refusals that state the boundary and show what was found, per FR-22.
@@ -272,6 +274,7 @@
 ## Stage 9 - Voice integration
 
 - **Goal:** Build the full voice loop against the measurements taken in Stage 2, rather than against assumptions.
+- **Reference:** voice mode in `design/mock/Chatbot Page.dc.html` - the 112px mic, the idle and listening states, and the copy "Hold to talk, or tap to start and tap to stop. The transcript is editable before it sends," which states FR-17 and FR-18 correctly.
 - **Scope in:**
   - Mode toggle between text and voice, persisted, per FR-16.
   - Centred microphone control with idle, listening and processing states.

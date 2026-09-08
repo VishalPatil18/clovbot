@@ -55,6 +55,7 @@
 ## Stage 2 - Member document upload
 
 - **Goal:** Let a signed-in member ask about a letter, bill or explanation of benefits they were sent.
+- **Reference:** the `＋` attach control in `design/mock/Chatbot Page.dc.html` is this feature. It is drawn in the signed-out composer, which this stage's first acceptance criterion forbids. It must not ship in P1. See `design/mock/README.md` conflict 4.
 - **Scope in:** Upload inside an authenticated session only. Type allowlist, size cap, page cap, per-session upload limit. Parse, chunk, embed, store scoped to that member. Retrieval alongside plan documents with filename and page citations. Member-visible file list with real deletion and a retention timer. Plain-language warning before upload.
 - **Scope out:** Any upload path for signed-out visitors. Any interpretation of a denial - see the first acceptance criterion.
 - **Acceptance criteria:**

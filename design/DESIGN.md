@@ -1,6 +1,8 @@
 # Clover — Style Reference
 
 > Botanical greenhouse on cream paper
+>
+> **Mocks:** [`mock/README.md`](./mock/README.md) explains how to use `mock/Landing Page.dc.html` and `mock/Chatbot Page.dc.html`, which apply these tokens to real screens. Read it before building any UI surface — it lists six conflicts between the mocks and frozen requirements, including a type scale below the WCAG floor.
 
 **Theme:** light
 

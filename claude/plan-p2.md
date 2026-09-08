@@ -77,6 +77,7 @@
 ## Stage 3 - Answer card and freshness
 
 - **Goal:** Stop presenting benefits answers as chat prose.
+- **Reference:** the bot message block in `design/mock/Chatbot Page.dc.html`. Note its citation chip is set at 11px, the smallest type on the screen, on the surface the product's trustworthiness rests on. See `design/mock/README.md` conflict 1.
 - **Scope in:** Answer card format - one-sentence direct answer, the amount in large type, source line beneath. Plan year and document version on every citation. Corpus ingestion date recorded and surfaced. Stale-document warning when the plan year rolls over.
 - **Scope out:** Appearance customization. That is P4.
 - **Acceptance criteria:**
@@ -97,6 +98,7 @@
 ## Stage 4 - Session UX cluster
 
 - **Goal:** The retention and sharing surfaces, grouped because they share state and ship together cleanly.
+- **Reference:** the sidebar in `design/mock/Chatbot Page.dc.html` already draws "Recent" and "Search conversations." Both belong to this stage, not to P1 Stage 7. Search across conversations is drawn but unspecified - decide whether it is in scope. See `design/mock/README.md` conflict 5.
 - **Scope in:** Conversation history persisted locally, restored on return, clearable. Export, print stylesheet, and copy or email of an answer or transcript. Quick-reply chips and basic commands. Static help panel listing what can be asked.
 - **Scope out:** Server-side history. Without auth there is no identity to key it to.
 - **Acceptance criteria:**

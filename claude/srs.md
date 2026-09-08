@@ -7,9 +7,10 @@
 | Field        | Value                                   |
 | ------------ | --------------------------------------- |
 | Project      | Clover Member Assistant                 |
-| Version      | 1.0.0                                   |
+| Version      | 1.1.0                                   |
 | Status       | Frozen                                  |
 | Last Updated | 2026-09-07                              |
+| Amendments   | 1.1.0 - added FR-31 (identifier redaction) and FR-32 (structured answer payload), both surfaced by `docs/testing-strategy.md` §10 |
 | Sources      | `docs/ideas.md`, `docs/call-drivers.md`, `docs/research-init.md`, `case-study-prompt.pdf` |
 
 ---
@@ -64,7 +65,8 @@ Derived from `docs/call-drivers.md` bucket A. Each maps to a call the member wou
 
 | ID | Requirement |
 | --- | --- |
-| FR-05 | **Cite or refuse, evaluated per claim.** Every factual statement in an answer is supported by a retrieved chunk and carries a visible citation to it. Any part of the question not supported by retrieval is named explicitly as not found, followed by the human path. The assistant never states an unsupported fact and never silently drops part of a question. |
+| FR-05 | **Cite or refuse, evaluated per claim.** Every factual statement in an answer is supported by a retrieved chunk and carries a visible citation to it. Any part of the question not supported by retrieval is named explicitly as not found, followed by the human path. The assistant never states an unsupported fact and never silently drops part of a question. Enforced structurally by FR-32. |
+| FR-32 | **The model returns a structured answer payload, not prose.** Each claim is a discrete object carrying its own citation identifiers; unanswered parts of the question are a separate list; a refusal is a separate typed branch. The payload is schema-validated at the model boundary and rendered to prose by the application. A claim with no citation identifier fails validation and is never rendered, so an uncited claim is structurally impossible rather than merely detectable. Every citation identifier in the payload must appear in the retrieved set for that turn; a citation to a chunk that was not retrieved fails validation. |
 | FR-06 | A citation renders as document name, plan year, contract identifier, and section or page. A citation without a plan year is not a valid citation. |
 | FR-07 | When retrieved chunks conflict, the Evidence of Coverage takes precedence as the legally controlling document. The conflict is stated in the answer, not hidden. |
 | FR-08 | Answers stream to the member token by token. |
@@ -110,7 +112,8 @@ Derived from `docs/call-drivers.md` bucket A. Each maps to a call the member wou
 
 | ID | Requirement |
 | --- | --- |
-| FR-26 | Every conversation turn is logged with: the question, the retrieved chunk ids, the reranker score, the confidence floor in effect, answered or refused, the refusal trigger where applicable, latency measurements, the corpus snapshot id, and the call-driver bucket. Any answer is reproducible after the fact from this record. |
+| FR-26 | Every conversation turn is logged with: the question in redacted form per FR-31, the retrieved chunk ids, the reranker score, the confidence floor in effect, answered or refused, the refusal trigger where applicable, latency measurements, the corpus snapshot id, and the call-driver bucket. Any answer is reproducible after the fact from this record. |
+| FR-31 | **Identifier redaction before logging.** A member can type an identifier into the chat box - a member id, a subscriber number, a date of birth, a social security number - and FR-26 would otherwise persist it. Identifier-shaped strings are detected and replaced before the question is written to any log or store. The raw text is never persisted. Redaction is conservative: it removes identifier shapes and leaves the surrounding question intact, so the turn log remains usable for corpus expansion. |
 | FR-27 | Each answer carries a "Did this answer your question?" control. Responses are logged. |
 | FR-28 | An automated evaluation harness runs a golden question set in CI. Questions are drafted from the call-driver taxonomy; expected answers are pinned by hand to a specific source document page or section. The set includes correct-refusal cases for every bucket C trigger and at least one prompt-injection case. |
 | FR-29 | The harness reports faithfulness, structural citation compliance, refusal rate, and per-bucket accuracy. It fails the build on the thresholds in NFR-QUAL-01 through NFR-QUAL-03. |
@@ -290,6 +293,28 @@ Scenario: [FR-29] an uncited factual sentence fails the build
   Given a generated answer contains a factual sentence with no citation marker
   When the structural citation check runs
   Then the build fails
+
+Scenario: [FR-32] a claim with no citation is rejected before rendering
+  Given a model payload containing a claim with an empty citation list
+  When the payload is validated at the model boundary
+  Then validation fails
+  And nothing is rendered to the member
+
+Scenario: [FR-32] a citation to an unretrieved chunk is rejected
+  Given a model payload citing a chunk id that was not in the retrieved set for that turn
+  When the payload is validated at the model boundary
+  Then validation fails with a containment violation
+
+Scenario: [FR-31] a member identifier typed into the chat box is not persisted
+  Given the member asks "my member id is 1234567890, is an MRI covered"
+  When the turn is logged
+  Then the stored question contains no digit sequence matching an identifier shape
+  And the stored question still contains the words "is an MRI covered"
+
+Scenario: [FR-31] redaction does not destroy a question containing an ordinary number
+  Given the member asks "what is my copay for a 30 day supply"
+  When the turn is logged
+  Then the stored question still contains "30 day supply"
 ```
 
 ---
