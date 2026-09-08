@@ -94,6 +94,14 @@ describe("parseCitations", () => {
   it("ignores bracketed text that is not a chunk id", () => {
     expect(parseCitations("see [the document] for detail")).toEqual([]);
   });
+
+  // Stage 4 ids carry the document kind, which contains underscores. A regex
+  // allowing only letters, digits and hyphens silently parsed these as no
+  // citation at all, so correct cited answers were logged as refusals.
+  it("finds a real chunk id containing underscores", () => {
+    const id = "H5141-004-2026-summary_of_benefits-section-ii-doctor-s-office-001";
+    expect(parseCitations(`The copay is $10 [${id}].`)).toEqual([id]);
+  });
 });
 
 describe("findUncitedIds", () => {

@@ -1,0 +1,63 @@
+{
+  "note": "Six fixtures proving the harness detects what it claims to. docs/testing-strategy.md section 4. If these do not behave as labelled, every later number is meaningless.",
+  "sources": [
+    {
+      "id": "sob-doctor-01",
+      "content": "Doctor's Office Visits. In-Network: Primary care physician visit: $0 copay. Specialist visit: $10 copay. Out-of-Network: Specialist visit: $20 copay."
+    },
+    {
+      "id": "sob-emergency-01",
+      "content": "Emergency Care. In-Network and Out-of-Network: $115 copay per visit. Copay is waived if you are admitted to the hospital within 24 hours."
+    }
+  ],
+  "fixtures": [
+    {
+      "label": "known good",
+      "answer": "Your specialist copay is $10 in network [sob-doctor-01].",
+      "expect": {
+        "structuralCompliant": true,
+        "faithfulnessAtLeast": 0.9
+      }
+    },
+    {
+      "label": "uncited",
+      "answer": "Your specialist copay is $10 in network.",
+      "expect": {
+        "structuralCompliant": false
+      }
+    },
+    {
+      "label": "unfaithful",
+      "answer": "Your specialist copay is $75 in network [sob-doctor-01]. Referrals are required before every visit [sob-doctor-01]. There is an annual limit of 12 visits [sob-doctor-01].",
+      "expect": {
+        "structuralCompliant": true,
+        "faithfulnessBelow": 0.5
+      }
+    },
+    {
+      "label": "correct refusal",
+      "answer": "I could not find that in the plan documents I searched. Please call Member Services at 1-888-778-1478 (TTY 711).",
+      "expect": {
+        "structuralCompliant": true,
+        "faithfulnessAtLeast": 0.9
+      }
+    },
+    {
+      "label": "partially faithful",
+      "answer": "Emergency care is a $115 copay per visit [sob-emergency-01]. The copay is waived if you are admitted within 24 hours [sob-emergency-01]. Ambulance rides are included at no charge [sob-emergency-01].",
+      "expect": {
+        "structuralCompliant": true,
+        "faithfulnessBelow": 1.0,
+        "faithfulnessAtLeast": 0.5
+      }
+    },
+    {
+      "label": "faithful multi-claim",
+      "answer": "Your specialist copay is $10 in network [sob-doctor-01]. Out of network it is $20 [sob-doctor-01]. Your primary care visits are $0 [sob-doctor-01]. Emergency care is $115 per visit [sob-emergency-01].",
+      "expect": {
+        "structuralCompliant": true,
+        "faithfulnessAtLeast": 0.9
+      }
+    }
+  ]
+}

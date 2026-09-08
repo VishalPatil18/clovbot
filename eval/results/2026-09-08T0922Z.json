@@ -1,0 +1,136 @@
+{
+  "snapshotId": "2026-09-08T0313Z",
+  "report": {
+    "faithfulness": null,
+    "structuralCompliance": 0.5,
+    "refusalRate": 1,
+    "refusalVerdict": "fail",
+    "buckets": [
+      {
+        "bucket": "A",
+        "total": 6,
+        "enforced": 6,
+        "passed": 0,
+        "accuracy": 0
+      },
+      {
+        "bucket": "B",
+        "total": 0,
+        "enforced": 0,
+        "passed": 0,
+        "accuracy": null
+      },
+      {
+        "bucket": "C",
+        "total": 0,
+        "enforced": 0,
+        "passed": 0,
+        "accuracy": null
+      },
+      {
+        "bucket": "adversarial",
+        "total": 0,
+        "enforced": 0,
+        "passed": 0,
+        "accuracy": null
+      }
+    ],
+    "failures": [
+      "3 answers carry an uncited factual claim",
+      "refusal rate 100.0% exceeds 35%"
+    ]
+  },
+  "outcomes": [
+    {
+      "id": "A-01",
+      "bucket": "A",
+      "driver": "A-02",
+      "enforced": true,
+      "passed": false,
+      "refused": true,
+      "faithfulness": null,
+      "structural": {
+        "compliant": true,
+        "uncitedSentences": []
+      },
+      "note": ""
+    },
+    {
+      "id": "A-02",
+      "bucket": "A",
+      "driver": "A-02",
+      "enforced": true,
+      "passed": false,
+      "refused": true,
+      "faithfulness": null,
+      "structural": {
+        "compliant": true,
+        "uncitedSentences": []
+      },
+      "note": ""
+    },
+    {
+      "id": "A-03",
+      "bucket": "A",
+      "driver": "A-02",
+      "enforced": true,
+      "passed": false,
+      "refused": true,
+      "faithfulness": null,
+      "structural": {
+        "compliant": false,
+        "uncitedSentences": [
+          "$0 copay for a primary care physician visit, whether in-network or out-of-network."
+        ]
+      },
+      "note": ""
+    },
+    {
+      "id": "A-04",
+      "bucket": "A",
+      "driver": "A-02",
+      "enforced": true,
+      "passed": false,
+      "refused": true,
+      "faithfulness": null,
+      "structural": {
+        "compliant": true,
+        "uncitedSentences": []
+      },
+      "note": ""
+    },
+    {
+      "id": "A-05",
+      "bucket": "A",
+      "driver": "A-03",
+      "enforced": true,
+      "passed": false,
+      "refused": true,
+      "faithfulness": null,
+      "structural": {
+        "compliant": false,
+        "uncitedSentences": [
+          "- **$9,250** for in-network providers.",
+          "- **$13,900** for in-network and out-of-network providers combined."
+        ]
+      },
+      "note": ""
+    },
+    {
+      "id": "A-06",
+      "bucket": "A",
+      "driver": "A-03",
+      "enforced": true,
+      "passed": false,
+      "refused": true,
+      "faithfulness": null,
+      "structural": {
+        "compliant": false,
+        "uncitedSentences": [
+          "Your combined in-network and out-of-network out-of-pocket maximum is **$13,900** for 2026."
+        ]
+      },
+      "note": ""
+    }
+  ]
+}

@@ -1245,6 +1245,42 @@ Drug tier is a high-volume bucket A call driver and the formulary answers it in 
 
 ---
 
+## Decision D-037 - Reranker is a local ONNX cross-encoder
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Eval harness (P1 Stage 5), consumed by Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`claude/srs.md` section 10 carries this as the last load-bearing open question. FR-03 and D-016 make the reranker score the sole signal deciding whether the assistant answers or refuses, so Stage 6 cannot begin without one. The zero-cost constraint rules out paid reranking APIs.
+
+### Options considered
+
+1. A local ONNX cross-encoder running in process. Zero cost and no rate limit, but a new dependency and a model file to ship.
+2. A hosted free tier. No local dependency, but a rate limit on the hot path and a provider that can withdraw the tier, as Fish Audio did during this project.
+3. Raw fusion score as the confidence signal, already rejected during requirements because Reciprocal Rank Fusion scores are not calibrated across question types.
+
+### Decision
+
+A local ONNX cross-encoder. The specific model is chosen in Stage 6 by measuring at least two candidates against the golden set, per the plan's instruction to pick on measured accuracy rather than preference.
+
+### Rationale
+
+The reranker sits on the hot path of every turn and inside NFR-PERF-02's 800ms time-to-first-token budget. A hosted call adds network latency plus a rate limit to the one component that decides whether an answer is safe to give, and a free tier that disappears takes the refusal gate with it. Local inference has a fixed cost that cannot be revoked.
+
+### Consequences
+
+- Adds an ONNX runtime dependency and a model file, the largest addition to the toolchain so far. It needs explicit approval before installation, and its size affects the deploy target chosen in Stage 10.
+- Reranking latency becomes a local CPU cost inside the NFR-PERF-02 budget, so it must be measured rather than assumed.
+- Resolves the last load-bearing open question in `srs.md` section 10.
+- The confidence floor is calibrated against the golden set once a model is chosen, which is only possible because Stage 5 built the golden set first.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

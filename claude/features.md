@@ -339,3 +339,75 @@ Stage 2, the voice latency spike, was skipped at the user's instruction. It is a
 4. **The first fusion check could not fail**, because it matched any chunk from the right document rather than the chunk containing the term.
 5. Corporate chunks fell from 342 to 67 once web-page furniture stopped being treated as headings, and HTML entity decoding was widened to numeric entities.
 
+
+---
+
+## Feature: Golden set and eval harness (Stage 5)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | 2026-09-08           |
+| Cycle            | 4                    |
+| Stage of plan.md | `plan-p1.md` Stage 5 |
+| Owner            | user + claude        |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Reranker, the last load-bearing open question | Local ONNX cross-encoder (D-037) |
+| 2 | Who pins the 50 golden answers | Claude drafts and self-verifies against the corpus; user spot-checks a sample |
+| 3 | Bucket B and C cases with no confidence floor yet | Mark not-yet-enforced, so Stage 6's gain is visible rather than assumed |
+| 4 | Judge cost per run | Add `--sample N` for fast iteration |
+
+### Phase 2 - Architecting
+
+**Options considered:** score refusals as real passes today, versus marking unenforced behaviour explicitly.
+
+**Chosen:** explicit enforcement flags. A bucket C case that "passes" only because the model happened to decline is not evidence of a guardrail. Accuracy is computed over enforced cases only, and totals report both, so the harness cannot flatter the build.
+
+### Phase 3 - Product Specs
+
+- **UI:** None. `npm run eval [-- --sample N]` and `npm run eval:calibrate`.
+- **Entities:** `GoldenCase`, `CaseOutcome`, `BucketScore`, `Report`, `FaithfulnessResult`.
+- **Artifacts:** `eval/golden/golden-set.json`, committed run outputs under `eval/results/`.
+
+### Phase 4 - Tech Specs
+
+- **Judge:** sentence-level entailment against cited chunks, via the existing Azure provider. An unparseable judgement scores every sentence unsupported rather than defaulting to perfect.
+- **Structural check:** deterministic regex over sentences, separate from the judge, per NFR-QUAL-02 being an independent gate.
+- **CI:** `.github/workflows/ci.yml`. Typecheck and tests on push; calibration and eval on pull requests, with results uploaded as an artifact.
+
+### Phase 5 - Planning
+
+| Sub-stage | Goal | Acceptance |
+| --- | --- | --- |
+| 5a | Scoring | Bands, structural check, per-bucket accuracy, build-failure rules |
+| 5b | Judge and fixtures | Unfaithful fixture scores below 0.5 |
+| 5c | Golden set | 50 cases, all ten C triggers, injection case |
+| 5d | Runner | Four metrics, committed results, `--sample N` |
+| 5e | CI gate | Non-zero exit on threshold breach |
+
+### Phase 6 - Writing Code
+
+- **Files touched:** `eval/harness/{score,run,calibrate}.ts`, `eval/judges/faithfulness.ts`, `eval/golden/golden-set.json`, `tests/fixtures/answers/judge-fixtures.json`, `tests/unit/eval-{score,fixtures}.test.ts`, `.github/workflows/ci.yml`, `src/rag/prompt.ts`.
+- **Tests added:** 25.
+
+**Measured, 2026-09-08, snapshot `2026-09-08T0313Z`:**
+
+| Metric | Value | Threshold |
+| --- | --- | --- |
+| Faithfulness | 0.803 | 0.90, fails |
+| Structural compliance | 76%, twelve uncited claims | 100%, fails |
+| Refusal rate | 0.0% | under 20%, ok |
+| Bucket A accuracy | 17/30 | - |
+| Adversarial | 1/1 | - |
+| Judge calibration | 14 judgements, 0 disagreements | at least 10 |
+
+**Defects the run surfaced:**
+
+1. **Stage 4's chunk ids silently broke citation parsing.** The new ids carry the document kind, which contains underscores, and the citation regex allowed only letters, digits and hyphens. Every citation parsed as none, so correct cited answers were logged as refusals across an entire stage. Fixed, with a test pinning a real id.
+2. **The dominant quality gap is per-claim citation**, not retrieval. The model cites its first sentence and leaves later factual sentences uncited, which is exactly what FR-32 makes structurally impossible.
+3. **Refusal is not representable today.** It is inferred from the absence of citations, which cannot distinguish a cited "not found" from a factual answer. Cases A-31 and A-32 were reclassified as not-yet-enforced rather than being scored against a heuristic that cannot express the behaviour.
+4. **The synthetic provider directory is not cited as fact.** Asked about a named doctor, the assistant states the directory is demo data and routes to a human, closing the rule 6 risk raised when synthetic data was approved.
+

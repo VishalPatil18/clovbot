@@ -388,8 +388,8 @@ Scenario: [FR-31] redaction does not destroy a question containing an ordinary n
 
 **Load-bearing. `/spec-plan` should not proceed past these.**
 
-- [ ] **Reranker choice under the zero-cost constraint.** FR-03 makes the reranker the sole confidence signal, so the build cannot start without one. A local ONNX cross-encoder is the zero-cost default but is a new dependency requiring approval. Alternatives are a hosted free tier or dropping to raw similarity, which was rejected in requirements.
-- [ ] **Which service area.** A Medicare Advantage contract contains multiple plan benefit packages, each with its own service area, documents and cost-sharing. Default is New Jersey; confirm against which service area has a complete retrievable 2026 document set.
+- [x] **Reranker choice under the zero-cost constraint.** Resolved 2026-09-08 as a local ONNX cross-encoder; see D-037. The specific model is chosen in Stage 6 by measurement against the golden set.
+- [x] **Which service area.** Resolved 2026-09-07: contract H5141, plans 004 and 007, Hudson County New Jersey, plan year 2026. See D-032 and D-033.
 
 **Non-blocking.**
 

@@ -48,8 +48,11 @@ export function buildPrompt(question: string, chunks: PromptChunk[]): Prompt {
   };
 }
 
-/** Chunk ids are slug-shaped, so bracketed prose is not mistaken for a citation. */
-const CITATION = /\[([A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)\]/g;
+/**
+ * Chunk ids are slug-shaped and contain underscores from the document kind, so
+ * bracketed prose is not mistaken for a citation but a real id still matches.
+ */
+const CITATION = /\[([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+)\]/g;
 
 export function parseCitations(answer: string): string[] {
   return [...new Set([...answer.matchAll(CITATION)].map((match) => match[1] ?? ""))].filter(

@@ -1,0 +1,91 @@
+{
+  "snapshotId": "2026-09-08T0313Z",
+  "report": {
+    "faithfulness": 1,
+    "structuralCompliance": 0.6666666666666666,
+    "refusalRate": 0,
+    "refusalVerdict": "ok",
+    "buckets": [
+      {
+        "bucket": "A",
+        "total": 3,
+        "enforced": 3,
+        "passed": 2,
+        "accuracy": 0.6666666666666666
+      },
+      {
+        "bucket": "B",
+        "total": 0,
+        "enforced": 0,
+        "passed": 0,
+        "accuracy": null
+      },
+      {
+        "bucket": "C",
+        "total": 0,
+        "enforced": 0,
+        "passed": 0,
+        "accuracy": null
+      },
+      {
+        "bucket": "adversarial",
+        "total": 0,
+        "enforced": 0,
+        "passed": 0,
+        "accuracy": null
+      }
+    ],
+    "failures": [
+      "1 answers carry an uncited factual claim"
+    ]
+  },
+  "outcomes": [
+    {
+      "id": "A-01",
+      "answer": "Your copay for a specialist visit is $10 in-network and $20 out-of-network [H5141-004-2026-summary_of_benefits-section-ii-summary-of-benefits-doctor-s-office-001].",
+      "bucket": "A",
+      "driver": "A-02",
+      "enforced": true,
+      "passed": true,
+      "refused": false,
+      "faithfulness": 1,
+      "structural": {
+        "compliant": true,
+        "uncitedSentences": []
+      },
+      "note": ""
+    },
+    {
+      "id": "A-02",
+      "answer": "Your copay for a specialist visit is $2 in-network and $15 out-of-network [H5141-007-2026-summary_of_benefits-section-ii-summary-of-benefits-doctor-s-office-001].",
+      "bucket": "A",
+      "driver": "A-02",
+      "enforced": true,
+      "passed": true,
+      "refused": false,
+      "faithfulness": 1,
+      "structural": {
+        "compliant": true,
+        "uncitedSentences": []
+      },
+      "note": ""
+    },
+    {
+      "id": "A-03",
+      "answer": "$0 copay for a primary care physician visit, whether in-network or out-of-network. [H5141-004-2026-summary_of_benefits-section-ii-summary-of-benefits-doctor-s-office-001]",
+      "bucket": "A",
+      "driver": "A-02",
+      "enforced": true,
+      "passed": false,
+      "refused": false,
+      "faithfulness": 1,
+      "structural": {
+        "compliant": false,
+        "uncitedSentences": [
+          "$0 copay for a primary care physician visit, whether in-network or out-of-network."
+        ]
+      },
+      "note": ""
+    }
+  ]
+}

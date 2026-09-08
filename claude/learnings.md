@@ -63,3 +63,15 @@ _<How this concept will apply to future work in this project.>_
 **State the narrow version of a decision once you can measure it.** D-004 chose hybrid retrieval over pure vector search. Measured: for a common drug the dense half already ranks the answer second, so fusion adds little. It earns its complexity on rare tokens a general embedding model has no signal for, and on paraphrases the lexical half cannot see at all. The decision stands, but "hybrid is better" was replaced by two named examples with ranks attached.
 
 **Delete the code that disagrees with reality.** Three modules and two test files, written before the corpus existed, encoded a data model where contract and plan were one field. Implementing them would have reintroduced the exact cross-plan leak a later decision existed to prevent. Deleting them was faster than reconciling them, and the adversarial test cases worth keeping were kept by fixing their identifiers.
+
+## Stage 5 - what building the measurement taught
+
+**A change to an identifier format can break a parser a stage away.** Stage 4 put the document kind into chunk ids, which introduced underscores. The citation regex allowed letters, digits and hyphens. Every valid citation then parsed as no citation, and because the code treats "no citation" as a refusal, correct answers were recorded as refusals rather than as errors. It survived a whole stage because the wrong behaviour was indistinguishable from a legitimate one. When a format changes, grep for every consumer that parses it, and prefer failures that look like failures.
+
+**Write down what is measured and what is merely observed.** Bucket B and C cases pass today only because the model happens to decline; no guardrail enforces it. Scoring those as passes would have produced a flattering number that Stage 8 could not improve on. Marking them not-yet-enforced, and computing accuracy over enforced cases only, means the harness reports what the build guarantees rather than what it got away with.
+
+**A binary inferred from a side effect will eventually be wrong.** Refusal was inferred from the absence of citations. An answer that declines to give a fact but cites the document explaining where to go is neither a refusal nor a factual answer, so the inference broke on exactly the cases that matter most. The spec already had the right answer - a typed refusal branch - and the shortcut was only ever a stand-in.
+
+**Verify the mitigation, not the intention.** Synthetic provider data was approved with a banner marking it demo data. The eval asked whether a named doctor was in network, and the assistant said the directory is demo data and routed to a human. That is the difference between believing a mitigation works and having a test that shows it.
+
+**Let the first run be red and read it.** The harness was built to fail, and its failures were diagnostic: twelve of seventeen came from one behaviour, per-claim citation, which is a single named requirement rather than a diffuse quality problem. A harness that had been tuned until it went green would have hidden that.

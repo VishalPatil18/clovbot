@@ -7,8 +7,8 @@
 | Field                | Value                          |
 | -------------------- | ------------------------------ |
 | Snapshot date        | 2026-09-08                     |
-| Current stage        | P1 Stage 4 complete. Stage 2 skipped. Next is Stage 5. |
-| Last feature shipped | Full ingest and hybrid retrieval over the whole corpus. |
+| Current stage        | P1 Stage 5 complete. Stage 2 skipped. Next is Stage 6. |
+| Last feature shipped | Golden set and eval harness, red by design. |
 
 ---
 
@@ -22,6 +22,8 @@
 - **RAG path** - `src/rag/`, eight modules: chunker, provenance, ingest planner, context generator, prompt, providers, store, CLI. Two commands: `ingest`, `ask`.
 - **Migrations** - `migrations/002_hybrid_retrieval.sql`, applied by hand in the Supabase dashboard.
 - **Acceptance script** - `scripts/stage4-check.ts`, prints the smoke-set and fusion numbers.
+- **Eval harness** - `eval/`: 50-case golden set, faithfulness judge, structural citation check, scoring, committed results. Commands `eval` and `eval:calibrate`.
+- **CI** - `.github/workflows/ci.yml`. Typecheck plus tests on every push; judge calibration and the golden-set eval on pull requests.
 - **Retrievability report** - `docs/corpus-report.md`, generated.
 
 ## 2. What works (verified)
@@ -36,7 +38,10 @@
 - **Ingest is idempotent.** Two consecutive runs report 0 new or changed, keep the same snapshot id, and leave 1476 rows with 1476 distinct ids and zero missing provenance.
 - **Hybrid retrieval.** Dense HNSW and lexical GIN fused by Reciprocal Rank Fusion in one Postgres function, both halves scoped to the plan before ranking. Measured: rare drug ORSERDU is dense rank 9 and hybrid rank 1; the paraphrase "what does it cost to see a skin doctor" is absent from lexical and hybrid rank 2.
 - **Smoke set.** 10 of 10 questions retrieve the expected source document.
-- **Tests.** 144 passing. 26 failing, all `not implemented` stubs belonging to Stages 6 through 9.
+- **Eval harness, measured 2026-09-08 against snapshot `2026-09-08T0313Z`.** Faithfulness **0.803** against a 0.90 floor. Structural citation compliance **76%**, twelve answers carrying an uncited factual claim. Refusal rate **0.0%**. Bucket A accuracy **17/30**. The adversarial prompt-injection case passes. The build correctly fails on faithfulness and structural compliance, which is what Stage 5 was for; Stage 6 makes it green.
+- **Judge calibrated.** 14 sentence-level judgements across six fixtures, zero disagreements. The deliberately unfaithful fixture scores 0.00, the partial one 0.67.
+- **Synthetic provider data is not cited as fact.** Asked whether a named doctor is in network, the assistant states the directory is demo data and routes to a human. The Stage 1 banner mitigation holds.
+- **Tests.** 172 passing. 26 failing, all `not implemented` stubs belonging to Stages 6 through 9.
 
 ## 3. Locked decisions
 
@@ -55,8 +60,8 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 
 ## 4. What's next
 
-1. **Stage 5** - golden set and eval harness. 50 hand-pinned questions, faithfulness judge, structural citation check, refusal-rate bands, CI gate. The harness is expected to fail on first run; Stage 6 makes it pass.
-2. **Reranker choice** - still the load-bearing open question in `srs.md` section 10. Stage 6 cannot start without it.
+1. **Stage 6** - reranking, confidence floor, per-claim cite-or-refuse, implemented until the Stage 5 harness goes green. The dominant failure is per-claim citation: the model cites its first sentence and leaves later factual sentences uncited. FR-32's structured payload is the fix.
+2. **Refusal is not currently representable.** It is inferred from the absence of citations, which cannot distinguish a cited "not found" from a factual answer. FR-32's typed refusal branch fixes this, and until then bucket B, bucket C and cases A-31 and A-32 are marked not-yet-enforced.
 3. **Stage 2, deferred** - the voice latency spike was skipped. NFR-PERF-03 and 04 stay unmeasured until Stage 9.
 4. **Gemini key** - rejected as invalid, so the D-034 fallback has never executed.
 
@@ -160,3 +165,21 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 - **D-004 is narrower than "hybrid is better".** For a common drug dense is already rank 2. Fusion earns its complexity on rare tokens and on paraphrases lexical cannot see at all.
 
 **Open:** Reranker choice blocks Stage 6. Gemini key invalid. Voice budgets unmeasured.
+
+## 2026-09-08 - Stage 5: golden set and eval harness
+
+**Did:** Built the 50-case golden set and the harness that scores it. Ran it against the Stage 4 system and recorded the first real numbers.
+
+**Files:** created `eval/golden/golden-set.json`, `eval/harness/{score,run,calibrate}.ts`, `eval/judges/faithfulness.ts`, `tests/fixtures/answers/judge-fixtures.json`, `.github/workflows/ci.yml`, `tests/unit/eval-{score,fixtures}.test.ts`. Committed `eval/results/`.
+
+**Measured:** faithfulness 0.803 against a 0.90 floor, structural compliance 76%, refusal rate 0.0%, bucket A 17 of 30. Build fails, as designed.
+
+**Decisions:** D-037 resolves the reranker open question as a local ONNX cross-encoder, model chosen by measurement in Stage 6.
+
+**What the run taught:**
+- **Stage 4's chunk id change silently broke citation parsing.** New ids carry the document kind, which contains underscores; the citation regex allowed only letters, digits and hyphens. Every valid citation parsed as none, so correct cited answers were recorded as refusals. It looked like a plausible outcome rather than an error, which is why it survived a whole stage.
+- **The dominant quality gap is per-claim citation.** The model cites its first sentence and leaves later factual sentences uncited. That is precisely what FR-32 exists to make structurally impossible.
+- **Refusal cannot be inferred from citation count.** An answer that declines but cites the document explaining where to go is neither a refusal nor a factual answer under that heuristic.
+- **The synthetic provider directory mitigation works.** The assistant states the directory is demo data rather than citing invented doctors, which was the rule 6 risk raised when synthetic data was approved.
+
+**Open:** Stage 6 reranker model selection. Gemini key invalid. Voice budgets unmeasured.
