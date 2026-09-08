@@ -1,12 +1,14 @@
+import { existsSync, readFileSync } from "node:fs";
 import { redactIdentifiers } from "../logging.ts";
-import { latestSnapshotId, readSnapshot } from "../corpus/snapshot.ts";
+import { bboxPath, latestSnapshotId, readSnapshot } from "../corpus/snapshot.ts";
+import { parseFormulary } from "../corpus/formulary.ts";
 import { CORPUS_SCOPE, findPlanRef, formatPlanRef } from "../corpus/scope.ts";
 import { planIngest, readSnapshotMarkdown } from "./ingest.ts";
 import { describeChunk, readGeneratedContext, writeGeneratedContext } from "./context.ts";
 import { answerTurn } from "./answer-turn.ts";
 import { citationLabel } from "./payload.ts";
 import { embed, generate } from "./providers.ts";
-import { connect, existingChunkContent, pruneChunks, upsertChunks, writeTurn } from "./store.ts";
+import { connect, existingChunkContent, pruneChunks, upsertChunks, upsertDrugs, writeTurn } from "./store.ts";
 
 const PLAN_YEAR = CORPUS_SCOPE.planYear;
 /** Azure embeddings are capped per minute by tokens, not requests. */
@@ -14,12 +16,38 @@ const TOKENS_PER_MINUTE = Number(process.env["AZURE_EMBEDDING_TPM"] ?? "29000");
 const BATCH_TOKEN_BUDGET = 5_000;
 const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
 
+/** D-007's typed half: the drug list as rows, not as prose. D-060. */
+async function ingestDrugs(snapshotId: string, snapshot: { entries: { documentId: string; kind: string }[] }): Promise<void> {
+  const formulary = snapshot.entries.find((entry) => entry.kind === "formulary");
+  if (formulary === undefined) return;
+  const path = bboxPath(snapshotId, formulary.documentId);
+  if (!existsSync(path)) {
+    console.warn(`  no bbox for ${formulary.documentId}; run corpus:convert to write it`);
+    return;
+  }
+  const rows = parseFormulary(readFileSync(path, "utf8"));
+  const client = connect();
+  await client.connect();
+  try {
+    await upsertDrugs(
+      client,
+      snapshotId,
+      rows.map((row) => ({ ...row, documentId: formulary.documentId, planYear: PLAN_YEAR })),
+    );
+  } finally {
+    await client.end();
+  }
+  console.log(`  drugs: ${rows.length} rows from ${formulary.documentId}`);
+}
+
 async function ingest(): Promise<void> {
   const snapshotId = latestSnapshotId();
   const snapshot = readSnapshot(snapshotId);
   const { chunks, rejected } = planIngest(snapshot, PLAN_YEAR, readSnapshotMarkdown(snapshotId));
 
   for (const skip of rejected) console.log(`  skipped ${skip.documentId}: ${skip.reason}`);
+
+  await ingestDrugs(snapshotId, snapshot);
 
   // D-006: headings carry context for most chunks; only the orphans need the model,
   // and their generated text is frozen so a second run does not churn.
@@ -109,6 +137,8 @@ async function ask(): Promise<void> {
     const turnId = await writeTurn(client, {
       question: turn.question,
       planContext: formatPlanRef(planRef),
+      route: turn.route.paths.join("+"),
+      routeReason: turn.route.reason,
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,

@@ -931,3 +931,113 @@ Specialist and primary-care copays **collide** between H8010-002 and H5141-004 a
 The failing set is **identical before and after** - A-03, A-18, A-28, ADV-01 - so nothing regressed and nothing new broke. All ten paired cases pass. Written to `eval/results/2026-09-08T1755Z.json`.
 
 **Still not verified, and not claimed:** FR-P2-05, that switching plans mid-session leaves earlier answers untouched, is verified by reading the code rather than by running the browser. There is no component harness, and adding one is a dependency decision the user deferred. The leakage check needs a live index and does not run in CI; the pure predicate behind it does.
+
+---
+
+## Feature: Structured formulary lookup and the router (P2 Stage 2)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-08                       |
+| Cycle            | 11                               |
+| Stage of plan.md | `plan-p2.md` Stage 2             |
+| Owner            | user + claude                    |
+| Requirements     | `srs-p2.md` FR-P2-07 to FR-P2-12 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How the formulary is parsed | Bounding boxes, reusing the Summary of Benefits machinery (D-058) |
+| 2 | Where typed rows live | A `drugs` table populated at ingest (D-060) |
+| 3 | What decides the route | A drug name present in the typed table (D-061) |
+| 4 | How a both-halves question is handled | Paths are additive, not exclusive (D-062) |
+| 5 | Where the router's decision is recorded | Two columns on `turns` (D-063) |
+| 6 | Where the routing cases live | Their own file, run inside `npm run eval` (D-063) |
+| 7 | How a member's word matches a table row | Normalized name tokens, longest match wins |
+| 8 | What to do about the chunker heading bug | Fix inside this stage as a nested bug cycle (D-059) |
+
+**Measured before speccing, not assumed.** The SRS listed formulary parseability as an open question; it is now closed. The document holds **2,468 drug rows across 105 categories** on 85 of its 123 pages. Layout text captures every row but drops **564 strength continuations and 379 requirement continuations**, and one line carries both halves at once, so a drug would read as carrying a quantity limit when it also requires step therapy. Bounding boxes place the columns at Tier x=375 and Requirements x=410 on every table page, which makes a continuation's column a fact.
+
+**Defect found while probing, live in v1.0.0.** `FORMULARY_CLASS` admits no lowercase letter and no parentheses, so `ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS` and `DISEASE-MODIFYING ANTI-RHEUMATIC DRUGS (DMARDS)` never match. Ten statins are indexed and cited under the preceding class. Visible in `eval/results/2026-09-08T0947Z.json`, where atorvastatin cites `...antilipemics-fibrates-001`.
+
+### Phase 2 - Architecting
+
+Four forks, each taken to the user. Full reasoning in D-058 through D-063.
+
+1. **Parse path.** Bounding boxes. *Rejected:* per-page column detection from the repeated header, and indentation thresholds - both re-derive from whitespace what the PDF already carries, and D-057 had just shown that assumption failing in this filer's documents.
+2. **Storage.** A `drugs` table at ingest. *Rejected:* a snapshot JSON artefact, which reads from a gitignored directory absent from the container; extra columns on `chunks`, which already carries wildcard scoping semantics.
+3. **Router.** Deterministic, keyed on indexed drug names. *Rejected:* an LLM classifier, because a zero-tolerance gate cannot depend on a probabilistic component; rules-plus-model, which doubles the thing under test.
+4. **Both halves.** Additive paths. *Rejected:* single selection with chaining, which introduces a "looks incomplete" judgement; always-both, which leaves no selection to measure.
+
+### Phase 3 - Product Specs
+
+**UX flow, changed lines only:**
+
+1. A member names a drug. The typed row answers the tier, cited to the row.
+2. A member asks a rules question. RAG answers, unchanged.
+3. A member asks both in one sentence. Both answer, each claim carrying its own citation kind.
+4. A drug the table does not hold falls through to RAG rather than failing.
+
+**Backend entities:** `DrugRow { name, normalizedName, form, strengths, tier, requirements, category, snapshotId }`. `RouteDecision { paths, reason }`.
+
+**DB schema:** a `drugs` table keyed on snapshot and normalized name; `turns` gains nullable `route` and `route_reason`.
+
+**Citation shape:** a row cites as `Drug List <year> · <drug name>`. The category travels in the chunk's section for prompt context, but `shortSection` renders only the last segment, and the drug name is the right leaf anyway - the formulary's own index is alphabetical by drug, so the name is what a member looks up.
+
+### Phase 4 - Tech Specs
+
+- **Parser:** `pdftotext -bbox-layout`, reusing `parseBboxPages`. *Rejected:* a new PDF library, since poppler is already a prerequisite and the bbox reader already exists.
+- **Matching:** normalized name tokens, longest match wins. *Rejected:* first-token exact match, which misses multi-word and combination drugs; `pg_trgm` fuzzy matching, which turns an exact gate into a threshold.
+- **Storage:** Postgres, same connection and migration path as every prior stage.
+- **New dependencies:** none.
+
+### Phase 5 - Planning
+
+Planned inline rather than by dispatching `spec-planner`: the four architectural forks were resolved before planning began, leaving sequencing with no open questions to explore.
+
+| # | Sub-stage | Deliverable |
+| --- | --- | --- |
+| 2.1 | Formulary parser | 2,468 typed rows from a committed bbox fixture, continuations joined |
+| 2.2 | Chunker heading fix | Both missed classes detected; regression test pins them by name |
+| 2.3 | Drugs table and ingest | Rows persisted in the same `npm run ingest` run |
+| 2.4 | Router and logging | Deterministic selection, recorded on every turn |
+| 2.5 | Structured answer path | Tier answers cited to a row, additive with RAG |
+| 2.6 | Routing set and eval | 30 hand-labelled cases, confusion matrix in the eval report |
+| 2.7 | Re-ingest and verify | Full eval, no P1 or Stage 1 regression |
+
+### Phase 6 - Writing Code
+
+**2.1 Formulary parser.** `src/corpus/formulary.ts` reads typed rows from bounding boxes, taking column boundaries from each page's own `Drug Name / Drug Tier / Requirements/Limits` header rather than inheriting them - the D-057 rule, applied to a second parser. 2,468 rows across 105 categories from the real document, none uncategorized.
+
+**2.2 Chunker heading fix.** `FORMULARY_CLASS` now admits lowercase and parentheses. Widening it alone broke the existing tests, because the old pattern had been excluding drug rows **by accident** - a row contains "15mg", whose lowercase disqualified it. The accident was doing real work. The discriminator is now explicit and matches the typed parser's own rule: a drug row carries a tier digit in its own column and a class heading never does.
+
+**2.3 Drugs table.** `migrations/006_drugs_and_routing.sql` adds `drugs` and two columns to `turns`. Populated inside the existing `npm run ingest` run.
+
+**2.4 Router.** `src/rag/router.ts` selects paths from the drug names actually indexed. A member types "atorvastatin" where the row reads "atorvastatin calcium", so any leading run of the name's words counts and the longest run wins - which also keeps a combination product from being read as one of its components, whose tier differs.
+
+**2.5 Structured answer path.** A drug row is projected into the same shape a retrieved chunk has, so it travels the existing prompt, citation, validation and cite-or-refuse machinery unchanged. That satisfies FR-P2-11 by construction rather than by a parallel implementation. An exact row scores above the confidence floor, so the gate needed no special case.
+
+**2.6 Routing set.** 32 hand-labelled cases in `eval/golden/routing-set.json`, scored inside `npm run eval` with a confusion matrix, an aggregate floor and a separate zero-tolerance count.
+
+**Two bugs I introduced and caught before they shipped:**
+
+- The page-furniture rule was `/^(PA - Prior|mail-order|\d+)\b/`, which matched the strength continuation `10 mg` as a page number and silently collapsed three distinct strengths of the same drug into one row. A page number is a bare integer alone on a line. Caught by a duplicate-name check, not by the parse succeeding.
+- `ROUTING_FLOOR` was declared below the top-level call that used it, so the router block threw a `ReferenceError` after all 60 answer cases had already run.
+
+**Two routing labels were wrong, and the corpus said so.** R-29 and R-30 expected "ozempic" and "mounjaro" to fall through to prose search on the assumption they were not covered. Both are on this formulary at Tier 3 with prior authorization. The labels were corrected against the table; the router was right.
+
+**Verified against the live index:**
+
+- **2,468 drug rows** ingested, 105 categories, none uncategorized. 1,632 distinct normalized names.
+- `what tier is atorvastatin on` returns **Tier 1**, cited `Drug List 2026 · atorvastatin calcium`, route recorded as `structured`.
+- `is eliquis covered and how do I appeal a denial` returns **Tier 3 from the row and the Level 1 appeal process from the Evidence of Coverage**, each with its own citation. Route recorded as `structured+rag`. FR-P2-10 and D-062 verified end to end.
+- Route and reason are written to `turns` on every answer.
+
+**Router, 32 cases:** accuracy **1.000** against a 0.90 floor, **0** drug questions reaching prose search alone. Confusion matrix is a clean diagonal: 12 structured, 12 rag, 8 both.
+
+**Eval, 60 cases:** faithfulness **1.000**, structural **100%**, refusal **10.0%**, bucket A **37/40**, B **8/8**, C **10/10**. Identical to the Stage 1 run, same four failing cases, despite the heading fix re-sectioning the formulary and re-embedding 675 chunks. Both reports come from one `npm run eval`, which satisfies FR-P2-51 ahead of Stage 8.
+
+**Not delivered, by decision:** provider search. D-051 narrowed D-007 because the directory is ten invented rows, and exact search over invented data produces a confident wrong answer about a member's own doctor. Provider questions keep the v1 refuse-and-route behaviour. Stage 2's first acceptance criterion in `plan-p2.md` is therefore **not met, deliberately**, and is marked as such rather than ticked.
+
+**Known limits:** the router cannot match a misspelled drug name; the fallback is prose search rather than a failure. Two rows collapse on the primary key - the same albuterol strength listed three times as the generic of three different brands, identical in tier and requirements.

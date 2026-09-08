@@ -443,6 +443,8 @@ async function handleAsk(
     const turnId = await writeTurn(client, {
       question: turn.question,
       planContext: formatPlanRef(planRef ?? firstIndexedPlan()),
+      route: turn.route.paths.join("+"),
+      routeReason: turn.route.reason,
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,

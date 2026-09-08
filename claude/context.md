@@ -361,3 +361,24 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** FR-P2-05 has no automated coverage; there is no component harness and adding one is a deferred dependency decision. The leakage check needs a live index and is not in CI. `migrations/005_contract_wildcard.sql` must be applied to any other environment.
 
 **Next:** Stage 2, structured formulary lookup and the router. D-051 narrowed it: formulary only, provider search keeps refusing.
+
+## 2026-09-08 - P2 Stage 2: structured formulary lookup and the router
+
+**Did:** Built D-007's typed half. The formulary is parsed into 2,468 typed rows, a deterministic router selects between the table and prose, and both paths can answer one question.
+
+**Files:** created `src/corpus/formulary.ts`, `src/rag/router.ts`, `migrations/006_drugs_and_routing.sql`, `eval/golden/routing-set.json`, four test files and one corpus fixture. Changed `src/rag/{chunk,store,answer-turn,cli}.ts`, `src/corpus/{convert,cli,snapshot}.ts`, `src/server.ts`, `eval/harness/run.ts`.
+
+**Verified:** 2,468 rows, 105 categories, none uncategorized, 1,632 distinct drug names. `what tier is atorvastatin on` returns Tier 1 cited to the row. `is eliquis covered and how do I appeal a denial` returns the tier from the table and the appeal process from the Evidence of Coverage, each cited separately. Router 32/32 with zero drug questions reaching prose alone. Eval unchanged from Stage 1 on all six answer metrics, same four failing cases. 451 tests pass.
+
+**What building it surfaced:**
+
+- **A live v1.0.0 defect, found by probing rather than by a failure.** `FORMULARY_CLASS` admitted no lowercase and no parentheses, so `ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS` never matched and ten statins were indexed and cited under the class above them. Visible in the committed eval results since Stage 5. A missed heading raises nothing; the drugs beneath it silently inherit the previous class.
+- **The old regex was doing work by accident.** Widening it to admit lowercase immediately broke the existing tests, because a drug row contains "15mg" and its lowercase had been disqualifying it. The real discriminator is the tier digit, which is what the typed parser uses, so one rule now serves both paths.
+- **Layout text loses half of two columns.** All 2,468 rows survive `pdftotext -layout`, but 564 strength continuations and 379 requirement continuations do not, and one line carries both halves at once. A drug would have read as carrying a quantity limit when it also requires step therapy.
+- **A page-number rule that ate strengths.** `/^\d+\b/` matched the continuation "10 mg" and collapsed three distinct strengths into one row. Caught by asserting no two rows share a printed name, not by the parse appearing to succeed.
+- **Two test labels were wrong and the corpus said so.** Ozempic and Mounjaro were labelled as not covered on assumption. Both are on this formulary at Tier 3 with prior authorization. The labels were corrected; the router was right.
+- **A structured answer needed no parallel machinery.** Projecting a row into the retrieved-chunk shape made it travel the existing prompt, citation, validation and cite-or-refuse path unchanged, and an exact row outscores the confidence floor so the gate needed no exception.
+
+**Open:** provider search is not built and will not be (D-051). The router cannot match a misspelled drug name and falls through to prose. Two albuterol rows collapse on the primary key, identical in tier and requirements, differing only in which brand they are the generic of.
+
+**Next:** Stage 3, answer card and freshness.

@@ -8,7 +8,9 @@ import { MEMBER_SERVICES, buildStructuredPrompt, renderAnswer } from "./payload.
 import { generate, generateStream } from "./providers.ts";
 import { embed } from "./providers.ts";
 import { rerank, type RerankedChunk } from "./rerank.ts";
-import { searchHybrid } from "./store.ts";
+import { loadDrugIndex, lookupDrugs, searchHybrid, type DrugLookup } from "./store.ts";
+import { chooseRoute, type RouteDecision } from "./router.ts";
+import { latestSnapshotId } from "../corpus/snapshot.ts";
 import type pg from "pg";
 
 /** Calibrated, not chosen. eval/results/floor-calibration.json. D-038. */
@@ -28,6 +30,7 @@ export interface TurnResult {
   refusalTrigger: string | null;
   provider: string;
   latencyMs: Record<string, number>;
+  route: RouteDecision;
 }
 
 const refusalText = (explanation: string): string =>
@@ -35,6 +38,44 @@ const refusalText = (explanation: string): string =>
 
 const NOT_FOUND =
   "I could not find an answer to that in the plan documents I searched.";
+
+/** An exact table row outranks anything the reranker can score. */
+const EXACT_MATCH_SCORE = 1;
+
+const RAG_ONLY: RouteDecision = { paths: ["rag"], drugs: [], reason: "router unavailable" };
+
+/** Loaded once per snapshot: the index changes only when the corpus is re-ingested. */
+const drugIndexes = new Map<string, Set<string>>();
+
+async function drugIndexFor(client: pg.Client, snapshotId: string): Promise<Set<string>> {
+  const cached = drugIndexes.get(snapshotId);
+  if (cached !== undefined) return cached;
+  const index = await loadDrugIndex(client, snapshotId);
+  drugIndexes.set(snapshotId, index);
+  return index;
+}
+
+/**
+ * A typed row rendered as a citable source, so a structured answer travels the
+ * same prompt, citation and validation path as a retrieved one. FR-P2-11.
+ */
+export function drugAsChunk(row: DrugLookup, snapshotId: string): RerankedChunk {
+  const requirements = row.requirements.length > 0 ? row.requirements : "none";
+  return {
+    id: `${row.documentId}-drug-${row.normalizedName.replace(/[^a-z0-9]+/g, "-")}`,
+    documentId: row.documentId,
+    kind: "formulary",
+    contractId: "*",
+    planId: "*",
+    planYear: row.planYear,
+    section: `${row.category} > ${row.normalizedName}`,
+    content:
+      `${row.name} is on Tier ${String(row.tier)} of the ${String(row.planYear)} drug list. ` +
+      `Therapeutic class: ${row.category}. Requirements or limits: ${requirements}.`,
+    distance: 0,
+    rerankScore: EXACT_MATCH_SCORE,
+  };
+}
 
 /**
  * One turn, end to end. Shared by the CLI and the eval harness so the thing
@@ -57,6 +98,7 @@ export async function answerTurn(
     citedIds: [] as string[],
     confidenceFloor: CONFIDENCE_FLOOR,
     provider: "none",
+    route: RAG_ONLY,
   };
 
   // FR-24. Answered in English, with the human path, and no partial attempt.
@@ -92,11 +134,29 @@ export async function answerTurn(
 
   let retrieved: RerankedChunk[] = [];
   let retrievedAt = started;
+  let route: RouteDecision = RAG_ONLY;
   try {
-    const [vector] = await embed([question]);
-    if (vector === undefined) throw new Error("no embedding returned");
-    const pool = await searchHybrid(client, vector, question, scope, CANDIDATE_POOL);
-    retrieved = (await rerank(question, pool)).slice(0, TOP_K);
+    // FR-P2-09, D-061. Selection is a lookup against indexed drug names, so a
+    // tier question about a drug we hold cannot degrade to prose search.
+    const snapshotId = latestSnapshotId();
+    route = chooseRoute(question, await drugIndexFor(client, snapshotId));
+
+    const structured = route.paths.includes("structured")
+      ? (await lookupDrugs(client, snapshotId, route.drugs)).map((row) =>
+          drugAsChunk(row, snapshotId),
+        )
+      : [];
+
+    // D-062: paths are additive, so a question that is both a lookup and a rules
+    // question keeps both halves and neither can be dropped.
+    let prose: RerankedChunk[] = [];
+    if (route.paths.includes("rag")) {
+      const [vector] = await embed([question]);
+      if (vector === undefined) throw new Error("no embedding returned");
+      const pool = await searchHybrid(client, vector, question, scope, CANDIDATE_POOL);
+      prose = (await rerank(question, pool)).slice(0, TOP_K);
+    }
+    retrieved = [...structured, ...prose];
     retrievedAt = Date.now();
   } catch (error) {
     // FR-09 and FR-25: an upstream failure never produces a factual claim.
@@ -108,6 +168,7 @@ export async function answerTurn(
       rerankTopScore: Number.NEGATIVE_INFINITY,
       outcome: "upstream_failure",
       refusalTrigger: "upstream_failure",
+      route,
       latencyMs: { total: Date.now() - started },
       note: error instanceof Error ? error.message : String(error),
     } as TurnResult;
@@ -124,6 +185,7 @@ export async function answerTurn(
       rerankTopScore: topScore,
       outcome: "refused",
       refusalTrigger: "below_floor",
+      route,
       latencyMs: { retrieval: retrievedAt - started, total: Date.now() - started },
     };
   }
@@ -162,6 +224,7 @@ export async function answerTurn(
       rerankTopScore: topScore,
       outcome: "upstream_failure",
       refusalTrigger: "upstream_failure",
+      route,
       provider: "none",
       latencyMs: { retrieval: retrievedAt - started, total: Date.now() - started },
       note: error instanceof Error ? error.message : String(error),
@@ -207,6 +270,7 @@ export async function answerTurn(
       provider,
       latencyMs,
       note: `cited unretrieved chunks: ${violations.join(", ")}`,
+      route,
     } as TurnResult;
   }
 
@@ -225,5 +289,6 @@ export async function answerTurn(
     refusalTrigger: answered ? null : (payload.refusal?.trigger ?? "no_supported_claim"),
     provider,
     latencyMs,
+    route,
   };
 }

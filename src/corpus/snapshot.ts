@@ -10,6 +10,10 @@ export const rawPath = (id: string, documentId: string, ext: string): string =>
 export const markdownPath = (id: string, documentId: string): string =>
   join(snapshotDir(id), "markdown", `${documentId}.md`);
 
+/** Word coordinates, kept for documents whose tables need typed extraction. D-058. */
+export const bboxPath = (id: string, documentId: string): string =>
+  join(snapshotDir(id), "bbox", `${documentId}.xhtml`);
+
 /** Sortable and filename-safe: 2026-09-07T2231Z. */
 export function newSnapshotId(now: Date): string {
   return `${now.toISOString().slice(0, 16).replace(/:/g, "")}Z`;

@@ -15,10 +15,12 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 - Plans are named wherever they are shown. The callback request used to label a member's plan "H5141-004"; it now reads "Clover Health Choice (PPO)".
 - Drug list and Clover information answers work under every plan rather than only the plans on one contract.
+- Drug tier answers now come from the drug list itself rather than from a search over its text, and cite the drug they read. Asking what tier a drug is on returns its tier, its therapeutic class and any prior-authorization, quantity or step-therapy limit.
+- Asking about a drug and a rule in one sentence answers both. "Is Eliquis covered and how do I appeal a denial" returns the tier from the drug list and the appeal process from the Evidence of Coverage, each with its own source.
 
 ### Fixed
 
-- _<bug fixes; populated by `/spec-bug`>_
+- Statin citations named the wrong drug class. Ten drugs under "ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS" were indexed and cited under the class listed above them, so an answer about atorvastatin pointed a member at the wrong part of the drug list. The tier was right; the source line was not.
 
 ### Removed
 

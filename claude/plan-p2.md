@@ -58,17 +58,17 @@
 - **Scope in:** Structured ingest of the provider directory and formulary into typed tables. Typed query functions for provider search and formulary tier lookup. A router selecting between structured lookup and RAG. Router decisions logged on every turn.
 - **Scope out:** Structured ingest of anything else. Cost-sharing tables stay in RAG for now.
 - **Acceptance criteria:**
-  - [ ] Provider search returns exact matches from typed data, not semantic approximations.
-  - [ ] Formulary tier lookup for a named drug returns the tier from a table row, with the row cited.
-  - [ ] The router logs its selection and reasoning on every turn.
-  - [ ] A held-out set of 30 routing cases achieves at least 90% correct selection.
-  - [ ] Misrouting a tier question to RAG is detected by test, since silent degradation to prose search is the exact failure D-007 exists to prevent.
-  - [ ] A question that is genuinely both - "is this drug covered and what is the appeal process" - is handled without dropping either half.
-  - [ ] Structured answers carry citations in the same format as RAG answers.
+  - [-] Provider search returns exact matches from typed data. **Not built, by decision (D-051):** the directory is ten invented rows, so exact search over it would produce a confident wrong answer about a member's own doctor. Provider questions keep the v1 refuse-and-route behaviour.
+  - [x] Formulary tier lookup for a named drug returns the tier from a table row, with the row cited. `Drug List 2026 · atorvastatin calcium`, Tier 1.
+  - [x] The router logs its selection and reasoning on every turn. `turns.route` and `turns.route_reason`.
+  - [x] A held-out set of 30 routing cases achieves at least 90% correct selection. 32 cases, 1.000.
+  - [x] Misrouting a tier question to RAG is detected by test. Counted separately and gated at zero, not folded into the aggregate.
+  - [x] A question that is genuinely both is handled without dropping either half. Verified live on "is eliquis covered and how do I appeal a denial".
+  - [x] Structured answers carry citations in the same format as RAG answers. A row is projected into the retrieved-chunk shape, so it travels the same path.
 - **Test plan:** A 30-case routing set with hand-labelled expected paths, run as a classification test with a reported confusion matrix. Separate correctness tests per path. The both-halves case is its own test.
 - **Effort:** L
 - **Exit signal:** A drug tier question returns a table row, a rules question returns prose, and the router's confusion matrix is on record.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-08. Provider search deliberately not delivered (D-051); everything else met.
 
 **Highest-uncertainty stage in P2.** D-007's rationale is strong on the split and silent on the routing, per comment T-3. Failing here early is the point of its position in the order.
 
@@ -201,7 +201,7 @@
 ## Completion Checklist
 
 - [x] Stage 1 - Second plan indexed
-- [ ] Stage 2 - Structured lookup and router
+- [x] Stage 2 - Structured lookup and router
 - [ ] Stage 3 - Answer card and freshness
 - [ ] Stage 4 - Session UX cluster
 - [ ] Stage 5 - Synthetic member records

@@ -1,13 +1,16 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { latestSnapshotId } from "../../src/corpus/snapshot.ts";
 import { answerTurn } from "../../src/rag/answer-turn.ts";
-import { connect } from "../../src/rag/store.ts";
+import { connect, loadDrugIndex } from "../../src/rag/store.ts";
+import { chooseRoute, type RoutePath } from "../../src/rag/router.ts";
 import { judgeFaithfulness } from "../judges/faithfulness.ts";
 import { buildReport, type Bucket, type CaseOutcome } from "./score.ts";
 import type { PlanRef } from "../../src/types.ts";
 
 
 const TOP_K = 5;
+/** NFR-P2-03. Aggregate floor; the structured direction is zero-tolerance. */
+const ROUTING_FLOOR = 0.9;
 
 interface GoldenCase {
   id: string;
@@ -52,11 +55,13 @@ try {
   await client.end();
 }
 
+const routing = await scoreRouting();
+
 const report = buildReport(outcomes);
 print(report, outcomes);
 persist(report, outcomes);
 
-if (report.failures.length > 0) process.exit(1);
+if (report.failures.length > 0 || routing.failed) process.exit(1);
 
 async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
   const turn = await answerTurn(client, testCase.question, {
@@ -120,6 +125,88 @@ function evaluate(
   if (accepted.length === 0) return true;
   const haystack = actual.answer.toLowerCase();
   return accepted.some((value) => haystack.includes(value.toLowerCase()));
+}
+
+interface RoutingCase {
+  id: string;
+  question: string;
+  expectedPaths: RoutePath[];
+  note: string;
+}
+
+interface RoutingResult {
+  total: number;
+  correct: number;
+  accuracy: number;
+  /** The direction D-007 exists to prevent: a lookup falling through to prose. */
+  structuredMissed: string[];
+  confusion: Record<string, number>;
+  failed: boolean;
+  wrong: { id: string; expected: string; actual: string }[];
+}
+
+async function scoreRouting(): Promise<RoutingResult> {
+  const routingCases = (
+    JSON.parse(readFileSync("eval/golden/routing-set.json", "utf8")) as { cases: RoutingCase[] }
+  ).cases;
+
+  const client = connect();
+  await client.connect();
+  let index: Set<string>;
+  try {
+    index = await loadDrugIndex(client, snapshotId);
+  } finally {
+    await client.end();
+  }
+
+  const key = (paths: readonly string[]): string => [...paths].sort().join("+");
+  const confusion: Record<string, number> = {};
+  const structuredMissed: string[] = [];
+  const wrong: RoutingResult["wrong"] = [];
+  let correct = 0;
+
+  for (const testCase of routingCases) {
+    const actual = chooseRoute(testCase.question, index).paths;
+    const expected = key(testCase.expectedPaths);
+    const got = key(actual);
+    confusion[`${expected} -> ${got}`] = (confusion[`${expected} -> ${got}`] ?? 0) + 1;
+    if (expected === got) correct += 1;
+    else wrong.push({ id: testCase.id, expected, actual: got });
+    // Zero tolerance: a case expecting a table row that reached prose alone.
+    if (testCase.expectedPaths.includes("structured") && !actual.includes("structured")) {
+      structuredMissed.push(testCase.id);
+    }
+  }
+
+  const accuracy = routingCases.length === 0 ? 0 : correct / routingCases.length;
+  const result: RoutingResult = {
+    total: routingCases.length,
+    correct,
+    accuracy,
+    structuredMissed,
+    confusion,
+    wrong,
+    failed: accuracy < ROUTING_FLOOR || structuredMissed.length > 0,
+  };
+
+  console.log("\n=== Router report ===");
+  console.log(`  cases               ${result.total}`);
+  console.log(`  accuracy            ${accuracy.toFixed(3)} (floor ${ROUTING_FLOOR})`);
+  console.log(`  drug question to prose search only  ${structuredMissed.length} [zero tolerance]`);
+  console.log("  confusion (expected -> actual):");
+  for (const [pair, count] of Object.entries(confusion).sort()) {
+    console.log(`    ${pair}  ${count}`);
+  }
+  if (wrong.length > 0) {
+    console.log("  misrouted:");
+    for (const item of wrong) console.log(`    ${item.id} expected ${item.expected}, got ${item.actual}`);
+  }
+  writeFileSync(
+    "eval/results/routing-latest.json",
+    `${JSON.stringify({ snapshotId, ...result }, null, 2)}\n`,
+    "utf8",
+  );
+  return result;
 }
 
 function print(report: ReturnType<typeof buildReport>, all: CaseOutcome[]): void {

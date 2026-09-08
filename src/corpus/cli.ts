@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { parseCatalog, parseCounties, selectPlanDocuments } from "./discover.ts";
 import { fetchDocuments, isPathAllowed } from "./fetch.ts";
-import { extractHtmlText, meetsByteFloor, pdfPageCount, pdfToPlanColumn, pdfToText } from "./convert.ts";
+import { extractHtmlText, meetsByteFloor, pdfPageCount, pdfToBbox, pdfToPlanColumn, pdfToText } from "./convert.ts";
 import { buildSyntheticProviderDirectory } from "./synthetic.ts";
 import { CORPUS_SCOPE } from "./scope.ts";
 import { renderReport } from "./report.ts";
@@ -9,6 +9,7 @@ import {
   catalogPath,
   documentsPath,
   latestSnapshotId,
+  bboxPath,
   markdownPath,
   mergeEntries,
   newSnapshotId,
@@ -180,6 +181,8 @@ function convertAll(): void {
           ? pdfToPlanColumn(source, entry.planId)
           : pdfToText(source);
       writeFile(markdownPath(id, entry.documentId), text);
+      // The formulary's tiers are a table, and typed extraction needs coordinates.
+      if (entry.kind === "formulary") writeFile(bboxPath(id, entry.documentId), pdfToBbox(source));
 
       const convertedBytes = Buffer.byteLength(text, "utf8");
       updated.push({

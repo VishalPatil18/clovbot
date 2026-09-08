@@ -145,6 +145,73 @@ export async function searchHybrid(
   }));
 }
 
+export interface DrugLookup {
+  normalizedName: string;
+  name: string;
+  category: string;
+  tier: number;
+  requirements: string;
+  documentId: string;
+  planYear: number;
+}
+
+/** Every indexed drug name, for the router's deterministic selection. D-061. */
+export async function loadDrugIndex(client: pg.Client, snapshotId: string): Promise<Set<string>> {
+  const { rows } = await client.query(
+    "select distinct normalized_name from drugs where snapshot_id = $1",
+    [snapshotId],
+  );
+  return new Set(rows.map((row: Record<string, unknown>) => String(row["normalized_name"])));
+}
+
+/** The rows behind a tier answer. Exact match, so no ranking and no floor. */
+export async function lookupDrugs(
+  client: pg.Client,
+  snapshotId: string,
+  names: string[],
+): Promise<DrugLookup[]> {
+  if (names.length === 0) return [];
+  const { rows } = await client.query(
+    "select normalized_name, name, category, tier, requirements, document_id, plan_year " +
+      "from drugs where snapshot_id = $1 and normalized_name = any($2) order by name",
+    [snapshotId, names],
+  );
+  return rows.map((row: Record<string, unknown>) => ({
+    normalizedName: String(row["normalized_name"]),
+    name: String(row["name"]),
+    category: String(row["category"]),
+    tier: Number(row["tier"]),
+    requirements: String(row["requirements"]),
+    documentId: String(row["document_id"]),
+    planYear: Number(row["plan_year"]),
+  }));
+}
+
+export async function upsertDrugs(
+  client: pg.Client,
+  snapshotId: string,
+  rows: DrugLookup[],
+): Promise<void> {
+  await client.query("begin");
+  try {
+    await client.query("delete from drugs where snapshot_id = $1", [snapshotId]);
+    for (const row of rows) {
+      await client.query(
+        "insert into drugs (snapshot_id, document_id, normalized_name, name, category, tier, requirements, plan_year) " +
+          "values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing",
+        [
+          snapshotId, row.documentId, row.normalizedName, row.name,
+          row.category, row.tier, row.requirements, row.planYear,
+        ],
+      );
+    }
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  }
+}
+
 export interface TurnRecord {
   question: string;
   planContext: string;
@@ -155,6 +222,9 @@ export interface TurnRecord {
   latencyMs: Record<string, number>;
   sessionId?: string;
   refusalTrigger?: string | null;
+  /** FR-P2-09. Which retrieval paths ran, and why. D-063. */
+  route?: string | null;
+  routeReason?: string | null;
 }
 
 /** FR-26. The question written here is already redacted per FR-31. */
@@ -162,8 +232,8 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
   const { rows } = await client.query(
     `insert into turns
        (question, plan_context, chunk_ids, corpus_snapshot_id, outcome, provider,
-        latency_ms, session_id, refusal_trigger)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        latency_ms, session_id, refusal_trigger, route, route_reason)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      returning id`,
     [
       turn.question,
@@ -175,6 +245,8 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
       JSON.stringify(turn.latencyMs),
       turn.sessionId ?? null,
       turn.refusalTrigger ?? null,
+      turn.route ?? null,
+      turn.routeReason ?? null,
     ],
   );
   return String(rows[0]?.["id"]);

@@ -2106,6 +2106,244 @@ The nesting satisfies `/spec-bug`'s "no repro, no fix" with a real artefact rath
 
 ---
 
+## Decision D-058 - The formulary is parsed from bounding boxes, not from layout text
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`srs-p2.md` listed as an open question whether the formulary's tier column survives `pdftotext` extraction cleanly enough for typed ingest. Measured before deciding: the layout text yields all 2,468 drug rows, but wrapped lines carry real data - 564 strength continuations and 379 requirement continuations - and column offsets differ across pages, with three distinct header positions.
+
+One line carries both halves at once:
+
+```
+     37.5mcg/hr, 50mcg/hr, 62.5mcg/hr,                            days), PA
+```
+
+Dropping continuations loses step-therapy and prior-authorization flags, so a drug would read as carrying a quantity limit only when it also requires step therapy.
+
+### Options considered
+
+1. `pdftotext -bbox-layout`, reusing `parseBboxPages` from the Summary of Benefits path.
+2. Layout text with per-page column detection inferred from the repeated header.
+3. Layout text, joining continuations by an indentation threshold.
+
+### Decision
+
+Option 1. Column boundaries come from the `Drug Name / Drug Tier / Requirements/Limits` header's own word positions, measured on each page.
+
+### Rationale
+
+With real coordinates a continuation line's column is a fact rather than an inference, and the both-halves line resolves without a special case. Option 3's single indent threshold mis-assigns exactly that line.
+
+D-057 had just established that absolute column assumptions break across pages in this filer's documents. Choosing option 2 or 3 would have repeated the mistake in a second parser.
+
+Measured on the real document: 85 of 123 pages carry the table header, columns are stable at Tier x=375 and Requirements x=410, and the parse yields 2,468 rows across 105 categories with none orphaned. Pages 95 to 123 are the alphabetical index and carry no header, so they are skipped by the same signal.
+
+### Consequences
+
+- A second consumer of `parseBboxPages`, which was written for one document and is now shared.
+- The formulary needs a bbox conversion alongside its existing text conversion.
+- Category headers are identified by x position rather than by letter case, which is what D-059 exists to fix.
+
+---
+
+## Decision D-059 - Formulary class headings are identified by position, not by letter case
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FORMULARY_CLASS` in `src/rag/chunk.ts` is `/^(\s*)([A-Z][A-Z0-9 &,'/-]{5,})\s*$/`. The character class admits no lowercase letter and no parentheses, so two real drug-class headings never match:
+
+- `ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS` - lowercase `o` in `HMG-CoA`
+- `DISEASE-MODIFYING ANTI-RHEUMATIC DRUGS (DMARDS)` - parentheses
+
+A missed heading does not produce an error. The drugs beneath it inherit the previous class, so ten statins are indexed and cited under `ANTILIPEMICS, FIBRATES`. This is live in v1.0.0 and visible in `eval/results/2026-09-08T0947Z.json`, where atorvastatin is cited to `...formulary-cardiovascular-antilipemics-fibrates-001`.
+
+Statins are among the highest-volume drug classes for a 65+ population, so this is not an obscure corner.
+
+### Options considered
+
+1. Fix inside Stage 2 as a nested bug cycle, the shape D-057 used.
+2. Fix now as a standalone `/spec-bug` before Stage 2 begins.
+3. Leave it, and let the typed rows become the source of truth for drug questions.
+
+### Decision
+
+Option 1. Class headings are detected by their x position - they sit left of the drug-name column - rather than by asserting every character is uppercase.
+
+### Rationale
+
+Option 3 leaves the two paths disagreeing about the same drug. The formulary stays in RAG for its prose, so a member asking a class question would still receive the wrong section while the typed path returned the right one, which is worse than either being wrong alone.
+
+Option 2 pays for two re-ingests, since Stage 2 re-ingests anyway when the drugs table lands.
+
+Letter case was never the signal. Position is, and the typed parser needs the same correction, so one rule serves both paths.
+
+### Consequences
+
+- Affected chunks change their context prefix and re-embed. Ten drugs, one class.
+- A regression test pins both headings by name, so a future character-class edit cannot silently drop them again.
+- Invisible to members as a category label, but the citation they read changes, so it is recorded in `CHANGELOG.md` under Fixed rather than omitted as internal.
+
+---
+
+## Decision D-060 - Typed drug rows live in their own table, populated at ingest
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+D-007 requires typed queries for facts that live in tables. The parsed formulary is 2,468 rows across 105 categories, and it has to be queryable at answer time.
+
+### Options considered
+
+1. A `drugs` table populated by the existing ingest command.
+2. A JSON artefact written to the snapshot directory at convert time.
+3. Extra structured columns on the existing `chunks` table.
+
+### Decision
+
+Option 1. One migration, one table, populated in the same `npm run ingest` run that writes chunks.
+
+### Rationale
+
+Option 2 reads from `data/`, which is gitignored and absent from the container. That is precisely the assumption behind the 2026-09-08 production incident and the one D-055 was written to avoid.
+
+Option 3 overloads a table whose shape exists for embedding and retrieval with one that exists for exact lookup, and `chunks` is already carrying wildcard scoping semantics from D-056.
+
+### Consequences
+
+- A second migration in this stage, on top of the router's logging columns.
+- Tier is one column for all seven New Jersey plans the formulary names, so drug rows are contract-wide in the same sense as their chunks, and a tier answer does not vary by plan.
+
+---
+
+## Decision D-061 - The router is deterministic, driven by the drug names actually indexed
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`NFR-P2-03` makes misrouting a drug-tier question to prose search a zero-tolerance failure, and `claude/plan-p2.md` calls the router the highest-uncertainty item in P2. Comment T-3 records that D-007 is strong on the split and silent on the selection rule.
+
+### Options considered
+
+1. Deterministic: the structured path runs when the question names a drug the typed table holds.
+2. An LLM classifier with a routing prompt.
+3. Rules first, model as fallback.
+
+### Decision
+
+Option 1. Route selection is a lookup against the indexed drug names.
+
+### Rationale
+
+A zero-tolerance gate whose decision comes from a probabilistic component is not zero-tolerance. Option 1 makes tier-to-RAG misrouting impossible for any drug in the table, by construction rather than by measurement.
+
+This follows D-043, which put bucket C on deterministic rules evaluated before retrieval for the same reason: a guarded question must never depend on the model to be guarded.
+
+The cost is that a drug the table does not hold cannot trigger the structured path. That is correct behaviour - there is no row to cite - and it falls through to RAG, which is where an unknown drug belongs.
+
+### Consequences
+
+- The router cannot handle a misspelled drug name. This audience will misspell drug names, and the fallback is RAG rather than a failure, so the cost is a worse answer rather than a wrong one.
+- The confusion matrix measures a rule, so a non-perfect score is a gap in the name index rather than a model that needs prompting.
+
+---
+
+## Decision D-062 - Retrieval paths are additive, not exclusive
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-10` requires that "is this drug covered and what is the appeal process" answers both halves and drops neither. A router that selects one path has to decide which half to serve.
+
+### Options considered
+
+1. The router returns a set of paths; both results feed one prompt, each with its own citation.
+2. The router selects one path, and the structured path chains to RAG when its answer looks incomplete.
+3. Always run both and merge, with no routing decision at all.
+
+### Decision
+
+Option 1. A drug name adds the structured path; RAG runs unless the question is a pure lookup.
+
+### Rationale
+
+Dropping a half becomes structurally impossible rather than something a heuristic has to get right. Option 2's "looks incomplete" test is a new judgement call in the middle of an answer path that currently has none.
+
+Option 3 cannot be measured. The plan requires a router that logs a selection and a 30-case accuracy figure, and a router that always chooses everything has no selection to report.
+
+### Consequences
+
+- A pure tier question costs one extra retrieval unless it is recognised as pure, so "pure lookup" needs a definition and a test.
+- Both citation kinds can appear in one answer, which is the shape `FR-P2-29` will need for combined member answers in Stage 7.
+
+---
+
+## Decision D-063 - Router decisions are columns on the turn log, and routing has its own test set
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-09` requires the router to log its selection and reason on every turn, and Stage 8 has to report router accuracy in the same output as the answer metrics.
+
+### Options considered
+
+For storage: dedicated columns on `turns`; folding the decision into the existing `latency_ms` JSON blob; stdout only.
+For the test set: its own file run inside `npm run eval`; extra fields on the existing golden set; its own file and its own command.
+
+### Decision
+
+Two nullable text columns on `turns`, `route` and `route_reason`. A separate `eval/golden/routing-set.json` of at least 30 hand-labelled cases, evaluated inside the existing `npm run eval` run and reported in the same output.
+
+### Rationale
+
+The route is a categorical fact about a turn that Stage 8 must aggregate, so it is queryable rather than parsed back out of a column named for timings.
+
+Routing is a classification problem with a confusion matrix, and the 60 answer cases were chosen to cover call drivers rather than to stress a router's boundary. Keeping the sets apart keeps each one honest; running them together satisfies `FR-P2-51` without merging two reports.
+
+### Consequences
+
+- `npm run insights` can group by route and show where questions actually go.
+- The eval run gets longer by the routing set, which needs no model call because the router is deterministic.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

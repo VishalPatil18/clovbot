@@ -1,0 +1,14 @@
+{
+  "snapshotId": "2026-09-08T1714Z",
+  "total": 32,
+  "correct": 32,
+  "accuracy": 1,
+  "structuredMissed": [],
+  "confusion": {
+    "structured -> structured": 12,
+    "rag+structured -> rag+structured": 8,
+    "rag -> rag": 12
+  },
+  "wrong": [],
+  "failed": false
+}
