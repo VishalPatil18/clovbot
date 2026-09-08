@@ -1,5 +1,6 @@
 import { redactIdentifiers } from "../logging.ts";
 import { latestSnapshotId, readSnapshot } from "../corpus/snapshot.ts";
+import { CORPUS_SCOPE, findPlanRef, formatPlanRef } from "../corpus/scope.ts";
 import { planIngest, readSnapshotMarkdown } from "./ingest.ts";
 import { describeChunk, readGeneratedContext, writeGeneratedContext } from "./context.ts";
 import { answerTurn } from "./answer-turn.ts";
@@ -7,9 +8,7 @@ import { citationLabel } from "./payload.ts";
 import { embed, generate } from "./providers.ts";
 import { connect, existingChunkContent, pruneChunks, upsertChunks, writeTurn } from "./store.ts";
 
-const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
-const PLAN_IDS = (process.env["CORPUS_PLAN_IDS"] ?? "004,007").split(",");
-const PLAN_YEAR = Number(process.env["CORPUS_PLAN_YEAR"] ?? "2026");
+const PLAN_YEAR = CORPUS_SCOPE.planYear;
 /** Azure embeddings are capped per minute by tokens, not requests. */
 const TOKENS_PER_MINUTE = Number(process.env["AZURE_EMBEDDING_TPM"] ?? "29000");
 const BATCH_TOKEN_BUDGET = 5_000;
@@ -77,24 +76,26 @@ async function ingest(): Promise<void> {
 
 async function ask(): Promise<void> {
   const { flags, words } = parseArgs(process.argv.slice(3));
-  const planId = flags["plan"] ?? PLAN_IDS[0];
+  const fallback = CORPUS_SCOPE.plans[0];
+  const contractId = flags["contract"] ?? fallback?.contractId;
+  const planId = flags["plan"] ?? fallback?.planId;
   const question = words.join(" ").trim();
 
-  if (question.length === 0 || planId === undefined) {
-    throw new Error('usage: npm run ask -- "your question" --plan 004');
+  if (question.length === 0 || contractId === undefined || planId === undefined) {
+    throw new Error('usage: npm run ask -- "your question" --contract H5141 --plan 004');
   }
-  if (!PLAN_IDS.includes(planId)) {
-    throw new Error(`plan ${planId} is not indexed; indexed plans are ${PLAN_IDS.join(", ")}`);
+  const planRef = findPlanRef(contractId, planId);
+  if (planRef === null) {
+    throw new Error(
+      `${contractId}-${planId} is not indexed; indexed plans are ` +
+        `${CORPUS_SCOPE.plans.map(formatPlanRef).join(", ")}`,
+    );
   }
 
   const client = connect();
   await client.connect();
   try {
-    const turn = await answerTurn(client, question, {
-      contractId: CONTRACT_ID,
-      planId,
-      planYear: PLAN_YEAR,
-    });
+    const turn = await answerTurn(client, question, planRef);
 
     console.log(`\n${turn.answer}\n`);
     if (turn.citedIds.length > 0) {
@@ -107,7 +108,7 @@ async function ask(): Promise<void> {
 
     const turnId = await writeTurn(client, {
       question: turn.question,
-      planContext: `${CONTRACT_ID}-${planId}`,
+      planContext: formatPlanRef(planRef),
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,

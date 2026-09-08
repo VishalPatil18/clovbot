@@ -1,4 +1,5 @@
 import { BYTE_FLOORS } from "./convert.ts";
+import { formatPlanRef } from "./scope.ts";
 import type { FetchStatus, ManifestEntry, Snapshot } from "./types.ts";
 
 const STATUSES: FetchStatus[] = ["ok", "failed", "blocked", "synthetic"];
@@ -23,7 +24,7 @@ export function renderReport(snapshot: Snapshot): string {
     "# Corpus retrievability report",
     "",
     `Snapshot \`${snapshot.id}\`, created ${snapshot.createdAt}.`,
-    `Scope: contract ${snapshot.contractId}, plan ${snapshot.planId}, ` +
+    `Scope: ${snapshot.plans.map(formatPlanRef).join(", ")}, ` +
       `plan year ${snapshot.planYear}, county ${snapshot.countyId}.`,
     "",
     "## Status counts",

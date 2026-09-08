@@ -1891,6 +1891,221 @@ The user's call. A login whose code never leaves the server is not a login flow 
 
 ---
 
+## Decision D-053 - Corpus scope is one typed module, not four sources of truth
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+FR-P2-01 requires corpus scope to be data rather than hardcoded constants. Investigating what that means found scope defined in four places by two different mechanisms: module constants in `src/corpus/cli.ts`, and `CORPUS_CONTRACT_ID` / `CORPUS_PLAN_IDS` / `CORPUS_PLAN_YEAR` read independently by `src/rag/cli.ts`, `src/server.ts` and `eval/harness/run.ts`. `scripts/deploy-api.sh` also forwards `CORPUS_COUNTY_ID` to Cloud Run, which no code reads.
+
+### Options considered
+
+1. One typed `src/corpus/scope.ts` holding a plan-reference array plus county and year, imported by all four call sites.
+2. A committed `corpus/scope.json` with a hand-rolled validator.
+3. CLI flags on `discover`, `fetch` and `convert`.
+
+### Decision
+
+Option 1. Scope lives in one typechecked module. The three `CORPUS_*` environment variables and the dead `CORPUS_COUNTY_ID` are deleted.
+
+### Rationale
+
+The defect FR-P2-01 points at is four sources of truth, not the file extension. Only option 1 collapses all four.
+
+Option 3 is actively unsafe: `fetch` and `convert` read the manifest `discover` wrote, so a run with mismatched flags produces a snapshot whose contents disagree with its declared scope, and nothing detects it.
+
+Option 2 adds a trust boundary and roughly thirty lines of validator - this project has no `zod`, so validation is hand-rolled - to protect a file only the author edits, and the file itself is not typechecked.
+
+### Consequences
+
+- Adding H8010-003 or a fourth plan is appending one record, which is what D-048's consequence promised.
+- `Snapshot.contractId` and `Snapshot.planId` become a plan-reference list, and `src/corpus/report.ts` renders the list.
+- P4's eleven-state expansion turns one county record into an array and a `flatMap` in `discover`. Deliberately not built now.
+- A reader taking "scope is data" to require a non-code artefact would not accept this. Recorded as the known objection.
+
+---
+
+## Decision D-054 - PlanRef types the scope, not every row that reports a plan
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | narrows D-049 |
+
+### Context
+
+D-049 makes plan identity a typed contract-and-plan pair throughout. `contractId:` appears 59 times across 35 files, including 13 test files and 8 one-off scripts. Taken literally, D-049 rewrites all of them.
+
+`searchHybrid` and `answerTurn` already take an anonymous `{ contractId, planId, planYear }`, so the scoping type largely exists and is unnamed.
+
+### Options considered
+
+1. `PlanRef` names the scoping shape only. Rows keep flat fields.
+2. As above, plus three structured columns on `turns` and `callbacks`.
+3. `PlanRef` nested into `Provenance`, `RetrievedChunk`, `CorpusChunk` and `ManifestEntry` as well.
+
+### Decision
+
+Option 1. `PlanRef` lives in `src/types.ts` and types what a caller scopes *with*. A row keeps flat fields describing what it *is*. `planContext` stays a text column, written by a single formatter from the answering reference.
+
+### Rationale
+
+The failure D-049 exists to prevent is leakage from a scope, and a scope is the one plan value that originates outside the system. A chunk's contract comes from the column it was selected by and cannot disagree with the scope that selected it, so nesting the pair into row projections defends against a bug that cannot occur.
+
+The real turn-log defect is not the column type. `src/server.ts` composes `planContext` from a module constant, so a turn answered under H8010-002 would have been logged as `H5141-002`. Writing it from the answering reference fixes that completely and needs no migration.
+
+Option 2's structured columns leave every pre-migration row null forever, or require a backfill that string-splits `plan_context` - the parsing D-049 exists to forbid.
+
+Option 3 rewrites citation rendering, which Stage 3 also touches.
+
+### Consequences
+
+- The line is: `PlanRef` is what you scope with; flat fields are what a row reports about itself.
+- No migration on `turns` or `callbacks`. `npm run reproduce` and `npm run insights` are unchanged.
+- Filtering the turn log by contract alone is not possible. No P2 requirement asks for it.
+- `/api/ask` gains membership validation against the derived plan list, returning 400 on an unknown reference rather than today's silent zero-result refusal.
+
+---
+
+## Decision D-055 - The offerable plan list is derived from the index; display names stay in code
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`PLANS` in `src/server.ts` is a hardcoded two-entry list served to the web chips, and it can silently disagree with what is indexed. Display names such as "Clover Health Choice (PPO)" exist nowhere in the `chunks` table.
+
+Reading `data/snapshots/<id>/catalog.json` at boot is already falsified: `data/` is gitignored and the Dockerfile copies only `src` and `certs`. The 2026-09-08 production incident was this exact class of assumption.
+
+### Options considered
+
+1. Derive the offerable set from `chunks` at boot; display names from a typed code-level map.
+2. A small `plans` table upserted at ingest, joined against `chunks`.
+3. A `plan_name` column on `chunks`.
+4. Read the catalog snapshot at boot.
+
+### Decision
+
+Option 1. `select distinct contract_id, plan_id, plan_year from chunks` runs once at startup. Names remain a typed key-to-label map, matching the existing `KIND_LABEL` pattern.
+
+### Rationale
+
+The safety property is the *set*: a plan must never be offerable without indexed documents. Option 1 derives exactly that part from the index and leaves in code the part that is presentation and changes once a year.
+
+It also strengthens boot. `connect()` constructs a `pg.Client` but never dials, so it throws only on a missing `DATABASE_URL` or an unreadable CA file - a wrong password or unreachable host still boots clean today, despite the comment claiming otherwise. A real query at boot makes an unindexed or unreachable deploy fail to start rather than serve an empty plan picker.
+
+Option 3's exclusion of wildcard rows encodes the invariant only by accident. Option 2 encodes it properly in a join and is the right answer if display names ever need to vary per deployment or plan year.
+
+### Consequences
+
+- Adding a plan needs two edits, the scope module and the name map, plus a restart. For this product a restart is a redeploy that was happening anyway.
+- A plan reference with no name entry must fail loudly rather than render a raw id to a member.
+- `web/src/components/CallbackPanel.tsx` currently shows a member the raw string "H5141-004" under a heading reading "Plan". The same name map should feed it.
+- If display names later vary per deployment, this is replaced by option 2.
+
+---
+
+## Decision D-056 - Contract-wide documents use a contract wildcard, mirroring the plan wildcard
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`src/rag/ingest.ts` stamps `planId = '*'` for the kinds in `CONTRACT_WIDE` - formulary and corporate. But `search_hybrid` still filters `c.contract_id = p_contract_id`, and `src/corpus/cli.ts` stamps corporate pages and filer documents with the single `CONTRACT_ID`. A session scoped to H8010 would therefore lose all six corporate pages and the entire formulary.
+
+### Options considered
+
+1. A contract wildcard mirroring the plan wildcard, with `search_hybrid` matching `(c.contract_id = p_contract_id or c.contract_id = '*')`.
+2. A wildcard for corporate only, discovering H8010's own formulary separately.
+3. Duplicating the rows once per contract.
+4. Substituting the session contract at query time.
+
+### Decision
+
+Option 1. `discover` leaves `contractId: ""` alongside the existing `planId: ""`, and ingest maps both wildcards from the one `CONTRACT_WIDE` list.
+
+### Rationale
+
+Symmetric with a mechanism that already exists and is already tested. One list, one place. `buildProvenance` keeps rejecting an empty id, so a blank can never reach a chunk.
+
+The formulary file is `formulary_ch_nj` - one New Jersey formulary with a contract-agnostic filename - so option 2 would be discovering a document that does not exist. Option 3 re-embeds the same text for every future contract. Option 4 moves scoping outside the SQL that D-033 deliberately put it inside.
+
+### Consequences
+
+- One migration, `create or replace function search_hybrid`, with unchanged parameters and return columns.
+- `citationLabel` needs a contract-wildcard branch or it renders "Plan \*" to a member.
+- `contextPrefix` embeds `contractId-planId` in the stored body, so changing these to the wildcard makes `existingChunkContent` see every formulary and corporate chunk as changed. They re-embed once. Roughly 500 chunks, one time.
+
+---
+
+## Decision D-057 - The column-gutter bug is fixed as a bug cycle nested inside Stage 1
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`extractPlanColumn` computes a `PlanColumns` struct per page and `nearestColumns` hands that whole struct - including absolute `boundary` and `labelBoundary` x coordinates - to pages carrying no `(Plan NNN)` header.
+
+H8010's Summary of Benefits has a two-column benefits table on page 11 with no header row, and the document alternates recto and verso margins. Measured: page 11's own correct gutter is 354.52, page 9's is 338.02, page 10's is 359.58. Inheriting either cuts a word in half and the existing safety throws "amounts on both sides of the column boundary and a word crossing it". H5141 never triggers this because every one of its table pages carries a header.
+
+The gutter is not a rigid translation of the margin. The recto/verso margin difference is about 41.5pt and the header spacing 18pt, while the gutters differ by 21.56pt, so any fix that shifts an inherited boundary by a margin delta is wrong by construction.
+
+### Options considered
+
+1. Split the struct: inherit plan identity and header x positions only, compute both gutters from the page being rendered.
+2. Fully page-local gutter detection from an x-histogram, inheriting only which plan is on which side.
+3. Stop inheriting and require every two-column page to carry a header.
+
+### Decision
+
+Option 1, prototyped and verified against both documents before this decision was taken. All four plans extract; H5141-004 still yields $10 and 007 still $2, matching the values hand-verified in P1 Stage 1.
+
+`nearestColumns` is additionally restricted to a backward-only search, so a page appearing before its document's first header page fails loudly rather than being attributed from a header it precedes.
+
+Sequenced as a `/spec-bug` cycle nested inside Stage 1: fetch far enough to save the page-10 and page-11 fixture, run the bug cycle against that artefact, then resume the stage.
+
+### Rationale
+
+The measured spread proves the gutter is content-derived per page, so option 1 recomputes exactly and only the quantity that is per-page, while leaving inherited the two things that genuinely are document-level.
+
+Option 2 solves a problem the evidence does not show exists and pays for it with a new silent failure: `findGutter` always returns something, so a full-width prose page with a coincidental gap would be cut without any error. A loud failure is better than a quiet wrong one.
+
+Option 3 breaks the existing H5141 page-15 test and fails H8010 page 11 outright, so neither document converts.
+
+The nesting satisfies `/spec-bug`'s "no repro, no fix" with a real artefact rather than a synthesised one, and keeps the fix diff separately reviewable inside a larger stage.
+
+### Consequences
+
+- This is a latent v1 defect. No document currently in the corpus triggers it, and it would have surfaced on any future document whose table pages do not all carry headers.
+- The residual: inherited header x positions still bound `findGutter`'s search window. A page whose columns sit outside that window falls back to the window midpoint. At 18pt of drift against a window roughly 200pt wide this is unlikely, and the existing money-on-both-sides throw catches it loudly.
+- Backward-only search means a pre-header two-column money table now throws instead of being silently attributed. Nothing currently converting is affected.
+- **Conflict flagged, not resolved:** `CLAUDE.md` section 3 says a bug logs under `### Fixed`, and section 8 says the changelog carries user-facing changes only. This fix is invisible to members. Taken as: not in `CHANGELOG.md`, recorded in `claude/context.md`. Reversible on the user's word.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

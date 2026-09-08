@@ -7,6 +7,17 @@ export type DocumentKind =
   | "pharmacy_directory"
   | "corporate";
 
+/**
+ * Which benefit package a caller is scoping to. Contract and plan travel together
+ * because plan ids repeat across contracts: H5141-002 and H8010-002 are different
+ * plans, and a bare "002" cannot tell them apart. D-049, D-054.
+ */
+export interface PlanRef {
+  contractId: string;
+  planId: string;
+  planYear: number;
+}
+
 /** A citation without a plan year is not a valid citation. FR-06. */
 export interface Provenance {
   document: DocumentKind;

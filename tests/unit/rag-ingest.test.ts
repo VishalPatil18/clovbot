@@ -28,8 +28,10 @@ const snapshot = (entries: ManifestEntry[]): Snapshot => ({
   createdAt: "2026-09-07T00:00:00.000Z",
   countyId: "34017",
   planYear: 2026,
-  contractId: "H5141",
-  planId: "004+007",
+  plans: [
+    { contractId: "H5141", planId: "004", planYear: 2026 },
+    { contractId: "H5141", planId: "007", planYear: 2026 },
+  ],
   entries,
 });
 

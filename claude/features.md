@@ -777,3 +777,110 @@ Two defects found while scoping, not asked about: **FR-27 feedback recorded noth
 
 **Not verified, and not claimed:** the deployed URL answering, the throttled latency numbers, and the accessibility criteria D-040 deferred. All three need the deploy and a real device.
 
+
+---
+
+## Feature: Second contract indexed (P2 Stage 1)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | in progress          |
+| Cycle            | 10                   |
+| Stage of plan.md | `plan-p2.md` Stage 1 |
+| Owner            | user + claude        |
+| Requirements     | `srs-p2.md` FR-P2-01 to FR-P2-06 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Which second benefit package | H8010-002 Classic (HMO), same county. Distinct contract, distinct network type (D-048) |
+| 2 | How far the plan-identity change goes | A typed contract-and-plan pair throughout (D-049) |
+| 3 | How contract-wide documents are scoped | A contract wildcard mirroring the existing plan wildcard (D-056) |
+| 4 | Golden set schema | `plan: "004"` becomes a `planRef` object on all 50 cases |
+| 5 | Where the offerable plan list comes from | Derived from what is indexed (D-055) |
+| 6 | Which H8010 documents are indexed | All three - SB, EOC, ANOC - full parity with H5141 |
+| 7 | The paired golden questions | Four numeric pairs plus one structural pair |
+| 8 | Regression fixture size | Trimmed two-page, pages 10 and 11 |
+| 9 | Synthetic provider directory for the new plan | Yes, same generator |
+| 10 | Whether to verify the HMO layout before speccing | Yes, fetched to scratch first |
+
+**Verified during requirements, not assumed:**
+
+- H8010-002 carries EOC and ANOC under the same catalog keys as H5141. Its Summary of Benefits is `..._nj_002-003_...`, the same two-plan side-by-side shape, titled "New Jersey 2026 Summary of Benefits Plans 002 and 003".
+- The extractor **fails** on it. Root cause measured and recorded in D-057.
+- Paired-question material, read from both documents: out-of-pocket maximum $6,000 against $9,250, emergency care $130 against $115, urgently needed $25 against $35. Specialist ($10) and primary care ($0) **collide** between H8010-002 and H5141-004 and prove nothing. The HMO has no out-of-network column at all, so the fifth pair differs in shape rather than in digits.
+
+**Defects found while scoping, not asked about:**
+
+- `search_hybrid` filters `c.contract_id = p_contract_id` while corporate pages and the formulary are stamped with the single `CONTRACT_ID`. A session scoped to H8010 loses all six corporate pages and the whole formulary.
+- `src/server.ts` composes the turn log's `planContext` from a module constant, so a turn answered under a second contract would be logged under the first.
+- `/api/ask` never checks that a `planId` is indexed. An unknown plan returns zero rows and reads as a model refusal.
+- `connect()` builds a `pg.Client` but never dials, so the boot check throws only on a missing `DATABASE_URL` or unreadable CA. The comment claiming a broken environment fails to start is wrong.
+- `CORPUS_COUNTY_ID` is forwarded to Cloud Run by `scripts/deploy-api.sh` and read by no code.
+- The 004/007 Summary of Benefits is fetched twice; the dedupe is keyed on document id, which differs per plan.
+- `CallbackPanel.tsx` shows a member the raw string "H5141-004" under a heading reading "Plan".
+
+### Phase 2 - Architecting
+
+Four forks, each taken to the user with options. Full reasoning in D-053 through D-057.
+
+1. **Corpus scope shape.** Chosen: one typed `src/corpus/scope.ts` imported by all four current sources of truth. *Rejected:* a JSON descriptor, which adds a hand-rolled validator and a second untypechecked source; CLI flags, where a `fetch` run disagreeing with its `discover` run is undetectable.
+2. **PlanRef blast radius.** Chosen: `PlanRef` types the scope; rows keep flat fields; `planContext` stays text written by one formatter. *Rejected:* structured turn-log columns, which leave every existing row null or require the string-splitting D-049 forbids; nesting the pair into all 59 call sites, which collides with Stage 3's citation work.
+3. **Plan list derivation.** Chosen: the set from `chunks` at boot, display names from a typed code map. *Rejected:* the catalog snapshot, falsified - `data/` is gitignored and absent from the image; a `plan_name` column, which encodes the invariant only by accident; a `plans` table, which is right if names ever vary per deployment.
+4. **The column-gutter fix.** Chosen: inherit plan identity and header positions only, compute both gutters on the page being rendered, and search backward only. *Rejected:* histogram detection, which introduces silent truncation on prose pages; requiring headers everywhere, which converts neither document.
+
+### Phase 3 - Product Specs
+
+**UX flow, changed lines only:**
+
+1. Member asks a plan-scoped question with no plan set. Chips appear, now three, grouped by contract.
+2. Member picks one. The answer is scoped to that contract and plan.
+3. The chosen plan persists as chrome with a change control. Picking a different one re-scopes later answers and leaves earlier ones as they were.
+4. A process question still answers with no chips, unchanged from D-022.
+
+**Frontend entities:** `PlanOption` gains `contractId`; the chip list groups by contract and renders the display name, never a raw id. The same name map feeds `CallbackPanel`.
+
+**Backend entities:** `PlanRef { contractId, planId, planYear }` in `src/types.ts`. `PLANS` is replaced by a boot-time query over `chunks` joined to a typed name map. `/api/plans` returns display names with refs; `/api/ask` takes a ref and validates membership, returning 400 on an unknown one.
+
+**DB schema:** no new tables and no new columns. `search_hybrid` is replaced in place so its contract predicate accepts the wildcard. Parameters and return columns are unchanged.
+
+**Corpus:** `src/corpus/scope.ts` holds county, state, year and a plan-reference list. Contract-wide documents carry an empty contract, mapped to the wildcard at ingest from the one `CONTRACT_WIDE` list.
+
+### Phase 4 - Tech Specs
+
+- **Language and runtime:** unchanged. TypeScript strict, Node 26, native type stripping.
+- **Scope descriptor:** a typed module. *Rejected:* JSON plus validator, per Phase 2; this project has no `zod`, so every parsed file costs a hand-rolled validator.
+- **Migration:** one file, `create or replace function search_hybrid`. *Rejected:* `drop`/`create`, unnecessary since the signature does not change; adding an index on `(contract_id, plan_year, plan_id)`, unjustified at three plans and a few thousand rows.
+- **Plan name source:** a typed key-to-label map, matching the existing `KIND_LABEL` pattern. *Rejected:* a `plans` table, deferred until names need to vary per deployment.
+- **Fixture:** a trimmed two-page bbox XHTML, following the existing `sob-page1` and `sob-page4` precedent. *Rejected:* the full 12-page document at 458KB, five times the weight for one bug.
+- **New dependencies:** none.
+
+**Known cost, stated rather than discovered later:** `contextPrefix` embeds `contractId-planId` in the stored body, so moving corporate and formulary chunks to the contract wildcard makes `existingChunkContent` see roughly 500 chunks as changed. They re-embed once.
+
+### Phase 5 - Planning
+
+Eight sub-stages, 22.5h against Stage 1's M band of ~7h. The overrun is entirely decisions taken after that estimate: D-049, D-053, D-056, D-057. Every sub-stage is a commit point with the suite green.
+
+| # | Sub-stage | Deliverable | Effort |
+| --- | --- | --- | --- |
+| 1.1 | Scope module and PlanRef | One typed scope, four env vars gone, golden set on `planRef` | 3h |
+| 1.2 | Contract wildcard | Corporate and formulary reachable from any contract | 2.5h |
+| 1.3 | Fetch H8010-002 | Second contract on disk, SB conversion failing for the predicted reason | 2h |
+| 1.4 | Column-gutter bug cycle | H8010 SB converts; all four plan columns extract | 3h |
+| 1.5 | Ingest and leakage check | H8010 answerable at the CLI, leakage asserted | 3h |
+| 1.6 | Derived plan list and validation | `/api/plans` from the index, `/api/ask` 400 on an unknown ref | 3h |
+| 1.7 | Web plan chrome | Three chips grouped by contract, names not raw ids | 3h |
+| 1.8 | Paired golden cases | Five cross-plan pairs, full eval green | 3h |
+
+**Ordering correction, found while implementing 1.1.** Contract-wide documents (corporate pages, the formulary, the pharmacy directory) are stamped with a single contract id, which no longer exists once scope is a plan list. 1.1 replaces it with `soleContractId()`, which throws when the corpus spans more than one contract. That is a guard, not a landmine - it fails at boot with a readable message - but it means **the server and ingest must be migrated off a single contract before 1.3 adds H8010 to the scope.** The wildcard work in 1.2 does exactly that for ingest; the server's ref threading moves from 1.6 into 1.2 for the same reason. Only the boot-time database derivation stays in 1.6, since it needs an index holding two contracts.
+
+**Operator actions between sub-stages:** apply `migrations/005_contract_wildcard.sql` after 1.2; run the corpus commands after 1.3 and again after 1.4; run `npm run ingest` and the leakage check after 1.5.
+
+**Cost found by the planner, not by the brief.** `existingChunkContent` and `readGeneratedContext` are both keyed by snapshot id. A new corpus snapshot therefore re-embeds the entire index rather than the ~500 wildcard chunks, and regenerates every orphan context prefix from a non-deterministic model - which moves the answers the golden set is pinned to. `context-prefixes.json` is copied forward in 1.3. That copy is safe only because the H5141 documents are unchanged; a changed document would keep a stale prefix.
+
+**Coverage gaps, decided rather than discovered:**
+
+- Cross-plan leakage is asserted by `scripts/plan-scope-check.ts` against a live index, plus a pure unit test of the scope predicate in CI. The live half is not in `npm test`, which is the residual.
+- FR-P2-05, plan switching not altering prior answers, is verified by hand. No browser or component harness exists and adding one is a dependency decision deferred.
+- `srs-p2.md` amended to 1.0.1 so FR-P2-02 and FR-P2-03 match D-054 and D-056 rather than contradicting them.

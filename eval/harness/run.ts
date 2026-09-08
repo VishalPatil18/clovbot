@@ -4,9 +4,9 @@ import { answerTurn } from "../../src/rag/answer-turn.ts";
 import { connect } from "../../src/rag/store.ts";
 import { judgeFaithfulness } from "../judges/faithfulness.ts";
 import { buildReport, type Bucket, type CaseOutcome } from "./score.ts";
+import type { PlanRef } from "../../src/types.ts";
 
-const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
-const PLAN_YEAR = Number(process.env["CORPUS_PLAN_YEAR"] ?? "2026");
+
 const TOP_K = 5;
 
 interface GoldenCase {
@@ -14,7 +14,7 @@ interface GoldenCase {
   bucket: Bucket;
   driver: string;
   question: string;
-  plan: string;
+  planRef: PlanRef;
   enforced: boolean;
   expect: {
     outcome: "answered" | "refused";
@@ -60,9 +60,7 @@ if (report.failures.length > 0) process.exit(1);
 
 async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
   const turn = await answerTurn(client, testCase.question, {
-    contractId: CONTRACT_ID,
-    planId: testCase.plan,
-    planYear: PLAN_YEAR,
+    ...testCase.planRef,
   });
 
   const refused = turn.outcome !== "answered";

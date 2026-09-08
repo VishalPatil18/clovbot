@@ -24,8 +24,10 @@ const snapshot = (entries: ManifestEntry[]): Snapshot => ({
   createdAt: "2026-09-07T22:31:00.000Z",
   countyId: "34017",
   planYear: 2026,
-  contractId: "H5141",
-  planId: "004",
+  plans: [
+    { contractId: "H5141", planId: "004", planYear: 2026 },
+    { contractId: "H8010", planId: "002", planYear: 2026 },
+  ],
   entries,
 });
 
@@ -33,6 +35,9 @@ describe("renderReport", () => {
   it("states the snapshot and scope it describes", () => {
     const md = renderReport(snapshot([entry({})]));
     expect(md).toContain("2026-09-07T2231Z");
+    // Every plan is named: a report listing one of two contracts hides half the corpus.
+    expect(md).toContain("H5141-004");
+    expect(md).toContain("H8010-002");
     expect(md).toContain("H5141");
     expect(md).toContain("34017");
   });

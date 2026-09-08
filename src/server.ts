@@ -5,6 +5,7 @@ import { redactIdentifiers } from "./logging.ts";
 import { answerTurn } from "./rag/answer-turn.ts";
 import { citationLabel, citationNumbers, numberCitations, spokenAnswer } from "./rag/payload.ts";
 import { needsPlanContext } from "./rag/plan-scope.ts";
+import { CORPUS_SCOPE, soleContractId } from "./corpus/scope.ts";
 import {
   checkRate,
   connect,
@@ -19,8 +20,8 @@ import { degradeNotice } from "./voice/chain.ts";
 import { speak, transcribe } from "./voice/providers.ts";
 
 const PORT = Number(process.env["PORT"] ?? "5174");
-const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
-const PLAN_YEAR = Number(process.env["CORPUS_PLAN_YEAR"] ?? "2026");
+const CONTRACT_ID = soleContractId();
+const PLAN_YEAR = CORPUS_SCOPE.planYear;
 
 /** Names come from the Stage 1 catalog, not from the mock's invented placeholders. */
 export const PLANS = [

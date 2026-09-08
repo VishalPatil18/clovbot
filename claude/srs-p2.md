@@ -9,9 +9,10 @@
 | Field        | Value                                                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | Project      | Clover Member Assistant                                                                                                        |
-| Version      | 1.0.0                                                                                                                          |
+| Version      | 1.0.1                                                                                                                          |
 | Status       | Frozen                                                                                                                         |
 | Last Updated | 2026-09-08                                                                                                                     |
+| Amendments   | 1.0.1 - FR-P2-02 narrowed by D-054 (turn log keeps a text column); FR-P2-03 and its scenario carved out for the D-056 contract wildcard |
 | Covers       | `claude/plan-p2.md` stages 1-8, shipped as v1.1.0                                                                              |
 | Sources      | `docs/ideas.md` P2-01 to P2-20, `claude/plan-p2.md`, `docs/call-drivers.md`, `claude/srs.md` v1.1.0, D-007, D-047 to D-052      |
 | Predecessor  | `claude/srs.md` v1.1.0 (P1, frozen)                                                                                            |
@@ -69,8 +70,8 @@ One P1 job is explicitly **not** improved by P2. "Find an in-network provider or
 | ID | Requirement |
 | --- | --- |
 | FR-P2-01 | The corpus pipeline indexes more than one contract. H8010-002 Classic (HMO) is indexed alongside H5141-004 and H5141-007 (D-048). Scope is data, not hardcoded constants. |
-| FR-P2-02 | Plan identity is a contract-and-plan pair carried as one typed value through corpus, retrieval, answering, turn log, eval and web (D-049). No layer reconstructs a contract from a string. |
-| FR-P2-03 | Retrieval is scoped to the session's plan reference before ranking. A chunk belonging to any other plan reference is never returned, and this is asserted directly rather than inferred from answer correctness. |
+| FR-P2-02 | Plan identity is a contract-and-plan pair carried as one typed value wherever a caller *scopes* by plan - corpus, retrieval, answering, eval and web (D-049, narrowed by D-054). A row reports its own contract and plan as flat fields, because those come from the column the row was selected by and cannot disagree with the scope. The turn log keeps `plan_context` as a text column, written by a single formatter from the reference that answered the turn. **No layer reconstructs a contract from a string.** |
+| FR-P2-03 | Retrieval is scoped to the session's plan reference before ranking. A chunk belonging to any other plan reference is never returned, and this is asserted directly rather than inferred from answer correctness. **Carve-out:** contract-wide documents - the formulary and corporate pages - carry the `*` wildcard in both contract and plan and are in scope for every session by design (D-056). The assertion is that a returned chunk matches the session reference *or* is a wildcard row; anything else is leakage. |
 | FR-P2-04 | The plan prompt stays lazy (P1 FR-10, D-022): a member may ask anything without setup, and only a question whose answer depends on the plan triggers the chips. Once a plan is known it is shown as persistent chrome with a control to change it. |
 | FR-P2-05 | Changing plan mid-session re-scopes every subsequent answer and leaves prior answers in the transcript unaltered and still correctly attributed to the plan they were answered under. |
 | FR-P2-06 | The golden set contains at least five paired questions that differ only by plan reference, with different expected answers per plan, hand-verified against both source documents. |
@@ -224,7 +225,8 @@ Scenario: [FR-P2-06] the same question returns different amounts under two contr
 Scenario: [FR-P2-03] retrieval never crosses a plan boundary
   Given a session scoped to H8010-002
   When any question is retrieved for
-  Then no returned chunk carries a plan reference other than H8010-002
+  Then every returned chunk is scoped to H8010-002 or carries the contract-wide wildcard
+  And no returned chunk carries a different contract or plan
 ```
 
 ```gherkin
