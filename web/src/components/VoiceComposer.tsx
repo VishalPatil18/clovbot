@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { IoCheckmark, IoMic, IoRefresh, IoStop, IoVolumeHigh } from "react-icons/io5";
+import {
+  IoCheckmark,
+  IoMic,
+  IoRefresh,
+  IoStop,
+  IoVolumeHigh,
+} from "react-icons/io5";
 import { isTap, startRecording, transcribe, type Recording } from "../voice.ts";
 
 type Phase = "idle" | "listening" | "processing" | "review";
@@ -17,7 +23,11 @@ interface Props {
  * FR-18 as amended by D-045: no live partial transcript, so the listening and
  * processing states carry the wait, and the transcript is editable before sending.
  */
-export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.Element {
+export function VoiceComposer({
+  busy,
+  responding,
+  onSend,
+}: Props): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
   const [level, setLevel] = useState(0);
@@ -48,7 +58,9 @@ export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.El
       };
       tick();
     } catch {
-      setError("I could not reach your microphone. Check the browser's permission, or type instead.");
+      setError(
+        "I could not reach your microphone. Check the browser's permission, or type instead.",
+      );
       setPhase("idle");
     }
   };
@@ -67,7 +79,11 @@ export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.El
       setNotice(result.notice);
       setPhase("review");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Your words could not be transcribed.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Your words could not be transcribed.",
+      );
       setPhase("idle");
     }
   };
@@ -108,7 +124,11 @@ export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.El
             {/* Rings read as sound leaving the microphone. Scaled by the measured
                 level so they respond to the voice rather than looping blindly. */}
             {phase === "listening" && !responding && (
-              <span className="mic-rings" aria-hidden="true" style={{ ["--level" as string]: level.toFixed(2) }}>
+              <span
+                className="mic-rings"
+                aria-hidden="true"
+                style={{ ["--level" as string]: level.toFixed(2) }}
+              >
                 <span className="mic-ring" />
                 <span className="mic-ring" />
                 <span className="mic-ring" />
@@ -135,7 +155,10 @@ export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.El
             >
               {responding ? (
                 <span className="equaliser" aria-hidden="true">
-                  <span /><span /><span /><span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
                 </span>
               ) : phase === "listening" ? (
                 <IoStop className="mic__icon" aria-hidden="true" />
@@ -146,13 +169,14 @@ export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.El
             </button>
           </div>
 
-          <p className="voice__state">
-            {responding && <IoVolumeHigh aria-hidden="true" />} {spoken}
-          </p>
-          <p className="voice__hint">
-            Hold to talk, or tap to start and tap to stop. You can change the words before they are
-            sent.
-          </p>
+          <div className="voice__lines">
+            <p className="voice__state">{spoken}</p>
+            <p className="voice__hint">
+              {responding
+                ? "The written answer is above, and you can scroll while it plays."
+                : "You can change the words before they are sent."}
+            </p>
+          </div>
         </div>
       )}
 
@@ -180,7 +204,11 @@ export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.El
             autoFocus
           />
           <div className="voice__actions">
-            <button type="submit" className="button button--primary" disabled={busy || transcript.trim().length === 0}>
+            <button
+              type="submit"
+              className="button button--primary"
+              disabled={busy || transcript.trim().length === 0}
+            >
               <IoCheckmark aria-hidden="true" /> Send this question
             </button>
             <button
@@ -198,7 +226,9 @@ export function VoiceComposer({ busy, responding, onSend }: Props): React.JSX.El
       )}
 
       <p className="voice__status" role="status">
-        {responding || phase === "listening" || phase === "processing" ? spoken : ""}
+        {responding || phase === "listening" || phase === "processing"
+          ? spoken
+          : ""}
       </p>
 
       {notice !== null && (

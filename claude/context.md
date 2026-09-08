@@ -448,3 +448,22 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** Framer Motion's 41KB is a real cost for this audience and is not measured on a throttled connection. `eval/results/real-device-latency.md` is still the empty template it has been since P1.
 
 **Next:** Stage 5, synthetic member records.
+
+## 2026-09-08 - Grouped long answers
+
+**Did:** Long answers now render as a few labelled parts instead of one run of equal sentences. Markdown was explored and rejected.
+
+**Files:** created `web/src/claims.ts` and `tests/unit/claim-groups.test.ts`. Changed `web/src/components/AnswerBody.tsx`, `web/src/app.css`, `tests/unit/a11y-static.test.ts`.
+
+**Verified:** 555 tests pass, typecheck clean on both projects, build succeeds.
+
+**Why not markdown:** it contradicts FR-32, which says prose is rendered by the application and never by the model; it needs the system-prompt change D-069 measured at faithfulness 1.000 to 0.989 with a required refusal flipping; and it renders model output as markup on a corpus of scraped text. D-079.
+
+**What the pass surfaced:**
+
+- **The problem was 3 answers in 36.** Median is 2 claims and 392 characters. Measuring first turned a markdown pipeline into a presentational rule.
+- **Grouping headings are true by construction.** Every sentence under a heading really did cite that section, because the grouping is read from the citation ids. A model-written heading would look the same and guarantee nothing.
+- **The rule needs its own off switch.** When no two neighbouring claims share a source, one group per claim is the original wall with headings on it, so it falls back to flat.
+- **A-24 opens with two near-duplicate claims.** Grouping makes that more visible. Left alone: suppressing one would make the application the editor of which cited claims a member sees.
+
+**Next:** P2 Stage 5, synthetic member records.

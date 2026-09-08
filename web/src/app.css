@@ -425,14 +425,22 @@
 
 /* Stage 9: voice mode. The mic follows the mock: a 112px circle on a keylime panel. */
 .voice { display: grid; gap: var(--spacing-12); }
+/*
+ * Horizontal: the 112px control keeps its size, which D-045 and the mock both
+ * require for a hand with tremor, but it no longer sits in a column of its own
+ * with the text stacked under it. That column was what filled the panel.
+ */
 .voice__stage {
-  display: grid; justify-items: center; gap: var(--spacing-16);
+  display: flex; align-items: center; gap: var(--spacing-16);
   background: var(--color-keylime-wash); border-radius: var(--radius-md);
-  padding: var(--spacing-32) var(--spacing-24);
+  padding: var(--spacing-12) var(--spacing-16);
+  overflow: hidden;
 }
 
+.voice__lines { display: grid; gap: var(--spacing-4); min-width: 0; text-align: left; }
+
 /* The well reserves room for the rings so they never shift the layout. */
-.mic-well { position: relative; display: grid; place-items: center; width: 200px; height: 200px; }
+.mic-well { position: relative; display: grid; place-items: center; width: 128px; height: 128px; flex-shrink: 0; }
 
 .mic {
   position: relative; z-index: 1;
@@ -474,21 +482,34 @@
   .mic { transition: none; }
 }
 
-.voice__state { margin: 0; text-align: center; font-size: var(--text-message); font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
-.voice__hint { margin: 0; text-align: center; max-width: 32rem; }
+.voice__state { margin: 0; text-align: left; font-size: var(--text-message); font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+.voice__hint { margin: 0; text-align: left; max-width: 32rem; }
 .voice__status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .voice__notice { margin: 0; text-align: center; color: var(--color-forest-ink); font-weight: var(--font-weight-semibold); }
 .voice__error { margin: 0; display: flex; align-items: center; gap: var(--spacing-8); color: #7a1f1f; font-weight: var(--font-weight-semibold); }
 
 .voice__review { display: grid; gap: var(--spacing-8); width: 100%; }
 .voice__label { font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+.voice__transcript:focus-visible {
+  outline-offset: -2px;
+  border-color: var(--color-forest-ink);
+  box-shadow: 0 0 0 4px rgb(15 62 23 / 12%);
+}
+
 .voice__transcript {
   width: 100%; padding: var(--spacing-12);
   border: 2px solid var(--color-forest-ink); border-radius: var(--radius-sm);
   font-size: var(--text-message); line-height: var(--leading-message);
   background: var(--color-cream-paper);
 }
-.voice__actions, .voice__playback { display: flex; flex-wrap: wrap; gap: var(--spacing-8); justify-content: center; }
+/* Stacked rows centred on their own widths did not line up with each other.
+   One edge, shared. */
+.voice__actions, .voice__playback {
+  display: flex; flex-wrap: wrap; gap: var(--spacing-8); justify-content: flex-start;
+  margin-top: 5px;
+}
+
+.voice__actions .button, .voice__playback .button { flex: 0 1 auto; }
 
 /* Dictation from the text composer. Round, to echo the voice-mode control. */
 .dictate {
@@ -721,7 +742,12 @@
  * sliver, so an answer could be heard but not read. The stage is capped and the
  * thread keeps its share.
  */
-.assistant--panel .voice { max-height: 42vh; overflow-y: auto; }
+/*
+ * No cap and no scroll here. The cap existed when the stage was a tall column;
+ * it is horizontal now and the transcript is a fixed three rows, so nothing in
+ * this region varies in height. All the scrollbar did was expose the rings,
+ * which pulse to about 1.8x their 112px base and overflow the well by design.
+ */
 .assistant--panel .voice__stage { padding: var(--spacing-12); }
 
 /* Smaller, quieter placeholder: the field should not shout its own instructions. */
@@ -896,4 +922,19 @@
 @keyframes pending-sweep {
   from { background-position: 160% 0; }
   to { background-position: -60% 0; }
+}
+
+/*
+ * A long answer as a few labelled parts. The heading names the source section
+ * the claims beneath it came from, so the structure carries provenance rather
+ * than decorating the text.
+ */
+.claim-group + .claim-group { margin-top: var(--spacing-16); }
+
+.claim-group__heading {
+  margin: 0 0 var(--spacing-8);
+  font-size: var(--text-body); font-weight: var(--font-weight-semibold);
+  color: var(--color-forest-ink);
+  padding-left: var(--spacing-12);
+  border-left: 3px solid var(--color-sage-mist);
 }

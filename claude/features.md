@@ -1229,3 +1229,48 @@ New modules: `web/src/progress.ts` for the staged messages. `App.tsx` gains the 
 **Verified:** 520 tests pass, both typecheck projects clean, web build succeeds. Twelve new assertions cover the focus loop, the scroll lock and its release, the three-way close, the preserved draft, reduced motion, the matched heights, the inside-drawn focus, the four-line cap, the hover-only scrollbars, the capped voice stage, one-control-per-job, and that the footer still says both things FR-15 needs.
 
 **Four tests were brittle rather than wrong.** Your reformatting had wrapped strings like `Reading this answer aloud` across lines, and the assertions matched exact whitespace. They now normalise whitespace instead. One real source bug was found this way: a second `prefers-reduced-motion` block made the first unreachable to anything reading the last occurrence, so the two were merged.
+
+---
+
+## Feature: Grouped long answers (readability pass)
+
+| Field            | Value                      |
+| ---------------- | -------------------------- |
+| Shipped          | 2026-09-08                 |
+| Cycle            | 15                         |
+| Stage of plan.md | not a plan stage; a readability pass |
+
+### Phase 1 - Requirements
+
+Brainstormed against measured evidence rather than an impression. On the last eval run: median answer 2 claims and 392 characters; 9 of 36 carry 3+ claims, 3 carry 5+. The longest, A-24 at 1,370 characters, is nine sentences at identical visual weight - the wall is uniformity, not a lack of bold and italic.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Markdown, or something else | Group claims by the source they cite (D-079) |
+| 2 | What to do about near-duplicate claims | Leave them visible; the application does not edit cited answers |
+
+**Markdown was ruled out on three counts**, all recorded in D-079: it contradicts FR-32, it needs the prompt change D-069 priced, and it renders model output as markup on a corpus of scraped text.
+
+### Phase 2 - Architecting
+
+Four alternatives weighed in D-079. Bulleting was rejected for reading as a sequence when the claims are not one; doing nothing was a genuine candidate at 8% of answers and was rejected because those answers are the process questions where a member most needs to find one part again.
+
+### Phase 3 and 4 - Specs
+
+`web/src/claims.ts` exposes `groupClaims(claims, citations)`, pure and testable without a browser. A group's heading is the section of its first citation, read off the label `citationLabel` already builds. No new dependency, no server change, no prompt change.
+
+### Phase 5 - Planning
+
+One stage: the pure function with its tests, then the renderer, then styling.
+
+### Phase 6 - Writing Code
+
+Grouping applies only at three or more claims, and only when neighbouring claims actually share sources - one group per claim is the same wall with headings on it, so that falls back to flat rendering. Claim order is never changed.
+
+**Nine assertions on the function**, covering the short-answer fallback, that neighbours sharing a source group together, that non-neighbours never merge, that a different set of sources starts a new group, that order is preserved, that an unknown source yields no heading, and that no claim is dropped or duplicated.
+
+**Three on the renderer**, including that it contains no `dangerouslySetInnerHTML` and no markdown library - FR-32 asserted at the render layer, not just intended.
+
+**Verified:** 555 tests pass, both typecheck projects clean, build succeeds.
+
+**Left alone deliberately:** A-24 opens with two claims saying nearly the same thing. Grouping makes that more obvious rather than less. Suppressing one would put the application in charge of which cited claims a member sees, which is a line this product has not crossed.

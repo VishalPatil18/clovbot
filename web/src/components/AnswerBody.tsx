@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Citation, Claim, Headline } from "../api.ts";
+import { groupClaims } from "../claims.ts";
 
 const HIGHLIGHT_MS = 5_000;
 
@@ -95,7 +96,15 @@ export function AnswerBody({
           <p className="headline__amount">{headline.amount}</p>
         </div>
       )}
-      {claims.map((claim, index) => (
+      {/* Long answers read as a few labelled parts rather than one run of
+          equal sentences. The grouping comes from which claim cites what, a
+          fact the payload already carries. */}
+      {groupClaims(claims, citations).groups.map((group, groupIndex) => (
+        <section key={groupIndex} className="claim-group">
+          {group.heading !== null && (
+            <h4 className="claim-group__heading">{group.heading}</h4>
+          )}
+          {group.claims.map((claim, index) => (
         <p key={index} className="claim">
           {claim.text}
           {[...new Set(claim.citationIds.map((id) => targetFor(id)?.id).filter((id): id is string => id !== undefined))].map(
@@ -120,6 +129,8 @@ export function AnswerBody({
             },
           )}
         </p>
+          ))}
+        </section>
       ))}
 
       {unanswered.length > 0 && (

@@ -2909,6 +2909,53 @@ What made it ugly was a hard 3px rectangle sitting 2px outside a rounded pill, r
 
 ---
 
+## Decision D-079 - Long answers are grouped by cited source, not rendered as markdown
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Long-answer readability |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Long answers read as an undifferentiated wall. Measured on the last eval run: median answer 2 claims and 392 characters, but 9 of 36 carry 3 or more claims and 3 carry 5 or more. The worst, A-24, is nine sentences at identical visual weight.
+
+The obvious fix - ask the model for markdown - is blocked three times over:
+
+- `FR-32` and D-038 state that prose is rendered by the application, never by the model. The model returns typed claims each carrying citation ids, and markdown would hand rendering back to it.
+- It needs a system-prompt change, and D-069 measured that cost precisely: faithfulness 1.000 to 0.989, and a pharmacy question the corpus cannot answer flipping from a refusal into an answer.
+- Rendering model output as markup is an injection surface on a product whose corpus is scraped text.
+
+### Options considered
+
+1. Group neighbouring claims that cite the same sources, under a heading taken from that source's section.
+2. As above, plus the first claim set a size larger as a lead.
+3. Render three or more claims as a bulleted list.
+4. Leave it alone.
+5. Markdown from the model.
+
+### Decision
+
+Option 1. Grouping happens in the renderer, over the claims the payload already carries.
+
+### Rationale
+
+The grouping is a fact the system already holds - which claim cites what - rather than anything inferred from the words. No prompt change, no dependency, no markup from the model, so none of the three objections apply.
+
+Option 3 reads as a checklist even when the claims are not a sequence, which is the structural dishonesty `frontend-design` warns about with numbered markers.
+
+Option 4 was a real candidate at 8% of answers affected, and was rejected because the answers it affects are the process questions - appeals, grievances, dental limits - where a member most needs to find one part again.
+
+### Consequences
+
+- Grouping applies only at three or more claims, and only when neighbouring claims actually share sources. One group per claim is the same wall with headings added, so that case falls back to flat rendering.
+- Claim order is never changed. The model returned a sequence and reordering it would change the answer.
+- Near-duplicate claims become more visible, not less. A-24 opens with two claims that say nearly the same thing. Suppressing one would make the application decide which cited claims a member sees, which this product has not done; the repetition is left visible and recorded as an answer-quality signal instead.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

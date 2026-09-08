@@ -147,6 +147,7 @@ export function Assistant({
   const [helpOpen, setHelpOpen] = useState(false);
   const [copied, setCopied] = useState<number | null>(null);
   const [corpusDate, setCorpusDate] = useState<string | null>(null);
+  const [voiceReset, setVoiceReset] = useState(0);
   const [stage, setStage] = useState<Stage | null>(null);
   const [stageElapsed, setStageElapsed] = useState(0);
   const reduceMotion = useReducedMotion();
@@ -351,7 +352,18 @@ export function Assistant({
     writeHistory(turns);
   }, [turns]);
 
+  const resetVoice = (): void => {
+    spoken?.stop();
+    setSpoken(null);
+    setSpeakingTurn(null);
+    setVoiceNotice(null);
+    setDictateError(null);
+    // Remounts the composer, which owns its own listening and review phases.
+    setVoiceReset((token) => token + 1);
+  };
+
   const startOver = (): void => {
+    resetVoice();
     setTurns([]);
     setPlan(null);
     setPlanPrompt(null);
@@ -360,6 +372,7 @@ export function Assistant({
   };
 
   const forgetHistory = (): void => {
+    resetVoice();
     clearHistory();
     setTurns([]);
   };
@@ -806,6 +819,7 @@ export function Assistant({
         {mode === "voice" ? (
           <>
             <VoiceComposer
+              key={voiceReset}
               busy={busy}
               responding={speakingTurn !== null}
               onSend={(question) => void submit(question, plan)}
@@ -822,6 +836,7 @@ export function Assistant({
                 <button
                   type="button"
                   className="button button--quiet"
+                  disabled={speakingTurn === null}
                   onClick={() => spoken.stop()}
                 >
                   <IoStop aria-hidden="true" /> Stop

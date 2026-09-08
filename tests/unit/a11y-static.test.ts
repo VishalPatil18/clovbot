@@ -529,8 +529,16 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
 
   // Voice filled the pinned foot and squeezed the thread to a sliver, so an
   // answer could be heard but not read.
-  it("caps the voice stage so the transcript stays scrollable", () => {
-    expect(rule(".assistant--panel .voice")).toMatch(/max-height/);
+  /*
+   * Voice used to fill the pinned foot and squeeze the thread to a sliver, so an
+   * answer could be heard but not read. A height cap was the first fix; the
+   * horizontal stage is the real one, and it holds without capping anything.
+   */
+  it("keeps the voice stage short enough that the transcript stays readable", () => {
+    const stage = rule(".voice__stage");
+    expect(stage).toContain("display: flex");
+    expect(stage).toContain("align-items: center");
+    expect(rule(".mic-well")).toMatch(/height: 128px/);
   });
 
   // Icon-only is right for close, expand and help; switching how you speak to
@@ -692,5 +700,90 @@ describe("waiting state [D-077]", () => {
     expect(css).toMatch(
       /prefers-reduced-motion[\s\S]*?\.turn__pending-text \{[^}]*animation: none[^}]*color: var\(--color-forest-ink\)/,
     );
+  });
+});
+
+describe("long answers [FR-32]", () => {
+  const answerBody = readFileSync("web/src/components/AnswerBody.tsx", "utf8");
+
+  // FR-32: prose is rendered by the application, never by the model. Grouping is
+  // presentation over the typed claims, not markup the model emitted.
+  it("groups claims in the renderer rather than asking the model for markup", () => {
+    expect(answerBody).toContain("groupClaims(claims, citations)");
+    expect(answerBody).not.toMatch(/dangerouslySetInnerHTML|marked|remark|markdown/i);
+  });
+
+  it("keeps every claim's citation markers inside its group", () => {
+    const loop = answerBody.slice(answerBody.indexOf("group.claims.map"));
+    expect(loop).toContain("claim.citationIds");
+    expect(loop).toContain("cite-marker");
+  });
+
+  it("labels a group with the section its source came from", () => {
+    expect(answerBody).toContain("group.heading");
+    expect(rule(".claim-group__heading")).toContain("var(--text-body)");
+  });
+});
+
+describe("voice stage layout [D-045]", () => {
+  const voice = readFileSync("web/src/components/VoiceComposer.tsx", "utf8");
+
+  // The stage filled the panel because the text sat in a column under the
+  // control. Beside it, the same content is a fraction of the height.
+  it("puts the text beside the control rather than under it", () => {
+    expect(rule(".voice__stage")).toContain("display: flex");
+    expect(rule(".voice__stage")).toContain("align-items: center");
+    expect(voice).toContain('className="voice__lines"');
+  });
+
+  // The press target is a requirement for a hand with tremor, not decoration.
+  it("keeps the control at its specified 112px", () => {
+    expect(rule(".mic")).toMatch(/width: 112px/);
+    expect(rule(".mic")).toMatch(/min-height: 112px/);
+  });
+
+  // The control itself is the icon; repeating it on each line was noise.
+  it("changes the second line when reading aloud rather than repeating dictation copy", () => {
+    expect(voice).toContain("The written answer is above, and you can scroll while it plays.");
+    expect(voice).toContain("You can change the words before they are sent.");
+  });
+
+  it("aligns the stacked button rows to one edge", () => {
+    expect(rule(".voice__actions, .voice__playback")).toContain("justify-content: flex-start");
+  });
+
+  // Stop with nothing playing is a control that does nothing.
+  it("disables Stop while no answer is playing", () => {
+    expect(markup).toContain("disabled={speakingTurn === null}");
+  });
+
+  // The composer owns its listening and review phases, so clearing the thread
+  // has to remount it or voice stays on whatever screen it was left on.
+  it("resets the voice surface when the conversation is cleared", () => {
+    expect(markup).toContain("key={voiceReset}");
+    expect(markup).toMatch(/const resetVoice[\s\S]*?setVoiceReset/);
+    expect(markup).toMatch(/const forgetHistory = \(\): void => \{\s*resetVoice\(\);/);
+    expect(markup).toMatch(/const startOver = \(\): void => \{\s*resetVoice\(\);/);
+  });
+
+  it("draws transcript focus inside the field, as the composer does", () => {
+    expect(rule(".voice__transcript:focus-visible")).toContain("outline-offset: -2px");
+  });
+
+  it("separates the playback buttons from the stage above them", () => {
+    expect(rule(".voice__actions, .voice__playback")).toContain("margin-top: 5px");
+  });
+});
+
+describe("voice stage overflow", () => {
+  // The rings pulse to roughly 1.8x their 112px base and overflow the 128px
+  // well by design. A scrolling ancestor turned that decoration into a
+  // scrollbar that tracked the animation.
+  it("does not make the voice region scrollable", () => {
+    expect(css).not.toMatch(/\.assistant--panel \.voice \{[^}]*overflow-y: auto/);
+  });
+
+  it("clips the pulse to its own block instead", () => {
+    expect(rule(".voice__stage")).toContain("overflow: hidden");
   });
 });

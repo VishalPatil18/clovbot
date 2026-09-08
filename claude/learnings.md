@@ -189,3 +189,15 @@ _<How this concept will apply to future work in this project.>_
 **Two dates that sound like one.** "Corpus ingestion date" reads as a single fact and is two: when the documents were fetched, and when they were indexed. A member asking whether an answer is current means the first; the pipeline only knew the second. Incremental ingest makes the second actively misleading, since re-embedding a third of the index moves it to today while most of the corpus is older.
 
 **A feature can be finished and still not shippable.** The contract, the validation, the layout, the contrast and the degradation rule were all built and all pass. The one thing that fills them cost more than they were worth. Shipping the parts that hold and recording precisely why the last one does not is a better outcome than a card that is right about a number and wrong about a refusal.
+
+## Grouped long answers - what the readability pass taught
+
+**Measure the problem before designing for it.** "Long answers are a wall" was true of 3 answers in 36. Knowing that changed the shape of the fix: a presentational grouping rule rather than a markdown pipeline, a prompt change and a new dependency for 8% of cases.
+
+**The request and the need are not always the same thing.** The ask was markdown styling. The need was that nine sentences at one visual weight are unreadable. Markdown was one way to meet it and the most expensive - it would have contradicted the answer contract, cost measured faithfulness, and rendered model output as markup. Grouping met the same need using a fact the payload already carried.
+
+**Structure can carry provenance instead of decorating text.** Grouping claims by the source they cite gives a long answer headings that are true by construction: every sentence beneath a heading really did come from that section. A markdown heading the model wrote would look identical and mean nothing.
+
+**Falling back is part of the rule.** Grouping only helps when neighbours share sources. When every claim cites something different, one group per claim is the original wall with headings added, so the rule detects that and renders flat. A layout rule without its own off switch makes some inputs worse.
+
+**Not fixing something is a decision worth recording.** Two near-duplicate claims in A-24 became more visible under grouping. Hiding one would have been three lines of similarity check and would have made the application the editor of which cited claims a member sees. Leaving it visible is the smaller change and the more honest one.

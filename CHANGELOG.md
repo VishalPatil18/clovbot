@@ -28,6 +28,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - While an answer is being prepared, the assistant says what it is doing at each step rather than showing one unchanging line.
 - The question box now grows to four lines as you type and holds a much longer question.
 - You can play an answer aloud and scroll back through the written version at the same time.
+- Longer answers are now grouped under the part of the plan document each set of sentences came from, so you can find one section again instead of re-reading the whole reply.
 - Tidier panel throughout: a single row of controls at the top, matching heights on the question box, microphone and Ask button, and slimmer scrollbars that stay out of the way until you need them.
 
 ### Fixed
