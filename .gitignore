@@ -12,3 +12,4 @@
 
 # Logs
 *.log
+.claude/settings.json
