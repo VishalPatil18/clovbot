@@ -452,6 +452,10 @@ async function handleAsk(
   }
 }
 
+// A revision with a broken environment must fail to start, not answer /api/plans
+// and 503 every question. connect() throws here, so the deploy rolls it back.
+connect();
+
 server.listen(PORT, () => {
   console.log(`api listening on http://localhost:${PORT}`);
 });

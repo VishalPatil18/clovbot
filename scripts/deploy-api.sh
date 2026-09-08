@@ -58,7 +58,9 @@ for name in DATABASE_URL AZURE_OPENAI_ENDPOINT AZURE_OPENAI_API_KEY AZURE_OPENAI
             FISH_AUDIO_API_KEY FISH_AUDIO_VOICE_ID \
             CORPUS_CONTRACT_ID CORPUS_PLAN_IDS CORPUS_PLAN_YEAR CORPUS_COUNTY_ID; do
   value="${!name:-}"
-  [[ -n "${value}" ]] && env_vars+="^@@^${name}=${value}"
+  # Only the first element declares the separator; repeating ^@@^ would fold it
+  # into the next variable name and silently drop the variable.
+  [[ -n "${value}" ]] && env_vars+="@@${name}=${value}"
 done
 
 gcloud run deploy "${SERVICE}" \

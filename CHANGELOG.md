@@ -8,6 +8,32 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- _<new capabilities>_
+
+### Changed
+
+- _<changed behavior>_
+
+### Fixed
+
+- _<bug fixes; populated by `/spec-bug`>_
+
+### Removed
+
+- _<removed capabilities>_
+
+### Security
+
+- _<security-relevant changes>_
+
+---
+
+## [1.0.0] - 2026-09-08
+
+Member-facing plan-document assistant: cited answers, guardrails, voice, and a public deploy.
+
+### Added
+
 - **You can talk to it instead of typing.** Hold the microphone button and speak, or tap once to start and tap again to stop. Both work, always.
 - **It shows you what it heard before it answers**, so you can fix a word it got wrong rather than getting an answer to the wrong question.
 - **Answers are read aloud and written down at the same time.** The text never disappears, so you can re-read it or check where it came from. You can replay or stop the audio.
@@ -41,21 +67,12 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Fixed
 
 - **"Did this answer your question?" now records the answer.** The control had been showing your choice without saving it anywhere since it was added. Regression covered by `migrations/004_release.sql` and the feedback endpoint.
+- **The deployed assistant can answer questions again.** Every question came back as "The assistant could not be reached" while the plan list loaded normally, because the deploy script folded its own separator into each variable name and the running service was left without a database address. Regression test: `tests/unit/deploy-config.test.ts`.
 - **Spoken answers no longer read the source list aloud.** The assistant was reading the citation markers and every "Where this comes from" line, so a 191-character answer took 400 characters to say. Regression test: `tests/unit/spoken-answer.test.ts`.
-
-- _<bug fixes; populated by `/spec-bug`>_
-
-### Removed
-
-- _<removed capabilities>_
-
-### Security
-
-- _<security-relevant changes>_
 
 ---
 
-## [0.1.0] - _<YYYY-MM-DD>_
+## [0.1.0] - 2026-09-07
 
 ### Added
 

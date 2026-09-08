@@ -4,10 +4,10 @@
 >
 > Current State, Key Decisions and Open Questions are edited in place. Session History is append-only: never rewrite a past entry, correct it in a new one.
 
-| Field                | Value                          |
-| -------------------- | ------------------------------ |
-| Snapshot date        | 2026-09-08                     |
-| Current stage        | P1 Stage 10 built. Deploy steps are the user's to run. |
+| Field                | Value                                                   |
+| -------------------- | ------------------------------------------------------- |
+| Snapshot date        | 2026-09-08                                              |
+| Current stage        | P1 Stage 10 built. Deploy steps are the user's to run.  |
 | Last feature shipped | Release tooling: deploy, instrumentation, reproduction. |
 
 ---
@@ -82,11 +82,11 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 2. **Nothing is measured under the NFR-PERF-05 throttled profile.** Every figure so far is unthrottled and on a laptop. `eval/results/real-device-latency.md` is the template to fill from a phone.
 3. **Accessibility verification** remains the largest outstanding risk. A single browser-tooling session at P3 closes five acceptance criteria at once.
 4. **Spanish** is specified as P3 Stage 4, with the Spanish corpus already confirmed available in the catalog.
-3. **Two register variants still refuse.** A-03 and A-18 score 0.0006 and 0.0002, below the 0.001 floor. The floor cannot separate them from nonsense, which is the cost D-038 records rather than hides.
-4. **No screen-reader pass has been done.** Stage 7's eleventh criterion, and the one no tooling replaces.
-5. **ADV-01 refuses rather than answering.** The injection attempt is declined outright, which is safe but not what the golden case expects.
-3. **Stage 2, deferred** - the voice latency spike was skipped. NFR-PERF-03 and 04 stay unmeasured until Stage 9.
-4. **Gemini key** - rejected as invalid, so the D-034 fallback has never executed.
+5. **Two register variants still refuse.** A-03 and A-18 score 0.0006 and 0.0002, below the 0.001 floor. The floor cannot separate them from nonsense, which is the cost D-038 records rather than hides.
+6. **No screen-reader pass has been done.** Stage 7's eleventh criterion, and the one no tooling replaces.
+7. **ADV-01 refuses rather than answering.** The injection attempt is declined outright, which is safe but not what the golden case expects.
+8. **Stage 2, deferred** - the voice latency spike was skipped. NFR-PERF-03 and 04 stay unmeasured until Stage 9.
+9. **Gemini key** - rejected as invalid, so the D-034 fallback has never executed.
 
 ## 5. Active environment
 
@@ -106,17 +106,17 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 
 ## 7. File map
 
-| Area              | Path                    | State                    |
-| ----------------- | ----------------------- | ------------------------ |
-| Working contract  | `CLAUDE.md`             | written                  |
-| Research corpus   | `docs/research-init.md` | written                  |
-| Design system     | `design/DESIGN.md`      | written                  |
-| Requirements      | `claude/srs.md`         | scaffold                 |
-| Plan              | `claude/plan.md`        | scaffold                 |
-| Features log      | `claude/features.md`    | scaffold                 |
-| Decisions (ADR)   | `claude/design-decisions.md` | scaffold            |
-| Application code  | none                    | does not exist           |
-| Test suite        | none                    | does not exist           |
+| Area             | Path                         | State          |
+| ---------------- | ---------------------------- | -------------- |
+| Working contract | `CLAUDE.md`                  | written        |
+| Research corpus  | `docs/research-init.md`      | written        |
+| Design system    | `design/DESIGN.md`           | written        |
+| Requirements     | `claude/srs.md`              | scaffold       |
+| Plan             | `claude/plan.md`             | scaffold       |
+| Features log     | `claude/features.md`         | scaffold       |
+| Decisions (ADR)  | `claude/design-decisions.md` | scaffold       |
+| Application code | none                         | does not exist |
+| Test suite       | none                         | does not exist |
 
 ## 8. Open questions
 
@@ -134,6 +134,7 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 > Append-only. Newest at the bottom. One entry per session that changed code, design, or architecture.
 >
 > Template:
+>
 > ```
 > ## YYYY-MM-DD - <title>
 > **Did:** <what changed>
@@ -147,11 +148,13 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Did:** Established the behavior contract for the whole project before any spec or code. Rewrote `CLAUDE.md` from the 399-line scaffold template into a 94-line contract carrying the user's eight rules. Logged it in the changelog. Populated this file with real state.
 
 **Files:**
+
 - `CLAUDE.md` (update) - replaced template with the contract. Cut unfilled Environment placeholders and a stale block referencing another repo's stack (Electron, Drizzle, `lib/db/repo/**`) that would have misled every session.
 - `CHANGELOG.md` (update) - logged the contract under `[Unreleased] > Changed`.
 - `claude/context.md` (update) - this file, replaced scaffold with real state.
 
 **Decisions:**
+
 - ADRs live in `claude/design-decisions.md`, not the `docs/design-decisions.md` the user first named. Reason: the file already exists and the `/spec-*` skills read and write it. Two logs would drift. Flagged to the user, reversible.
 - The changelog entry stands even though a contract rewrite is invisible to a member, which the contract's own section 8 argues against. Flagged, user's call.
 
@@ -166,6 +169,7 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Decisions:** D-030 discovery snapshot replayed. D-031 column split by bounding-box gutter. D-032 plan 004, superseded same session by D-033 plans 004 and 007. D-034 Gemini generation fallback, never embeddings.
 
 **What the live run taught:**
+
 - Clover's plan documents are behind two undocumented JSON endpoints. `zipcode=` is accepted and silently ignored; only `county_id` filters, so a wrong parameter returns all five states with no error. The parser asserts the returned set is state-scoped rather than trusting the request.
 - The Summary of Benefits is one PDF for two plans, side by side. Extracting the wrong column is a silent wrong answer on the highest-volume call driver. Header midpoints do not locate the column break, because headers are centred; the gutter has to be found empirically.
 - Temperature 0 is not determinism. The same refusal question cited a disclaimer chunk on one run and nothing on the next. This is the argument for Stage 6's confidence floor rather than trusting the model to self-refuse.
@@ -181,6 +185,7 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Decisions:** D-035 deterministic contextual prefixes from headings, model only for the 1.7% with no heading. D-036 pharmacy directory excluded from the index.
 
 **What the live run taught:**
+
 - **Chunk ids omitted the document, so twelve chunks collided and overwrote each other.** Corporate pages share headings like "Learn More". Silent content loss that only surfaced because idempotency reported one chunk permanently changed.
 - **LLM-generated context makes ingest non-idempotent.** Regenerating each run produced different text, so unchanged chunks looked changed and re-embedded forever. Frozen to disk, as `docs/testing-strategy.md` section 4 already required.
 - **The Azure quota is 29,000 tokens per minute, not requests.** Retry alone could not clear it. Pacing against a token budget, plus persisting each batch, made a full ingest survivable.
@@ -200,6 +205,7 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Decisions:** D-037 resolves the reranker open question as a local ONNX cross-encoder, model chosen by measurement in Stage 6.
 
 **What the run taught:**
+
 - **Stage 4's chunk id change silently broke citation parsing.** New ids carry the document kind, which contains underscores; the citation regex allowed only letters, digits and hyphens. Every valid citation parsed as none, so correct cited answers were recorded as refusals. It looked like a plausible outcome rather than an error, which is why it survived a whole stage.
 - **The dominant quality gap is per-claim citation.** The model cites its first sentence and leaves later factual sentences uncited. That is precisely what FR-32 exists to make structurally impossible.
 - **Refusal cannot be inferred from citation count.** An answer that declines but cites the document explaining where to go is neither a refusal nor a factual answer under that heuristic.
@@ -218,6 +224,7 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Decisions:** D-037 gained its measured numbers. D-038 amends D-016. D-039 removes automated conflict detection.
 
 **What the measurements taught:**
+
 - **The reranker score cannot be the confidence signal.** The same question scores 0.998 phrased tersely and 0.0005 phrased the way a member actually speaks. Out-of-corpus questions top out at 0.0002, so a grandmother asking about cover on a trip abroad is indistinguishable from "what is the capital of France". Ordering is fine, at 96-100% accuracy@5; only the scalar is unusable.
 - **A spurious conflict detector is worse than none.** Comparing amounts across chunks fired on unrelated benefits, and telling the model a conflict existed made it declare a correct Clover document incorrect and invent a $25 figure.
 - **The Evidence of Coverage table of contents was being read as headings.** Body chapters carry their title on the following line while contents entries carry it inline, so every chunk inherited a heading from a page-number line. Fixing it cut EOC chunks from 656 to 318 and made sections meaningful.
@@ -233,6 +240,7 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Decisions:** D-040 defers accessibility tooling to P3, with the gap stated. D-041 amends NFR-PERF-02 to the measured number.
 
 **What building it surfaced:**
+
 - **A live D-026 violation in shipped code.** `src/rag/payload.ts` hardcoded Clover's real number, `1-888-778-1478`, in the escalation text every refusal renders. D-026 had decided on an obviously-fake placeholder precisely so an unaffiliated public deploy cannot route real members to a real call centre. Replaced, with a test asserting the real number never appears.
 - **The corpus reproduces that number anyway**, because the Evidence of Coverage contains it and answers quote it under citation. Accepted on the user's call, since it is quoted from a public document rather than published as this site's own support line.
 - **The mock's own README was the most valuable file in the design folder.** It listed six conflicts with frozen requirements before a line was written, and the type scale conflict alone would have failed four acceptance criteria.
@@ -248,6 +256,7 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Measured:** all 50 cases enforced, up from 29. Faithfulness 1.000, structural 100%, refusal 13.3%, bucket A 27/30, B 8/8, C 10/10. Every Stage 8 acceptance criterion passes against the live database.
 
 **What the run taught:**
+
 - **Rules over-refuse, and the eval found where within one run.** "If I end up in the emergency room what am I looking at paying" matched the bare word "emergency"; "how long do I have to file an appeal" matched filing without matching the exception for explaining it. Bucket A fell to 25/30 until both were fixed, then rose to 27/30. Neither would have been visible without enforcing the whole set.
 - **Enforcing a bucket is what makes its number mean anything.** Bucket B and C had been passing since Stage 5 purely because the model happened to decline. Marking them enforced changed nothing about the code and everything about what the report claims.
 - **A guardrail that runs after generation is not a guardrail.** Deciding before retrieval means a guarded question never reaches the model, so there is no partial answer to leak on the way to a refusal.
@@ -263,6 +272,7 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Decisions:** D-045 drops the live partial transcript and amends FR-18. D-046 replaces both voice latency budgets with measured values.
 
 **What building it taught:**
+
 - **A requirement can be impossible rather than unmet.** NFR-PERF-04 asked for a complete spoken answer within 4 seconds. Speech runs at roughly 18 characters per second, so the answers tested take 17 to 31 seconds to say. The requirement had conflated beginning to speak with finishing, and no amount of engineering makes speech faster than speech.
 - **The cheap privacy shortcut was the wrong trade.** Live partial transcription would have meant streaming a member's spoken health question to Google for reassurance while they talk, when the editable transcript is what actually protects them from a mis-heard question. FR-18 was amended rather than met that way.
 - **Read the provider spec, do not recall it.** Both request shapes were taken from the live OpenAPI documents. The realtime speech-to-text endpoint the plan assumed does not exist in the REST API at all, which would have been discovered much later.
@@ -278,9 +288,32 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Files:** created `Dockerfile`, `.dockerignore`, `vercel.json`, `scripts/deploy-api.sh`, `.github/workflows/deploy-api.yml`, `src/ops.ts`, `migrations/004_release.sql`, `tests/unit/no-secrets.test.ts`, `eval/results/real-device-latency.md`. Extended `src/rag/store.ts`, `src/server.ts`, the browser client, and `README.md`.
 
 **What building it surfaced:**
+
 - **FR-27 recorded nothing.** The "Did this answer your question?" control had been React state since Stage 7: never sent, never stored, and a Stage 10 acceptance criterion depends on it. Three stages passed with the control looking finished.
 - **`reproduceTurn` had been deleted at Stage 4** along with `pipeline.ts`, and NFR-OPS-02 depends on it. Rebuilt against the turn log rather than the removed abstraction, and it now reports a chunk that is no longer in its snapshot as a finding rather than skipping it.
 - **The deployment target changed what the code could assume.** `latestSnapshotId()` read a gitignored directory on every request, and the audio cache wrote to a fixed path. Neither survives a container. Both are configurable now, which took two lines because the coupling was shallow.
 - **A secret scan did not need a new tool.** Scanning git-tracked files for credential shapes inside the existing suite satisfies NFR-SEC-03 and gates CI already. Proven by planting a key-shaped string and watching the test name the file.
 
 **Open:** migration 004 unapplied; the deploy itself; throttled real-device numbers.
+
+## 2026-09-08 - Production 503 on every question
+
+**Did:** Fixed the deployed service answering `/api/plans` while 503ing every `/api/ask`.
+
+**Cause:** `scripts/deploy-api.sh` builds the `--set-env-vars` string with gcloud's custom-separator syntax, `^@@^`, and repeated that declaration for each variable rather than the separator alone. Cloud Run received `^DATABASE_URL`, `^AZURE_OPENAI_API_KEY` and the rest, so `connect()` threw on every question. `connect()` sat outside `handleAsk`'s try, so the throw became an unhandled rejection and killed the process; Cloud Run returned 503 and restarted, once per question.
+
+**Files:** fixed `scripts/deploy-api.sh` (separator), added a boot-time `connect()` to `src/server.ts`, added `tests/unit/deploy-config.test.ts`. 379 tests pass.
+
+**Why `/api/plans` looked healthy:** it serves a constant. Nothing in the verification step touched the database, Azure or the reranker.
+
+## 2026-09-08 - v1.0.0 released
+
+**Did:** Cut the release. `CHANGELOG.md` moves everything under `[Unreleased]` into `[1.0.0] - 2026-09-08` and opens a fresh unreleased section; `package.json` goes to 1.0.0; `claude/plan-p1.md` marks its stages.
+
+**Shipped:** Stages 1 and 3 through 10. Cited answers over a two-plan 2026 NJ PPO corpus, hybrid retrieval with a local cross-encoder reranker, guardrails and escalation, voice in and out, and a public deploy on Cloud Run behind Vercel at the project domain.
+
+**Not shipped, and recorded as such:** Stage 2 was skipped, so the voice budgets were measured at Stage 9 rather than hour six (D-046). Stage 7's accessibility verification is deferred to P3 (D-040). No throttled real-device latency numbers exist; `eval/results/real-device-latency.md` is still a stub.
+
+**Measured at release:** faithfulness 1.000, structural validity 100%, refusal rate 13.3%, bucket A 27/30, B 8/8, C 10/10. 379 tests pass.
+
+**Open:** `--min-instances 1` bills about $21/month for an idle container; no budget alert on the billing account.
