@@ -93,6 +93,24 @@ export async function sendFeedback(turnId: string, resolved: boolean): Promise<b
   }
 }
 
+export interface PlansResponse {
+  plans: PlanOption[];
+  planYear: number;
+  corpus: { documentsFetchedAt: string; ingestedAt: string; planYear: number } | null;
+}
+
+/** What the corpus covers and when it was collected. FR-P2-16. */
+export async function fetchPlans(): Promise<PlansResponse | null> {
+  try {
+    const response = await fetch("/api/plans");
+    if (!response.ok) return null;
+    return (await response.json()) as PlansResponse;
+  } catch {
+    // The picker still works from the needs_plan event; only the date is lost.
+    return null;
+  }
+}
+
 /** Reads the server-sent stream one event at a time. */
 export async function ask(
   question: string,

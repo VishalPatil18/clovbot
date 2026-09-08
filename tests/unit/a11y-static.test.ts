@@ -339,3 +339,69 @@ describe("answer card [FR-P2-13, NFR-P2-06, D-068]", () => {
     expect(rule(".headline__amount")).toContain("var(--color-forest-ink)");
   });
 });
+
+describe("session surfaces [FR-P2-20 to FR-P2-23, D-071, D-073]", () => {
+  it("gives every quick-reply chip a 44px target", () => {
+    const chip = rule(".chip");
+    expect(Number(/min-height:\s*(\d+)px/.exec(chip)?.[1])).toBeGreaterThanOrEqual(MIN_TARGET_PX);
+    expect(Number(/min-width:\s*(\d+)px/.exec(chip)?.[1])).toBeGreaterThanOrEqual(MIN_TARGET_PX);
+  });
+
+  it("gives the icon-only close and help controls a 44px target", () => {
+    const icon = rule(".assistant__icon-button");
+    expect(Number(/min-height:\s*(\d+)px/.exec(icon)?.[1])).toBeGreaterThanOrEqual(MIN_TARGET_PX);
+    expect(Number(/min-width:\s*(\d+)px/.exec(icon)?.[1])).toBeGreaterThanOrEqual(MIN_TARGET_PX);
+  });
+
+  // An icon with no text needs a name, or a screen reader announces "button".
+  it("names the icon-only controls for a screen reader", () => {
+    expect(markup).toContain("Close the assistant");
+    expect(markup).toMatch(/Show help|Hide help/);
+  });
+
+  // Help is a region, not a dialog: a dialog traps focus, which FR-P2-23 forbids.
+  // The surrounding panel is separately a non-modal dialog, which is unrelated.
+  it("exposes help as an expandable region rather than a dialog", () => {
+    expect(markup).toContain('aria-expanded={helpOpen}');
+    expect(markup).toContain('aria-controls="assistant-help"');
+    const help = markup.slice(markup.indexOf('id="assistant-help"'));
+    const region = help.slice(0, help.indexOf("</section>"));
+    expect(region).not.toMatch(/role="dialog"|aria-modal|tabIndex/);
+  });
+
+  it("pins the header and composer so only the thread scrolls", () => {
+    expect(rule(".assistant--panel")).toContain("grid-template-rows: auto 1fr auto");
+    // A grid row will not shrink below its content without this.
+    expect(rule(".assistant--panel > .assistant__scroll")).toContain("min-height: 0");
+    expect(rule(".assistant--panel > .assistant__scroll")).toContain("overflow-y: auto");
+  });
+
+  it("keeps the human path inside the pinned header, reachable at any scroll position", () => {
+    const header = markup.slice(markup.indexOf("<header"), markup.indexOf("</header>"));
+    expect(header).toContain("button--human");
+  });
+});
+
+describe("print output [FR-P2-20]", () => {
+  const printBlock = /@media print\s*\{([\s\S]*)\}\s*$/.exec(css)?.[1] ?? "";
+
+  it("has a print stylesheet at all", () => {
+    expect(printBlock.length).toBeGreaterThan(0);
+  });
+
+  it("drops interface chrome", () => {
+    for (const chrome of [".launcher", ".chips", ".composer", ".feedback", ".assistant__corner"]) {
+      expect(printBlock, chrome).toContain(chrome);
+    }
+  });
+
+  // A citation list inside a scroll box prints as one clipped screenful.
+  it("releases the scrolling region so the whole transcript prints", () => {
+    expect(printBlock).toMatch(/\.assistant__scroll[\s\S]*overflow: visible/);
+  });
+
+  it("keeps the citation list, which is the point of printing", () => {
+    expect(printBlock).not.toMatch(/\.citations\s*\{[^}]*display:\s*none/);
+    expect(printBlock).toMatch(/\.citations\s*\{\s*break-inside: avoid/);
+  });
+});

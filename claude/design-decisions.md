@@ -2591,6 +2591,152 @@ Option 1 remains open and is the likely route if the card is picked up later: it
 
 ---
 
+## Decision D-070 - Contextual follow-up chips are not built
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-22` folded `docs/ideas.md` P2-01 into Stage 4: two or three contextual follow-up questions after each answer. The obvious implementation asks the answering model for them.
+
+D-069 measured what touching that prompt costs. One added rule moved faithfulness from 1.000 to 0.989 and turned a pharmacy question the corpus cannot answer from a refusal into an answer. Even naming an unused field in the declared JSON shape moved a case from 1.0 to 0.667.
+
+### Options considered
+
+1. Drop follow-ups. Ship the three commands `docs/ideas.md` P2-06 actually names.
+2. A second model call over the finished answer, never the answering prompt.
+3. Deterministic suggestions from the cited sections' siblings.
+4. Static chips keyed to the call driver.
+
+### Decision
+
+Option 1. Quick replies are `help`, `talk to a person` and `start over`. P2-01 returns to unbuilt.
+
+### Rationale
+
+The user's call, taken with the Stage 3 measurement in hand. Option 2 is safe for the answer path but produces suggestions grounded in nothing, which on a cite-or-refuse product invites a member to ask a question the corpus cannot answer. Option 3 turns section headings into stilted questions and offers siblings unrelated to what was asked. Option 4 goes stale the moment the corpus changes.
+
+The deflection argument for P2-01 was that one session resolving three questions deflects three calls. That is real, and it is not worth a measurable drop in whether the answers are true.
+
+### Consequences
+
+- P2-01 is unbuilt and recorded as such rather than quietly folded away.
+- `FR-P2-22` is met only in its command half. The plan's chip criterion is marked partial.
+- The route if it is revisited is option 2 with the suggestions checked against the index before they are offered.
+
+---
+
+## Decision D-071 - Help is an inline expandable section, not a dialog
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-23` requires the help panel to be reachable by keyboard and to **not** trap focus. A modal dialog is defined by trapping focus; that is what makes it modal. The requirement is describing something that is not a dialog.
+
+### Options considered
+
+1. An inline expandable section in the normal document flow.
+2. A non-modal floating dialog closed by Escape.
+3. A separate `/help` route.
+
+### Decision
+
+Option 1. A disclosure button expands help in place, with `aria-expanded` and `aria-controls`.
+
+### Rationale
+
+Tab moves through the panel and out the other side, so nothing is trapped and Escape is unnecessary. A screen reader announces an expanded region rather than a dialog that has taken over.
+
+Option 2 is the pattern screen-reader users most often lose their place in. Option 3 leaves the conversation, which is the thing D-022's lazy plan prompt and Stage 6's inline login both exist to avoid.
+
+### Consequences
+
+- Help pushes content down rather than covering it, which on a 40vw panel means scrolling. Accepted: this audience scrolls more comfortably than it recovers from a lost focus position.
+- It is also the P4-06 tour's re-entry point, per P2-07, and an inline section is a stable target for that.
+
+---
+
+## Decision D-072 - Starting over and clearing history are different actions
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`docs/ideas.md` P2-06 names a `start over` command. `FR-P2-18` requires stored history to be clearable, and the acceptance criterion asks for clearing to be verified by inspecting storage rather than by the interface reporting success.
+
+### Options considered
+
+1. Separate: `start over` ends the current conversation; a distinct control erases stored conversations.
+2. One action that does both.
+3. `start over` only, with no clear control.
+
+### Decision
+
+Option 1. `start over` empties the thread and forgets the chosen plan. Clearing saved conversations is its own control and deletes the storage key.
+
+### Rationale
+
+Option 2 makes a member who wanted a clean slate for one question lose every prior conversation, with no undo. Two verbs with two consequences is less surprising than one verb with a hidden second effect.
+
+Option 3 fails `FR-P2-18` outright.
+
+### Consequences
+
+- Two controls where the mock draws one.
+- `start over` forgetting the plan is deliberate: a new conversation should re-ask lazily per D-022 rather than inherit a plan the member may have chosen for a different question.
+
+---
+
+## Decision D-073 - The chat panel pins its header and composer
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`.panel` is a single scrolling column, so the header, the "Talk to a person" button and the composer scroll away with the thread. The close control is a text button in a wrapping action row rather than an X at the top right, and `FR-13` requires the human path to be present in every state.
+
+### Options considered
+
+1. Pinned header and composer, with only the thread scrolling.
+2. A minimal header with the actions behind an overflow menu.
+3. Keep one scroll and move only the close control.
+
+### Decision
+
+Option 1. The panel becomes a three-row grid: header, scrolling thread, composer. The close control is an X at the top right of the title row.
+
+### Rationale
+
+Option 3 leaves FR-13 broken in the state where it matters most: a member who has scrolled into a long transcript cannot see the human path. Option 2 puts the voice toggle and help behind an extra tap for an audience with declining motor control, to buy vertical space a 40vw panel does not urgently need.
+
+### Consequences
+
+- The launcher, the full-page variant and the panel now share one layout rule rather than the panel inheriting the page's.
+- The X is icon-only and needs an accessible name, and it must clear the 44px target minimum.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

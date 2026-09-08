@@ -19,6 +19,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Asking about a drug and a rule in one sentence answers both. "Is Eliquis covered and how do I appeal a denial" returns the tier from the drug list and the appeal process from the Evidence of Coverage, each with its own source.
 - Once the calendar passes the plan year the documents cover, every answer says so in plain words and tells you to call and check. The notice is read aloud with the answer too, since audio cannot be scrolled back to.
 - The date the plan documents were collected is now recorded and served alongside the plan list.
+- Your conversation is kept on your own device and comes back when you return. A **Clear saved conversations** control deletes it, and **Start over** empties the current conversation without touching what is saved.
+- **Print** produces a clean copy of the conversation with every source intact and none of the buttons, which your browser can save as a PDF or send to a printer.
+- **Copy this answer** puts one answer, its sources, your plan and the document date on the clipboard as plain text, ready to paste into an email or a message.
+- A **Help** panel lists what you can ask, what the assistant cannot do, and what each button does. It opens in place rather than covering the conversation.
+- The assistant panel now keeps its header and its message box in view while the conversation scrolls between them, so **Talk to a person** is always reachable. Close is an **X** at the top right.
 
 ### Fixed
 

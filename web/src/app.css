@@ -72,16 +72,60 @@
   font-weight: var(--font-weight-semibold); cursor: pointer;
 }
 
+/*
+ * The panel no longer scrolls as one column. Header and composer are pinned and
+ * only the thread moves, so FR-13's human path stays reachable from inside a
+ * long transcript rather than scrolling away with it. D-073.
+ */
 .panel {
   position: fixed; right: 0; top: 0; bottom: 0; z-index: 50;
   width: 40vw; min-width: 24rem; max-width: 100vw;
   background: var(--color-cream-paper); border-left: 1px solid var(--color-border-mist);
-  overflow-y: auto; padding: var(--spacing-16);
+  overflow: hidden; padding: 0;
+  display: flex; flex-direction: column;
 }
 
 .assistant { display: flex; flex-direction: column; gap: var(--spacing-16); }
 .assistant--page { max-width: 52rem; }
+
+.assistant--panel {
+  flex: 1; min-height: 0; gap: 0;
+  display: grid; grid-template-rows: auto 1fr auto;
+}
+
+.assistant--panel > .assistant__header,
+.assistant--panel > .assistant__foot {
+  padding: var(--spacing-16); background: var(--color-cream-paper);
+}
+
+.assistant--panel > .assistant__header { border-bottom: 1px solid var(--color-border-mist); }
+.assistant--panel > .assistant__foot { border-top: 1px solid var(--color-border-mist); }
+
+/* The only scrolling region. min-height:0 lets a grid row actually shrink. */
+.assistant--panel > .assistant__scroll {
+  overflow-y: auto; min-height: 0;
+  padding: var(--spacing-16);
+  display: flex; flex-direction: column; gap: var(--spacing-16);
+}
+
+.assistant--page > .assistant__scroll,
+.assistant--page > .assistant__foot { display: flex; flex-direction: column; gap: var(--spacing-16); }
+
 .assistant__header { display: flex; flex-wrap: wrap; gap: var(--spacing-16); justify-content: space-between; align-items: flex-start; }
+
+/* Title row: heading on the left, icon controls hard against the right edge. */
+.assistant__titles { flex: 1; min-width: 0; }
+
+.assistant__corner { display: flex; gap: var(--spacing-8); align-items: flex-start; flex-shrink: 0; }
+
+.assistant__icon-button {
+  min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; border-radius: var(--radius-md);
+  color: var(--color-forest-ink); font-size: var(--text-subheading); cursor: pointer;
+}
+
+.assistant__icon-button:hover { background: var(--color-keylime-wash); }
 .assistant__title { font-family: var(--font-display); font-size: var(--text-heading-sm); color: var(--color-forest-ink); margin: 0; }
 .assistant__context { margin: var(--spacing-4) 0 0; font-size: var(--text-body); }
 .assistant__plan-change {
@@ -413,4 +457,69 @@
   .turn__answer--speaking { animation: none; background-position: 0 0, 50% 0; }
   .mic-halo__sweep { animation: none; }
   .equaliser span { animation: none; transform: scaleY(0.8); }
+}
+
+/* Stage 4: session surfaces. */
+
+.help {
+  background: var(--color-keylime-wash); border: 1px solid var(--color-mint-veil);
+  border-radius: var(--radius-md); padding: var(--spacing-16);
+}
+
+.help__title {
+  margin: var(--spacing-12) 0 var(--spacing-8); font-size: var(--text-subheading);
+  font-family: var(--font-display); color: var(--color-forest-ink);
+}
+
+.help__title:first-child { margin-top: 0; }
+.help__list { margin: 0; padding-left: var(--spacing-24); font-size: var(--text-message); line-height: var(--leading-message); }
+.help__list li { margin-bottom: var(--spacing-8); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--spacing-8); margin-bottom: var(--spacing-12); }
+
+/* NFR-P2-11: 44px minimum on every chip. */
+.chip {
+  display: inline-flex; align-items: center; gap: var(--spacing-8);
+  min-height: 44px; min-width: 44px; padding: 0 var(--spacing-16);
+  background: var(--color-cream-paper); color: var(--color-forest-ink);
+  border: 1px solid var(--color-forest-ink); border-radius: var(--radius-pill);
+  font-size: var(--text-body); font-weight: var(--font-weight-semibold);
+  text-decoration: none; cursor: pointer;
+}
+
+.chip:hover { background: var(--color-keylime-wash); }
+
+/*
+ * FR-P2-20. Print carries the transcript and every source and drops the chrome.
+ * The browser's own print-to-PDF is the export path, so this stylesheet is the
+ * whole export feature.
+ */
+@media print {
+  .launcher,
+  .chips,
+  .composer,
+  .feedback,
+  .assistant__corner,
+  .assistant__header-actions,
+  .button--human,
+  .cite-marker,
+  .help,
+  .voice,
+  .dictate { display: none !important; }
+
+  .panel {
+    position: static; width: auto; min-width: 0; border: 0;
+    overflow: visible; display: block;
+  }
+
+  .assistant--panel { display: block; }
+
+  /* Every region prints; nothing is left inside a scroll box. */
+  .assistant__scroll,
+  .assistant__foot { overflow: visible !important; max-height: none !important; padding: 0; }
+
+  .turn { break-inside: avoid; }
+  .citations { break-inside: avoid; }
+
+  body { background: #ffffff; color: #000000; }
 }

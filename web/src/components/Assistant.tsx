@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ask,
+  fetchPlans,
   sendFeedback,
   type AskEvent,
   type CallbackDraft,
@@ -10,7 +11,8 @@ import {
   type PlanOption,
 } from "../api.ts";
 import {
-  IoCall, IoChatbubbleEllipses, IoClose, IoExpand, IoMic, IoMicOff,
+  IoCall, IoChatbubbleEllipses, IoClose, IoCopy, IoExpand, IoHelpCircleOutline, IoMic, IoMicOff,
+  IoPrint, IoRefresh, IoTrash,
   IoPlay, IoSend, IoStop, IoThumbsDown, IoThumbsUp, IoVolumeHigh, IoWarning,
 } from "react-icons/io5";
 import { AnswerBody } from "./AnswerBody.tsx";
@@ -18,6 +20,8 @@ import { DictateButton } from "./DictateButton.tsx";
 import { CallbackPanel } from "./CallbackPanel.tsx";
 import { VoiceComposer } from "./VoiceComposer.tsx";
 import { readMode, speak, writeMode, type Spoken, type VoiceMode } from "../voice.ts";
+import { clearHistory, readHistory, writeHistory } from "../history.ts";
+import { answerAsText } from "../copy.ts";
 
 /** FR-14. Drawn from the highest-volume bucket A drivers in docs/call-drivers.md. */
 const STARTERS = [
@@ -55,7 +59,7 @@ interface Props {
 }
 
 export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Element {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [turns, setTurns] = useState<Turn[]>(() => readHistory());
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<PlanOption | null>(null);
@@ -67,6 +71,9 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
   const [spoken, setSpoken] = useState<Spoken | null>(null);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [dictateError, setDictateError] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [copied, setCopied] = useState<number | null>(null);
+  const [corpusDate, setCorpusDate] = useState<string | null>(null);
   const [speakingTurn, setSpeakingTurn] = useState<number | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
@@ -203,12 +210,56 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
     if (pending.length > 0) void submit(pending, option);
   };
 
+  // Plans and the corpus date, so the plan control and the freshness line exist
+  // before any plan-scoped question is asked. FR-P2-16.
+  useEffect(() => {
+    void fetchPlans().then((response) => {
+      if (response === null) return;
+      setPlanOptions(response.plans);
+      setCorpusDate(response.corpus?.documentsFetchedAt.slice(0, 10) ?? null);
+    });
+  }, []);
+
+  // Written on every settled turn rather than on unload, which mobile browsers
+  // do not reliably fire.
+  useEffect(() => {
+    writeHistory(turns);
+  }, [turns]);
+
+  const startOver = (): void => {
+    setTurns([]);
+    setPlan(null);
+    setPlanPrompt(null);
+    setCallback(null);
+    setStatus("");
+  };
+
+  const forgetHistory = (): void => {
+    clearHistory();
+    setTurns([]);
+  };
+
+  const copyAnswer = (turn: Turn): void => {
+    const text = answerAsText(
+      { ...turn, staleness: turn.staleness },
+      plan?.name ?? "No plan selected",
+      corpusDate ?? "unknown",
+    );
+    void navigator.clipboard?.writeText(text).then(
+      () => {
+        setCopied(turn.id);
+        setTimeout(() => setCopied(null), 3_000);
+      },
+      () => setStatus("Could not copy. Select the answer and copy it yourself."),
+    );
+  };
+
   const heading = variant === "page" ? "Member Assistant" : "Member Assistant";
 
   return (
     <section className={`assistant assistant--${variant}`} aria-labelledby="assistant-heading">
       <header className="assistant__header">
-        <div>
+        <div className="assistant__titles">
           <h2 id="assistant-heading" className="assistant__title">
             {heading}
           </h2>
@@ -247,18 +298,60 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
               <IoExpand aria-hidden="true" /> Open full page
             </button>
           )}
+        </div>
+        {/* Icon controls sit hard against the top right, clear of the wrapping
+            action row so they never move as the header reflows. D-073. */}
+        <div className="assistant__corner">
+          <button
+            type="button"
+            className="assistant__icon-button"
+            aria-expanded={helpOpen}
+            aria-controls="assistant-help"
+            onClick={() => setHelpOpen((open) => !open)}
+          >
+            <IoHelpCircleOutline aria-hidden="true" />
+            <span className="visually-hidden">{helpOpen ? "Hide help" : "Show help"}</span>
+          </button>
           {variant === "panel" && onClose !== undefined && (
-            <button type="button" className="button button--quiet" onClick={onClose}>
-              <IoClose aria-hidden="true" /> Close
+            <button type="button" className="assistant__icon-button" onClick={onClose}>
+              <IoClose aria-hidden="true" />
+              <span className="visually-hidden">Close the assistant</span>
             </button>
           )}
         </div>
+        {/* FR-13: present in every state, including while an answer is generating. */}
+        <a className="button button--human" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
+          <IoCall aria-hidden="true" /> Talk to a person
+        </a>
       </header>
 
-      {/* FR-13: present in every state, including while an answer is generating. */}
-      <a className="button button--human" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-        <IoCall aria-hidden="true" /> Talk to a person
-      </a>
+      <div className="assistant__scroll">
+      {/* FR-P2-23. An expandable region, not a dialog: tab passes through and out,
+          so nothing is trapped and Escape is unnecessary. D-071. */}
+      {helpOpen && (
+        <section id="assistant-help" className="help" aria-label="What you can ask">
+          <h3 className="help__title">What you can ask</h3>
+          <ul className="help__list">
+            <li>What a service costs under your plan: copays, coinsurance, the out-of-pocket maximum.</li>
+            <li>Whether a service or a drug is covered, and what tier a drug is on.</li>
+            <li>How a process works: prior authorization, referrals, appeals and grievances.</li>
+            <li>What your supplemental benefits include: dental, vision, hearing, over-the-counter.</li>
+          </ul>
+          <h3 className="help__title">What it cannot do</h3>
+          <ul className="help__list">
+            <li>Anything about you personally. It holds no member data and never signs you in.</li>
+            <li>Medical advice, or deciding whether something will be covered for you.</li>
+            <li>Tell you whether a named doctor is in network. That directory is demonstration data.</li>
+          </ul>
+          <h3 className="help__title">The buttons</h3>
+          <ul className="help__list">
+            <li><strong>Talk to a person</strong> calls Member Services at {MEMBER_SERVICES_DISPLAY}.</li>
+            <li><strong>Start over</strong> empties this conversation and forgets the plan you chose.</li>
+            <li><strong>Print</strong> produces a copy with every source, which your browser can save as a PDF.</li>
+            <li><strong>Copy</strong> puts one answer and its sources on the clipboard.</li>
+          </ul>
+        </section>
+      )}
 
       <div className="assistant__thread" role="log" aria-live="polite" aria-label="Conversation">
         {turns.length === 0 && planPrompt === null && (
@@ -313,6 +406,12 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
 
                 {/* FR-27, on answered turns only. */}
                 {turn.outcome === "answered" && (
+                  <>
+                  {/* FR-P2-21. Answer plus every source, as plain text, because a
+                      caregiver pastes into email or a text message. */}
+                  <button type="button" className="button button--quiet" onClick={() => copyAnswer(turn)}>
+                    <IoCopy aria-hidden="true" /> {copied === turn.id ? "Copied" : "Copy this answer"}
+                  </button>
                   <div className="feedback">
                     <span id={`fb-${turn.id}`}>Did this answer your question?</span>
                     <div role="group" aria-labelledby={`fb-${turn.id}`}>
@@ -338,6 +437,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
                       ))}
                     </div>
                   </div>
+                  </>
                 )}
               </div>
             )}
@@ -378,6 +478,38 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
           </div>
         )}
         <div ref={threadEnd} />
+      </div>
+      </div>
+
+      <div className="assistant__foot">
+      {/* FR-P2-22, D-070: the three commands ideas.md P2-06 names. Contextual
+          follow-ups are not built; D-069 measured what touching the prompt costs. */}
+      <div className="chips" aria-label="Quick actions">
+        <button
+          type="button"
+          className="chip"
+          aria-expanded={helpOpen}
+          aria-controls="assistant-help"
+          onClick={() => setHelpOpen((open) => !open)}
+        >
+          Help
+        </button>
+        <a className="chip" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
+          Talk to a person
+        </a>
+        <button type="button" className="chip" onClick={startOver}>
+          <IoRefresh aria-hidden="true" /> Start over
+        </button>
+        {turns.length > 0 && (
+          <>
+            <button type="button" className="chip" onClick={() => window.print()}>
+              <IoPrint aria-hidden="true" /> Print
+            </button>
+            <button type="button" className="chip" onClick={forgetHistory}>
+              <IoTrash aria-hidden="true" /> Clear saved conversations
+            </button>
+          </>
+        )}
       </div>
 
       {mode === "voice" ? (
@@ -455,7 +587,9 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
       <p className="assistant__scope">
         An assistant, not a clinician. It answers only from 2026 plan documents and never decides
         coverage. Phone number and hours shown here are placeholders for this case study.
+        {corpusDate !== null && ` Plan documents collected ${corpusDate}.`}
       </p>
+      </div>
     </section>
   );
 }

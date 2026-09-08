@@ -406,3 +406,24 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** the answer card. The likely route if it is picked up is a second model call over the validated claims only, which cannot change answering behaviour by construction, at one extra call on cost answers. `srs-p2.md` still states FR-P2-13 as a requirement and has not been amended.
 
 **Next:** Stage 4, the session UX cluster.
+
+## 2026-09-08 - P2 Stage 4: session surfaces and the chat panel layout
+
+**Did:** Conversation history, copy, print, help and quick replies. Rebuilt the panel layout so the header and composer stay put.
+
+**Files:** created `web/src/history.ts`, `web/src/copy.ts`, two test files. Changed `web/src/api.ts`, `web/src/app.css`, `web/src/components/Assistant.tsx`, `tests/unit/a11y-static.test.ts`.
+
+**Verified:** `/api/plans` serves three plans and both corpus dates. Web build succeeds. 503 tests pass. The stage's diff is web, tests and ADRs only, so the answer and router metrics cannot have moved.
+
+**What building it surfaced:**
+
+- **FR-13 was broken in the state that matters.** "Talk to a person" must be present in every state. `.panel` scrolled as one column, so it scrolled away as soon as a member read a long answer. The human path now lives in a pinned header.
+- **A requirement asking for something that is not a dialog.** FR-P2-23 wants a help panel that is keyboard reachable and does not trap focus. Trapping focus is what makes a dialog a dialog. Built as a disclosure region, which is what the requirement describes.
+- **Stage 3's measurement settled Stage 4's biggest question without an experiment.** Contextual follow-up chips would have needed the answering prompt, and D-069 had already priced that.
+- **A restored turn can break cite-or-refuse.** Storage holding claims without their citations would redraw claims with nothing behind them after a reload. Such a turn is dropped on read.
+- **`min-height: 0`** is what lets a grid row shrink below its content; without it the "scrolling" region simply grows and the panel scrolls as before.
+- **A DOM module imported by a test drags the DOM into the Node project.** `history.ts` reaches storage through `globalThis` rather than `window` so it compiles under both tsconfigs.
+
+**Open:** contextual follow-up chips are not built. History surviving a real browser reload, and the printed page's appearance, are asserted at the storage and stylesheet layers but not rendered in a browser - still the deferred component-harness decision.
+
+**Next:** Stage 5, synthetic member records. `claude/srs-p2.md` FR-P2-24 to FR-P2-29.

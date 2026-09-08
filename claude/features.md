@@ -1105,3 +1105,64 @@ Seven standing rules became eight, and rule 4 is the refusal rule. Rewording it 
 **Final verification, prompt byte-identical to Stage 2:** faithfulness **1.000**, structural **100%**, refusal **10.0%**, bucket A **37/40**, B **8/8**, C **10/10**, router **1.000** with zero structured misses. Failing set is the four known cases. A-22 back to 1.0. Written to `eval/results/2026-09-08T2050Z.json`. 479 tests pass.
 
 **Not covered by an automated test:** the plan asks for snapshot tests on three answer shapes. Two of the three - multi-part and prose-only - are the shipped path and are covered. The single-amount card cannot be snapshot-tested because nothing produces a headline, and there is still no component harness; that remains the deferred dependency decision from Stage 1.
+
+---
+
+## Feature: Session UX cluster and chat panel layout (P2 Stage 4)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-08                       |
+| Cycle            | 13                               |
+| Stage of plan.md | `plan-p2.md` Stage 4             |
+| Requirements     | `srs-p2.md` FR-P2-18 to FR-P2-23 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How contextual follow-up chips are generated | Not built (D-070) |
+| 2 | Help panel shape | Inline expandable region, not a dialog (D-071) |
+| 3 | What history stores and how much | Rendered turns, capped at 50 (FR-P2-18) |
+| 4 | Chat panel layout | Pinned header and composer, thread scrolls between (D-073) |
+| 5 | `start over` versus clearing history | Separate actions (D-072) |
+| 6 | Copy format | Plain text: answer, sources, plan, document date |
+| 7 | Print scope | Whole transcript, chrome stripped, sources expanded |
+
+**The follow-up question was settled by Stage 3's measurement.** D-069 recorded that adding one rule to the answering prompt moved faithfulness from 1.000 to 0.989 and turned a required refusal into an answer. Generating contextual follow-ups from that prompt is the same move, so it was not made.
+
+**A spec tension worth naming.** FR-P2-23 asks for a help panel that is keyboard reachable and does **not** trap focus. A dialog is defined by trapping focus. The requirement is describing a disclosure region, and that is what was built.
+
+### Phase 2 - Architecting
+
+Four forks, all to the user. D-070 through D-073.
+
+### Phase 3 and 4 - Specs
+
+`web/src/history.ts` owns storage; `web/src/copy.ts` owns the clipboard format. Both are pure and testable without a browser: storage is reached through `globalThis` rather than `window`, so the module compiles in the Node project the tests run under. The panel becomes a three-row grid. No new dependencies.
+
+### Phase 5 - Planning
+
+Storage, copy format, layout, help and chips, print, verification. Planned inline.
+
+### Phase 6 - Writing Code
+
+**Delivered:**
+
+- **History.** Restored on mount, written on every settled turn rather than on unload, which mobile browsers do not reliably fire. Capped at 50, newest kept. Pending turns are never stored.
+- **Storage failure.** Reads and writes are wrapped; a private window that throws on access yields an empty history and nothing else changes. Malformed stored content is ignored, and a stored turn missing its citations is **dropped** rather than restored - a restored claim with no source is cite-or-refuse broken by a page reload.
+- **Clearing** removes the storage key itself, so the acceptance criterion is verified by inspecting storage rather than by the interface reporting success.
+- **`start over`** empties the thread and forgets the plan, so the next question re-asks lazily per D-022. Clearing saved conversations is a separate control.
+- **Copy** puts the question, every claim, every source in full, any gap, any staleness notice, the plan name and the document date on the clipboard as plain text.
+- **Print** drops the launcher, chips, composer, feedback and icon controls, releases the scrolling region so the whole transcript prints rather than one clipped screenful, and keeps the citation list, which is the point of printing.
+- **Help** is an expandable region with `aria-expanded` and `aria-controls`, reachable from the header icon and the chip. Tab passes through and out; nothing is trapped.
+
+**The layout fix.** `.panel` was one scrolling column, so the header, the human path and the composer scrolled away with the thread - FR-13 requires that path present in every state, and it was not present in the state where a member most needs it. The panel is now a three-row grid: pinned header, scrolling thread, pinned foot. `min-height: 0` on the scroll row is what lets a grid row actually shrink. The close control is an icon-only **X at the top right** on the title row, beside a help toggle, both 44px with screen-reader names, in a `flex-shrink: 0` corner so they do not move as the header reflows.
+
+**Verified:** `/api/plans` serves three plans and both corpus dates (`documentsFetchedAt` 2026-09-08, `ingestedAt` 2026-09-08). Web build succeeds. 503 tests pass.
+
+**Answer metrics unchanged by construction:** this stage's diff touches `web/`, tests and ADRs only. No server, prompt, migration or eval change, so faithfulness, the router and the golden set cannot have moved.
+
+**Not delivered:** contextual follow-up chips (D-070). `docs/ideas.md` P2-01 returns to unbuilt.
+
+**Not covered by an automated test:** history surviving an actual browser reload, and the print output's rendered appearance. The storage layer and the stylesheet are asserted; the browser behaviour needs the component harness that remains a deferred dependency decision from Stage 1.

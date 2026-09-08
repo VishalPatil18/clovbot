@@ -102,17 +102,18 @@
 - **Scope in:** Conversation history persisted locally, restored on return, clearable. Export, print stylesheet, and copy or email of an answer or transcript. Quick-reply chips and basic commands. Static help panel listing what can be asked.
 - **Scope out:** Server-side history. Without auth there is no identity to key it to.
 - **Acceptance criteria:**
-  - [ ] History survives a page reload and a browser restart.
-  - [ ] Clearing history removes it from storage, verified by inspection rather than by the interface reporting success.
-  - [ ] Print output renders the transcript legibly with citations intact and no interface chrome.
-  - [ ] Export produces a file containing the answers and their citations.
-  - [ ] Quick-reply chips meet the 44x44 target requirement.
-  - [ ] The help panel is reachable by keyboard and does not trap focus.
-  - [ ] History is absent when storage is unavailable, with no crash and no error surfaced to the member.
+  - [x] History survives a page reload and a browser restart. Restored on mount, written on every settled turn. Storage layer tested; the browser reload itself is not, for want of a component harness.
+  - [x] Clearing history removes it from storage, verified by inspection rather than by the interface reporting success. The test asserts the key is absent.
+  - [x] Print output renders the transcript legibly with citations intact and no interface chrome. Chrome dropped, the scroll region released, citations kept and page-break protected.
+  - [x] Export produces a file containing the answers and their citations. Browser print-to-PDF is the export path, decided in Stage 1's requirements pass.
+  - [x] Quick-reply chips meet the 44x44 target requirement. Asserted, as are the icon-only close and help controls.
+  - [x] The help panel is reachable by keyboard and does not trap focus. Built as a disclosure region rather than a dialog, since a dialog traps focus by definition (D-071).
+  - [x] History is absent when storage is unavailable, with no crash and no error surfaced to the member.
+  - [-] Quick-reply chips include contextual follow-ups. **Not delivered (D-070):** generating them needs the answering prompt, and D-069 measured that cost. The three commands ship; P2-01 returns to unbuilt.
 - **Test plan:** Persistence integration tests across reload. Print stylesheet snapshot. Storage-unavailable test simulating a private window, since that path silently breaks in most implementations.
 - **Effort:** M
 - **Exit signal:** You can close the tab, return, see your prior conversation, and print it with citations intact.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-08, minus contextual follow-up chips (D-070). Also fixed the panel layout: header and composer are pinned and the close control is an X at the top right (D-073).
 
 ---
 
@@ -203,7 +204,7 @@
 - [x] Stage 1 - Second plan indexed
 - [x] Stage 2 - Structured lookup and router
 - [~] Stage 3 - Answer card and freshness (card not delivered, D-069)
-- [ ] Stage 4 - Session UX cluster
+- [x] Stage 4 - Session UX cluster (follow-up chips not delivered, D-070)
 - [ ] Stage 5 - Synthetic member records
 - [ ] Stage 6 - Email OTP authentication
 - [ ] Stage 7 - Login detection and member answering
