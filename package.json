@@ -15,16 +15,25 @@
     "ingest": "node --env-file=.env --experimental-strip-types src/rag/cli.ts ingest",
     "ask": "node --env-file=.env --experimental-strip-types src/rag/cli.ts ask",
     "eval": "node --env-file=.env --experimental-strip-types eval/harness/run.ts",
-    "eval:calibrate": "node --env-file=.env --experimental-strip-types eval/harness/calibrate.ts"
+    "eval:calibrate": "node --env-file=.env --experimental-strip-types eval/harness/calibrate.ts",
+    "api": "node --env-file=.env --experimental-strip-types src/server.ts",
+    "web": "vite",
+    "build:web": "vite build"
   },
   "devDependencies": {
     "@types/node": "26.5.0",
     "@types/pg": "8.23.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
     "typescript": "7.0.2",
+    "vite": "8.2.2",
     "vitest": "5.0.0"
   },
   "dependencies": {
     "@huggingface/transformers": "4.2.0",
-    "pg": "8.23.0"
+    "pg": "8.23.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   }
 }

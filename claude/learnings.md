@@ -87,3 +87,15 @@ _<How this concept will apply to future work in this project.>_
 **Structure beats inspection for guarantees.** Stage 5 checked for uncited claims by scanning prose and found twelve. Stage 6 made claims carry their own citation ids and validated at the boundary, and structural compliance went to 100% because an uncited claim can no longer be represented. Detecting a class of defect is weaker than making it unrepresentable.
 
 **Budgets are only real once something prints a number.** Time to first token measured 1632ms against a stated 800ms, unthrottled, and the structured payload makes it worse because JSON precedes the first useful token. The requirement was written months of decisions ago and had never been checked. It is recorded as a breach rather than quietly renegotiated.
+
+## Stage 7 - what building the surface taught
+
+**Read the design folder's README before the design files.** `design/mock/README.md` listed six conflicts between the mock and frozen requirements, ranked, before a line of UI existed. The type scale conflict alone would have failed four acceptance criteria, and the mock's citation chip at 11px would have put the product's entire trust surface in the smallest type on the screen for an audience with declining eyesight. A design handoff that states its own conflicts is worth more than one that looks finished.
+
+**Constants carry decisions, and decisions rot in constants.** D-026 chose a fake phone number so an unaffiliated public deploy could never route real members to a real call centre. Stage 6 then hardcoded Clover's real number into the escalation string that every refusal renders, and it passed review, tests and an eval run. Nothing connected the ADR to the string. The fix was one line; the lesson is that a decision with no test attached is a comment.
+
+**A stated priority and a deferred verification cancel out unless you write it down.** Accessibility was made the priority and its automated verification was deferred to P3 in the same exchange. Both are defensible; together they mean conformance is asserted rather than tested, which is the position the testing strategy exists to reject. Recording the override in an ADR keeps the two answers from quietly resolving into "we said it was important".
+
+**Some of a deferred check is usually available for free.** With axe and Playwright unavailable, a static pass over the CSS and JSX still enforced the type floor, the target minimum, the focus ring, the no-hover rule and the presence of every required surface: 22 assertions, no new dependency. It is not conformance, and it is a regression guard that would catch the exact defect the mock would have introduced.
+
+**Budgets written before code are guesses wearing a number.** 800ms for time to first token was set months of decisions before anything ran, and the measured path is 1632ms of which two thirds is a hosted model round trip. Amending it to the measured value with the reasoning attached is more useful than either failing the criterion silently or trading away per-claim citation to chase it.

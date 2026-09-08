@@ -1380,6 +1380,120 @@ Matching amounts across chunks cannot establish that two sources are talking abo
 
 ---
 
+## Decision D-040 - Accessibility verification tooling deferred to P3
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Chat surface (P1 Stage 7) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Stage 7 has eleven acceptance criteria. Five of them require browser tooling: an automated axe scan on three routes, a keyboard-only walk, computed-style assertions for focus and target size, reflow at 200% zoom, and a Lighthouse run under the NFR-PERF-05 throttled profile. `docs/build-journal.md` already named this the largest known gap in the toolchain.
+
+The user approved `@playwright/test`, `@axe-core/playwright` and Lighthouse, and directed that they land at P3 rather than in Stage 7.
+
+### Options considered
+
+1. Install the tooling now and satisfy the criteria as written.
+2. Approve the tooling and defer it to P3, building to the standard and hand-verifying.
+3. Drop the criteria.
+
+### Decision
+
+Option 2. Stage 7 ships the surface built to WCAG 2.2 AA with a static audit in `tests/unit/a11y-static.test.ts`, and the five browser-dependent criteria are recorded as unverified rather than claimed.
+
+### Rationale
+
+The user's call, taken after the tension was put to them: accessibility was made the priority in the same exchange that deferred its automated verification. Recording the override keeps the two statements consistent rather than letting the second quietly cancel the first.
+
+### Consequences
+
+- **Stage 7 ships with WCAG conformance asserted, not tested.** `docs/testing-strategy.md` section 7.4 exists to reject exactly this position, and it is now the project's largest verification gap.
+- The static audit covers what is checkable without a browser: no font size below 18px, a 44px shared target minimum applied to buttons, inputs and starter controls, a focus ring of at least 2px never removed, no hover rule that reveals or hides content, reduced-motion honoured, and the presence of the FR-13, FR-15, FR-30 and NFR-SEC-01 surfaces. Twenty-two assertions.
+- Still unverified: real contrast ratios, screen-reader reading order, keyboard trap behaviour, actual rendered target sizes, reflow at 200% zoom, and both latency budgets under throttling.
+- The static audit is a regression guard, not a conformance claim. It cannot be cited as evidence the product meets NFR-A11Y-01.
+
+---
+
+## Decision D-041 - NFR-PERF-02 amended to the measured time to first token
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Chat surface (P1 Stage 7) |
+| Status | accepted |
+| Supersedes | amends NFR-PERF-02 |
+
+### Context
+
+NFR-PERF-02 set time to first token under 800ms, written before any code existed. Measured on the finished Stage 6 path, unthrottled, it is 1632ms to 1713ms. Roughly 300ms is retrieval plus reranking; the rest is the Azure round trip.
+
+FR-32's structured payload makes it worse, because the model emits JSON and the first useful token arrives only after the opening of the `claims` array.
+
+### Options considered
+
+1. Stream rendered prose and validate afterwards, giving up FR-32's guarantee during the stream.
+2. Amend the budget to the measured number with the reasoning recorded.
+3. Leave the requirement and let the criterion fail.
+
+### Decision
+
+Option 2. NFR-PERF-02 becomes: **time to first token under 2000ms unthrottled, measured and reported; the 800ms target is retained as an aspiration for a future streaming design.** Retrieval stays at NFR-PERF-01's 300ms, which is met.
+
+### Rationale
+
+800ms was a guess made before a single request had been sent, and no amount of frontend work compresses a hosted model round trip into it. Option 1 trades a measurable safety property, per-claim citation, for a latency number, which is the wrong direction for this product: an uncited answer is a worse failure than a slow one.
+
+### Consequences
+
+- The published budget now reflects something measured rather than hoped for.
+- Streaming rendered claims as each one validates would recover much of the gap, and is the obvious P2 improvement.
+- Stage 10's throttled measurement will be worse again, and must be reported rather than renegotiated a second time.
+- NFR-PERF-03 and NFR-PERF-04, the two voice budgets, remain unmeasured because Stage 2 was skipped. They are now the only performance numbers in the SRS with no evidence behind them.
+
+---
+
+## Decision D-042 - The 18px floor applies to the reading surface, not the whole interface
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Chat surface (P1 Stage 7) |
+| Status | accepted |
+| Supersedes | narrows the Stage 7 decision to lift the entire scale |
+
+### Context
+
+Stage 7 resolved the mock's type-scale conflict by lifting every text token to 18px, on the reading that NFR-A11Y-03's "body text is at least 18px" covered the whole interface. In use that flattened the hierarchy: navigation, context lines, captions and the answer itself all sat at one size, so nothing led.
+
+The user narrowed the rule: 18px for the chat question and answer, everything else back to the `design/DESIGN.md` scale.
+
+### Options considered
+
+1. Keep every token at 18px. Meets the strictest reading; no typographic hierarchy.
+2. 18px for the reading surface, DESIGN.md scale for interface chrome.
+3. Return the whole scale to the mock, including the 11px citation chip.
+
+### Decision
+
+Option 2. `--text-message` is 18px at 1.6 line height and carries the member's question, the assistant's answer, the pending line and the starter questions. Interface chrome returns to DESIGN.md: 14px body, 23px and 40px headings, 10px caption. Two values sit outside both tiers on purpose: the composer input at 18px, because below 16px iOS zooms the page when the field takes focus, and the citation at 14px.
+
+### Rationale
+
+WCAG sets no absolute minimum font size, so "body text" is the project's own term and reasonably means the text a member reads rather than every label in the frame. The gap between 18px content and 14px chrome is what makes the answer dominant, which is the correct hierarchy: the answer is the product.
+
+### Consequences
+
+- **Interface chrome is now below 18px**, which a strict reading of NFR-A11Y-03 would have disallowed. The requirement is now understood as covering the reading surface.
+- The citation stays at 14px rather than the mock's 11px chip. `docs/build-journal.md` singled that chip out as the product's trust surface set in the smallest type on the screen for an audience with declining eyesight; 11px would reintroduce a defect already identified. Reversible if the user wants the mock's value.
+- The static audit changed from "no font size below 18px" to checking the split holds. That is a deliberately weaker guard, and it is weaker in a way the browser tooling deferred by D-040 would have caught properly.
+- Answer text gained a 68ch measure, so line length stays readable now that the panel is no longer uniformly large.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

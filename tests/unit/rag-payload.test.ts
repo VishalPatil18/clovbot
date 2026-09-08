@@ -102,7 +102,7 @@ describe("renderAnswer", () => {
     };
     const rendered = renderAnswer(payload, chunks);
     expect(rendered).toContain("cannot evaluate");
-    expect(rendered).toMatch(/1-888-778-1478/);
+    expect(rendered).toMatch(/1-555-0100/);
   });
 
   it("offers the human path on a refusal even with no chunks", () => {
@@ -111,6 +111,8 @@ describe("renderAnswer", () => {
       unanswered: [],
       refusal: { trigger: "C-10", explanation: "Not found.", humanPathOffered: true },
     };
-    expect(renderAnswer(payload, [])).toMatch(/1-888-778-1478/);
+    // D-026: the number must be obviously fake on an unaffiliated deploy.
+    expect(renderAnswer(payload, [])).toMatch(/1-555-0100/);
+    expect(renderAnswer(payload, [])).not.toMatch(/1-888-778-1478/);
   });
 });

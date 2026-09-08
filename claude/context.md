@@ -7,8 +7,8 @@
 | Field                | Value                          |
 | -------------------- | ------------------------------ |
 | Snapshot date        | 2026-09-08                     |
-| Current stage        | P1 Stage 6 complete. Stage 2 skipped. Next is Stage 7. |
-| Last feature shipped | The answer contract. Eval gates green. |
+| Current stage        | P1 Stage 7 complete. Stage 2 skipped. Next is Stage 8. |
+| Last feature shipped | Member-facing chat surface with lazy plan context. |
 
 ---
 
@@ -44,9 +44,14 @@
 - **Judge calibrated.** 14 sentence-level judgements across six fixtures, zero disagreements. The deliberately unfaithful fixture scores 0.00, the partial one 0.67.
 - **Synthetic provider data is not cited as fact.** Asked whether a named doctor is in network, the assistant states the directory is demo data and routes to a human. The Stage 1 banner mitigation holds.
 - **Reranker.** Local ONNX cross-encoder, `Xenova/ms-marco-MiniLM-L-6-v2`, ~280ms at a pool of 10.
-- **Tests.** 201 passing. 10 failing, all `not implemented` stubs belonging to Stage 8 (FR-23 loop breaker, FR-24 language detection).
+- **Chat surface.** React 19 and Vite in `web/`, a Node API in `src/server.ts` streaming server-sent events. Host page with launcher, a 40% viewport panel that is full width on mobile, and a `/assistant` full-page route sharing one component.
+- **Lazy plan context works both ways, verified live.** "how do I file an appeal" answers without asking. "what is my specialist copay" returns the plan chips first, then answers $10 for plan 004. This is what the mock README calls the subtlest thing to get right.
+- **Type scale is two-tier** (D-042). The reading surface, question and answer, sits at 18px/1.6 with a 68ch measure; interface chrome uses the DESIGN.md scale. The composer input stays at 18px because iOS zooms fields below 16px, and the citation sits at 14px rather than the mock's 11px chip.
+- **Tests.** 236 passing. 10 failing, all `not implemented` stubs belonging to Stage 8 (FR-23 loop breaker, FR-24 language detection).
 
-**Known NFR breach.** Time to first token measured at **1632ms** against NFR-PERF-02's 800ms budget, unthrottled. Retrieval plus rerank is roughly 300ms of that; the rest is generation. This needs addressing before Stage 10's throttled measurement, and the structured payload makes it worse than prose would, because the model must emit JSON before the first useful token.
+**Known verification gap, the largest in the project.** Five of Stage 7's eleven acceptance criteria need browser tooling that was approved but deferred to P3 (D-040): the axe scan, the keyboard walk, computed-style focus and target checks, 200% reflow, and the throttled Lighthouse run. The surface is built to WCAG 2.2 AA and guarded by 22 static assertions, but conformance is **asserted, not tested**. Also unverified: contrast ratios, screen-reader reading order, keyboard traps.
+
+**NFR-PERF-02 amended** by D-041 from 800ms to 2000ms unthrottled, against a measured 1632ms. The 800ms figure predated any code. NFR-PERF-03 and 04, the voice budgets, remain the only performance numbers with no evidence behind them, because Stage 2 was skipped.
 
 ## 3. Locked decisions
 
@@ -65,10 +70,10 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 
 ## 4. What's next
 
-1. **Stage 7** - the chat surface and WCAG 2.2 AA accessibility. The largest remaining stage, and the one `docs/build-journal.md` argues carries the most deflection leverage.
-2. **Time to first token is over budget**, 1632ms against 800ms. Streaming the rendered prose rather than the raw JSON payload is the obvious lever.
+1. **Stage 8** - bucket C guardrails, the loop breaker (FR-23), language detection (FR-24), the callback form and the refusal surface. The 10 remaining red tests are its stubs.
+2. **Accessibility verification** is the largest outstanding risk. A single browser-tooling session at P3 closes five acceptance criteria at once.
 3. **Two register variants still refuse.** A-03 and A-18 score 0.0006 and 0.0002, below the 0.001 floor. The floor cannot separate them from nonsense, which is the cost D-038 records rather than hides.
-4. **Stage 8 stubs remain**: FR-23 loop breaker and FR-24 language detection.
+4. **No screen-reader pass has been done.** Stage 7's eleventh criterion, and the one no tooling replaces.
 3. **Stage 2, deferred** - the voice latency spike was skipped. NFR-PERF-03 and 04 stay unmeasured until Stage 9.
 4. **Gemini key** - rejected as invalid, so the D-034 fallback has never executed.
 
@@ -207,3 +212,18 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 - **The Evidence of Coverage table of contents was being read as headings.** Body chapters carry their title on the following line while contents entries carry it inline, so every chunk inherited a heading from a page-number line. Fixing it cut EOC chunks from 656 to 318 and made sections meaningful.
 
 **Open:** time to first token 1632ms against an 800ms budget. Two register variants below the floor. Stage 8 stubs.
+
+## 2026-09-08 - Stage 7: the member-facing chat surface
+
+**Did:** Built the host page, launcher, panel and full-page assistant route in React and Vite, with a Node server streaming answers over server-sent events. Lifted the mock's type scale to the 18px accessibility floor.
+
+**Files:** created `web/` (index.html, tokens.css, app.css, App.tsx, api.ts, components/Assistant.tsx), `src/server.ts`, `src/rag/plan-scope.ts`, `vite.config.ts`, `tests/unit/{plan-scope,a11y-static}.test.ts`. Dependencies react, react-dom, vite, @vitejs/plugin-react and their types.
+
+**Decisions:** D-040 defers accessibility tooling to P3, with the gap stated. D-041 amends NFR-PERF-02 to the measured number.
+
+**What building it surfaced:**
+- **A live D-026 violation in shipped code.** `src/rag/payload.ts` hardcoded Clover's real number, `1-888-778-1478`, in the escalation text every refusal renders. D-026 had decided on an obviously-fake placeholder precisely so an unaffiliated public deploy cannot route real members to a real call centre. Replaced, with a test asserting the real number never appears.
+- **The corpus reproduces that number anyway**, because the Evidence of Coverage contains it and answers quote it under citation. Accepted on the user's call, since it is quoted from a public document rather than published as this site's own support line.
+- **The mock's own README was the most valuable file in the design folder.** It listed six conflicts with frozen requirements before a line was written, and the type scale conflict alone would have failed four acceptance criteria.
+
+**Open:** accessibility verification deferred; no screen-reader pass; Stage 8 stubs.

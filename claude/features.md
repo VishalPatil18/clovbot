@@ -483,3 +483,76 @@ All six named edges pass, including the datastore-unreachable case the plan call
 
 **Known NFR breach:** time to first token 1632ms against NFR-PERF-02's 800ms, unthrottled. The structured payload worsens it, because JSON must be emitted before any useful token.
 
+
+---
+
+## Feature: Chat surface and accessibility (Stage 7)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | 2026-09-08           |
+| Cycle            | 6                    |
+| Stage of plan.md | `plan-p1.md` Stage 7 |
+| Owner            | user + claude        |
+
+### Phase 1 - Requirements
+
+Driven by the six conflicts `design/mock/README.md` lists between the mock and frozen requirements.
+
+| # | Conflict or question | Resolution |
+| --- | --- | --- |
+| 1 | Mock type scale runs 10-14px against an 18px floor | Lift the whole scale; later narrowed by D-042 to the reading surface only |
+| 2 | Corpus reproduces Clover's real phone number under citation | Accept, since it is quoted from a public document |
+| 3 | Support hours are unsourced | Show as clearly-labelled placeholder |
+| 4 | Frontend stack undecided | React with TypeScript and Vite |
+| 5 | axe, Playwright, Lighthouse needed by five criteria | Approved but deferred to P3 |
+| 6 | Time to first token 1632ms against an 800ms budget | Amend the budget to the measured number |
+
+Applied without asking, per the mock README: attach button removed (P4, auth-gated), sidebar search and Recent list omitted (P2), plan names corrected to the real `Clover Health Choice (PPO)` 004 and `Clover Health Choice Value (PPO)` 007, header contract corrected from the non-existent `H5141-001`.
+
+### Phase 2 - Architecting
+
+**Options considered:**
+
+1. **Vanilla TypeScript with Vite** - fewest dependencies, most hand-written state and accessibility work.
+2. **React with Vite and a thin Node API** - a component model for streaming, plan context and refusal states; adds React.
+3. **Next.js** - routing, API routes and deploy in one; the largest dependency in the project.
+
+**Chosen:** 2. The panel carries real state and Next.js brings a framework's surface for a single route.
+
+### Phase 3 - Product Specs
+
+- **UI:** host page with nav, hero, plan cards and support block; launcher fixed bottom right; panel at 40vw, full width under 48rem; `/assistant` full-page route sharing one `Assistant` component.
+- **UX flow:** ask freely, plan chips appear only when the question is plan-scoped, answer renders claim by claim with a citation block, feedback control on answered turns only.
+- **Frontend entities:** `Turn`, `Citation`, `Claim`, `PlanOption`, `AskEvent`.
+- **Backend entities:** one streaming endpoint `POST /api/ask`, one `GET /api/plans`.
+
+### Phase 4 - Tech Specs
+
+- **Framework:** React 19 with Vite 8. *Rejected:* vanilla, for state complexity; Next.js, for surface area.
+- **Transport:** server-sent events over a plain Node HTTP server. *Rejected:* WebSockets, since the stream is one-directional and short-lived.
+- **Styling:** hand-written CSS against DESIGN.md tokens, no hex values in component styles. *Rejected:* Tailwind, an unapproved dependency whose utility classes would have made the type-scale audit harder to enforce.
+
+### Phase 5 - Planning
+
+| Sub-stage | Goal | Acceptance |
+| --- | --- | --- |
+| 7a | Tokens with the lifted scale | No text token below 18px |
+| 7b | Plan-scope rule | Cost asks, process does not |
+| 7c | Streaming API | Events for plan prompt, progress, answer, error |
+| 7d | Surface | Launcher, panel, full-page route, starters, citations, feedback |
+| 7e | Static audit | Type, target, focus, hover and required surfaces asserted |
+
+### Phase 6 - Writing Code
+
+**Verified:**
+
+- Lazy plan context both sides of the boundary, live: "how do I file an appeal" answers without asking; "what is my specialist copay" returns plan chips first, then $10 for plan 004.
+- 22 static accessibility assertions pass: no font size below 18px, 44px target minimum applied to buttons, inputs and starters, a 3px focus ring never removed, no hover rule that reveals content, reduced motion honoured, and the FR-13, FR-14, FR-15, FR-30 and NFR-SEC-01 surfaces present.
+- The real Clover phone number appears nowhere in the interface, asserted by test.
+- 236 tests pass; the 10 red are Stage 8 stubs.
+
+**Not verified, and not claimed** (D-040): automated axe scan, keyboard-only walk, computed focus and target sizes, reflow at 200% zoom, throttled Lighthouse, and the screen-reader pass. Five of eleven acceptance criteria and the manual one.
+
+**Defect found:** `src/rag/payload.ts` shipped Clover's real support number in every refusal, violating D-026. Fixed, with a regression test.
+

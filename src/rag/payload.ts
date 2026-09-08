@@ -2,7 +2,12 @@ import type { AnswerPayload } from "../types.ts";
 import type { DocumentKind } from "../corpus/types.ts";
 import type { Prompt } from "./prompt.ts";
 
-export const MEMBER_SERVICES = "1-888-778-1478 (TTY 711), 8am to 8pm local time, 7 days a week";
+/**
+ * D-026: an obviously-fake number, because this is an unaffiliated public deploy
+ * and a real one would route real members to a call centre that never agreed to
+ * it. Hours are omitted: srs.md section 10 lists Clover's real hours as unsourced.
+ */
+export const MEMBER_SERVICES = "1-555-0100 (TTY 711), a placeholder for this case study";
 
 export interface CitableChunk {
   id: string;

@@ -8,6 +8,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- **There is now something to use.** A Clover-styled page with an assistant you can open from the bottom right, or open full screen on its own page.
+- **You can start asking straight away.** No sign-in, no setup, and no plan to choose first. The assistant asks which plan you are on only when the answer depends on it, and remembers it for the rest of your visit.
+- **Six suggested questions** to start from, drawn from what members phone about most.
+- **"Talk to a person" is on screen at all times**, including while an answer is being written.
+- **Text is at least 18px everywhere**, including the source line under each answer, and the page still works at 200% zoom.
 - **Every fact in an answer carries its own source.** Answers are built claim by claim, and a statement the plan documents do not support is not shown at all.
 - **The assistant says what it could not answer.** If part of a question is outside the plan documents, it names that part and gives the phone number instead of quietly leaving it out.
 - **Answers appear as they are written**, rather than after a pause.
