@@ -8,6 +8,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- **Questions that need a person now go to a person.** Coverage decisions, medical questions, plan choices, complaints, fraud reports and record changes are declined with the reason, not answered badly.
+- **If you describe an emergency, the assistant stops and tells you to call 911** instead of looking anything up.
+- **After two answers it could not give, it offers to hand you over** rather than inviting you to try again.
+- **The handover carries your question, your plan and the documents already searched**, so you do not repeat yourself. Nothing is sent anywhere in this case study.
+- **A question in another language gets a plain English answer saying so**, and the number to call, rather than a half-translated guess.
 - **There is now something to use.** A Clover-styled page with an assistant you can open from the bottom right, or open full screen on its own page.
 - **You can start asking straight away.** No sign-in, no setup, and no plan to choose first. The assistant asks which plan you are on only when the answer depends on it, and remembers it for the rest of your visit.
 - **Six suggested questions** to start from, drawn from what members phone about most.

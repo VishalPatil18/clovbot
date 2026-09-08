@@ -111,11 +111,66 @@
 .turn__answer p { font-size: var(--text-message); line-height: var(--leading-message); margin: 0 0 var(--spacing-12); max-width: 68ch; }
 .turn__answer--refused, .turn__answer--upstream_failure { background: var(--color-slate-hush); padding: var(--spacing-16); border-radius: var(--radius-md); }
 
-.citations { margin-top: var(--spacing-12); background: var(--color-keylime-wash); border-radius: var(--radius-md); padding: var(--spacing-12) var(--spacing-16); }
+.claim { position: relative; }
+
+/*
+ * Inline citation marker. WCAG 2.2 excepts targets inline in a block of text
+ * from the target-size criteria, so this is padded as far as the line allows
+ * rather than forced to 44px, which would break the reading rhythm.
+ */
+.cite-marker {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 0; min-height: 0;
+  margin-left: 3px; padding: 2px 6px;
+  border: 1px solid var(--color-forest-ink); border-radius: var(--radius-sm);
+  background: var(--color-keylime-wash); color: var(--color-forest-ink);
+  font-size: var(--text-cite); font-weight: var(--font-weight-semibold);
+  line-height: 1.2; cursor: pointer; vertical-align: baseline;
+}
+.cite-marker:hover { background: var(--color-mint-veil); }
+/* The chosen marker stays picked out while its source is highlighted. */
+.cite-marker--active {
+  background: var(--color-forest-ink); color: var(--color-cream-paper);
+  border-color: var(--color-forest-ink);
+}
+
+.gap { margin-top: var(--spacing-12); }
+.gap ul { margin: var(--spacing-4) 0 0; padding-left: var(--spacing-24); }
+
+.citations { margin-top: var(--spacing-16); background: var(--color-keylime-wash); border-radius: var(--radius-md); padding: var(--spacing-12) var(--spacing-16); }
 .citations__title { margin: 0 0 var(--spacing-8); font-size: var(--text-body); font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
-.citations ul { margin: 0; padding-left: var(--spacing-24); }
-/* The trust surface. Same size as body text, never smaller. */
-.citation { font-size: var(--text-cite); line-height: var(--leading-body); }
+.citations__list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--spacing-8); }
+/* The trust surface. Chrome size per D-042, never the mock's 11px chip. */
+.citation {
+  font-size: var(--text-cite); line-height: var(--leading-body);
+  padding: var(--spacing-4) var(--spacing-8);
+  border-left: 4px solid transparent; border-radius: var(--radius-sm);
+}
+.citation__number { font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+
+/*
+ * Found state. It sits inside a keylime block, so a tinted background alone
+ * barely reads. A cream ground plus a full ring lifts it off the container.
+ * The ring is a box-shadow rather than a border so nothing reflows.
+ * Weight and the marker change carry the cue as well, since colour alone is
+ * not sufficient. WCAG 1.4.1.
+ */
+.citation--found {
+  background: var(--color-cream-paper);
+  border-left-color: var(--color-forest-ink);
+  box-shadow: 0 0 0 3px var(--color-forest-ink);
+  font-weight: var(--font-weight-semibold);
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+.citation--found .citation__number {
+  background: var(--color-forest-ink);
+  color: var(--color-cream-paper);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--spacing-4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .citation--found { transition: none; }
+}
 
 .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-12); margin-top: var(--spacing-12); }
 .feedback [role="group"] { display: flex; gap: var(--spacing-8); }
@@ -140,3 +195,20 @@
   .panel { width: 100vw; min-width: 0; }
   .launcher { left: var(--spacing-16); right: var(--spacing-16); }
 }
+
+/* Stage 8: refusal, escalation and limit surfaces. */
+.notice { background: var(--color-slate-hush); border-radius: var(--radius-md); padding: var(--spacing-16); display: grid; gap: var(--spacing-12); justify-items: start; }
+.notice p { margin: 0; font-size: var(--text-message); line-height: var(--leading-message); }
+
+.callback { background: var(--color-keylime-wash); border: 2px solid var(--color-mint-veil); border-radius: var(--radius-md); padding: var(--spacing-16); display: grid; gap: var(--spacing-12); }
+.callback--done { background: var(--color-mint-veil); }
+.callback__title { margin: 0; font-size: var(--text-subheading); color: var(--color-forest-ink); }
+.callback p { margin: 0; }
+.callback__prefill { display: grid; grid-template-columns: auto 1fr; gap: var(--spacing-4) var(--spacing-12); margin: 0; }
+.callback__prefill dt { font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+.callback__prefill dd { margin: 0; overflow-wrap: anywhere; }
+.callback__label { font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+.callback__note-input { width: 100%; padding: var(--spacing-12); border: 2px solid var(--color-forest-ink); border-radius: var(--radius-sm); font-size: var(--text-message); background: var(--color-cream-paper); }
+.callback__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
+.callback__error { color: #7a1f1f; font-weight: var(--font-weight-semibold); }
+.callback__note { font-size: var(--text-body); }

@@ -1494,6 +1494,81 @@ WCAG sets no absolute minimum font size, so "body text" is the project's own ter
 
 ---
 
+## Decision D-043 - Bucket C is decided by deterministic rules, before retrieval
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Guardrails and escalation (P1 Stage 8) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+FR-21 routes ten named triggers to a human. Two measurements constrained how. Stage 5 found bucket C questions score near zero on the reranker, so retrieval confidence cannot separate them from nonsense. Stage 6 found the model's own refusal branch fires inconsistently at temperature zero. Neither signal can carry a regulatory boundary.
+
+`claude/design-decisions.md` comment T-3 had already warned that a router with an unspecified selection rule is "the part most likely to fail silently".
+
+### Options considered
+
+1. Rules per trigger, run before retrieval.
+2. A model classifier before retrieval.
+3. A hybrid: rules for the unambiguous, model for the rest.
+
+### Decision
+
+Option 1. Ordered rules, each with an optional exception pattern for the answerable driver beside it, evaluated before retrieval. A guarded question never reaches the model. Emergencies are checked first and are their own outcome kind rather than a refusal.
+
+### Rationale
+
+A guardrail that is non-deterministic is not a guardrail. The same question must refuse on every run, and every refusal must be explainable by pointing at the rule that fired. Every trigger already has a written definition in `docs/call-drivers.md` section 6, so the rules encode an existing specification rather than inventing one. Running before retrieval also means a guarded question cannot leak a partial answer on its way to being refused.
+
+### Consequences
+
+- **Over-refusal is the failure mode, and it is measurable.** The first live run refused two legitimate questions: "if I end up in the emergency room what am I looking at paying" matched the bare word "emergency", and "how long do I have to file an appeal" matched filing without matching the exception. Both are now regression tests. Bucket A accuracy moved 25/30 to 27/30 once fixed.
+- Phrasing outside a pattern passes through. The confidence floor and the structured payload remain behind it as second and third nets.
+- The rules read the golden set's bucket C cases in test, so the eval harness and the product share one definition of what must refuse.
+- Emergencies take precedence over the clinical rule. "Chest pain and shortness of breath, what medication should I take" is labelled C-02 in the golden set but fires C-06, because acute symptoms need care guidance before any other boundary applies. It refuses either way, so the eval passes, but the behaviour differs from the label.
+
+---
+
+## Decision D-044 - The callback request collects no contact details
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Guardrails and escalation (P1 Stage 8) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+FR-22 requires a refusal to present a callback request pre-filled with the question, the plan context and the documents already searched. The mock's panel also carries a "Call me back" affordance, which implies collecting a number.
+
+NFR-SEC-01 states the system holds no protected health information and no member identity. A phone number is member identity.
+
+### Options considered
+
+1. Collect a phone number, so a callback is actually possible.
+2. Collect nothing beyond what FR-22 names, plus an optional free-text note.
+3. Drop the form and show only the phone number.
+
+### Decision
+
+Option 2. The form stores the question, plan context, documents searched, the refusal trigger and an optional note. No name, phone or email. Both stored text fields are redacted through FR-31 on the way in.
+
+### Rationale
+
+FR-22 lists what the form is pre-filled with, and a contact field is not among them. Adding one would collect exactly the identity NFR-SEC-01 promises not to hold, on a public unaffiliated deployment, for a case study that cannot protect it.
+
+### Consequences
+
+- **A callback request with nothing to call back.** The flow is demonstrable end to end, per D-026, but the contact leg is deliberately absent. In a deployment behind authentication the number already exists on the member record.
+- The stored row is useful for corpus expansion, which is the same reason FR-31 keeps the redacted question rather than dropping it.
+- If the demo needs to show a real callback loop, this decision has to be revisited alongside NFR-SEC-01 rather than quietly amended.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

@@ -1,5 +1,7 @@
 export interface Citation {
   id: string;
+  /** Position in the turn's source list; the marker shown beside a claim. */
+  number: number;
   label: string;
   documentId: string;
 }
@@ -25,9 +27,42 @@ export type AskEvent =
       unanswered: string[];
       refusal: { trigger: string; explanation: string } | null;
       citations: Citation[];
+      /** Cited chunk id to display number, including ids merged onto one source. */
+      claimCitationNumbers?: Record<string, number>;
       latencyMs: Record<string, number>;
     }
+  | { type: "rate_limited"; message: string }
+  | {
+      type: "offer_callback";
+      question: string;
+      planContext: string;
+      documentsSearched: string[];
+      refusalTrigger: string | null;
+    }
   | { type: "error"; message: string; detail?: string };
+
+export interface CallbackDraft {
+  question: string;
+  planContext: string;
+  documentsSearched: string[];
+  refusalTrigger: string | null;
+}
+
+/** FR-22. Validates, stores and confirms; nothing is sent anywhere. */
+export async function requestCallback(
+  draft: CallbackDraft,
+  note: string,
+): Promise<{ ok: boolean; message: string }> {
+  const response = await fetch("/api/callback", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...draft, note }),
+  });
+  const body = (await response.json()) as { error?: string };
+  return response.ok
+    ? { ok: true, message: "Your request is saved. A person will pick this up." }
+    : { ok: false, message: body.error ?? "The request could not be saved." };
+}
 
 /** Reads the server-sent stream one event at a time. */
 export async function ask(

@@ -30,6 +30,18 @@ const KIND_LABEL: Record<DocumentKind, string> = {
   corporate: "Clover Health public information",
 };
 
+/** Heading paths can be wrapped body sentences, so a section is trimmed for display. */
+const MAX_SECTION = 40;
+
+function shortSection(section: string): string {
+  const leaf = section.split(">").at(-1)?.trim() ?? "";
+  const cleaned = leaf.replace(/^Chapter:\s*/i, "").trim();
+  if (cleaned.length <= MAX_SECTION) return cleaned;
+  const cut = cleaned.slice(0, MAX_SECTION);
+  const boundary = cut.lastIndexOf(" ");
+  return `${cut.slice(0, boundary > 20 ? boundary : MAX_SECTION)}...`;
+}
+
 /** FR-06. A citation without a plan year is not a valid citation. */
 export function citationLabel(chunk: CitableChunk): string {
   if (!Number.isInteger(chunk.planYear)) {
@@ -39,8 +51,66 @@ export function citationLabel(chunk: CitableChunk): string {
     throw new Error(`citation for ${chunk.id} has no contract id`);
   }
   const plan = chunk.planId === "*" ? chunk.contractId : `${chunk.contractId}-${chunk.planId}`;
-  const section = chunk.section.length > 0 ? `, ${chunk.section}` : "";
-  return `${KIND_LABEL[chunk.kind]} ${chunk.planYear}, plan ${plan}${section}`;
+  const section = shortSection(chunk.section);
+  return `${KIND_LABEL[chunk.kind]} ${chunk.planYear} · Plan ${plan}${section.length > 0 ? ` · ${section}` : ""}`;
+}
+
+/**
+ * Numbers the sources a turn cites, in order of first appearance, so a claim can
+ * carry a short marker instead of a hundred characters of provenance.
+ */
+export function numberCitations(
+  payload: AnswerPayload,
+  chunks: CitableChunk[],
+): { chunk: CitableChunk; number: number }[] {
+  const byId = new Map(chunks.map((chunk) => [chunk.id, chunk]));
+  const ordered: { chunk: CitableChunk; number: number }[] = [];
+  const seen = new Map<string, number>();
+  // Two chunks from the same document and section render the same citation, so
+  // they are one source to the reader even though they are separate rows.
+  const byLabel = new Map<string, number>();
+
+  for (const claim of payload.claims) {
+    for (const id of claim.citationIds) {
+      if (seen.has(id)) continue;
+      const chunk = byId.get(id);
+      if (chunk === undefined) continue;
+
+      const label = citationLabel(chunk);
+      const existing = byLabel.get(label);
+      if (existing !== undefined) {
+        seen.set(id, existing);
+        continue;
+      }
+
+      const number = ordered.length + 1;
+      seen.set(id, number);
+      byLabel.set(label, number);
+      ordered.push({ chunk, number });
+    }
+  }
+  return ordered;
+}
+
+/** Maps every cited chunk id onto its display number, including merged duplicates. */
+export function citationNumbers(
+  payload: AnswerPayload,
+  chunks: CitableChunk[],
+): Map<string, number> {
+  const numbered = numberCitations(payload, chunks);
+  const byLabel = new Map(numbered.map((entry) => [citationLabel(entry.chunk), entry.number]));
+  const byId = new Map(chunks.map((chunk) => [chunk.id, chunk]));
+
+  const result = new Map<string, number>();
+  for (const claim of payload.claims) {
+    for (const id of claim.citationIds) {
+      const chunk = byId.get(id);
+      if (chunk === undefined) continue;
+      const number = byLabel.get(citationLabel(chunk));
+      if (number !== undefined) result.set(id, number);
+    }
+  }
+  return result;
 }
 
 const SYSTEM = [
@@ -91,12 +161,26 @@ export function renderAnswer(payload: AnswerPayload, chunks: CitableChunk[]): st
     return lines.join("\n");
   }
 
+  // Markers rather than inline provenance: a 109-character citation inside a
+  // sentence is unreadable, and the same text repeats in the list below.
+  const numbered = numberCitations(payload, chunks);
+  const numberOf = citationNumbers(payload, chunks);
+
   for (const claim of payload.claims) {
-    const labels = claim.citationIds
-      .map((id) => byId.get(id))
-      .filter((chunk): chunk is CitableChunk => chunk !== undefined)
-      .map((chunk) => citationLabel(chunk));
-    lines.push(labels.length === 0 ? claim.text : `${claim.text} (${labels.join("; ")})`);
+    const markers = [...new Set(claim.citationIds.map((id) => numberOf.get(id)))]
+      .filter((n): n is number => n !== undefined)
+      .sort((a, b) => a - b)
+      .map((n) => `[${n}]`)
+      .join("");
+    lines.push(markers.length === 0 ? claim.text : `${claim.text} ${markers}`);
+  }
+
+  if (numbered.length > 0) {
+    lines.push("");
+    lines.push("Where this comes from:");
+    for (const entry of numbered) {
+      lines.push(`  [${entry.number}] ${citationLabel(entry.chunk)}`);
+    }
   }
 
   if (payload.unanswered.length > 0) {

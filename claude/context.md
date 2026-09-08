@@ -7,8 +7,8 @@
 | Field                | Value                          |
 | -------------------- | ------------------------------ |
 | Snapshot date        | 2026-09-08                     |
-| Current stage        | P1 Stage 7 complete. Stage 2 skipped. Next is Stage 8. |
-| Last feature shipped | Member-facing chat surface with lazy plan context. |
+| Current stage        | P1 Stage 8 complete. Stage 2 skipped. Next is Stage 9. |
+| Last feature shipped | Guardrails and escalation. Whole golden set enforced. |
 
 ---
 
@@ -38,7 +38,10 @@
 - **Ingest is idempotent.** Two consecutive runs report 0 new or changed, keep the same snapshot id, and leave 1476 rows with 1476 distinct ids and zero missing provenance.
 - **Hybrid retrieval.** Dense HNSW and lexical GIN fused by Reciprocal Rank Fusion in one Postgres function, both halves scoped to the plan before ranking. Measured: rare drug ORSERDU is dense rank 9 and hybrid rank 1; the paraphrase "what does it cost to see a skin doctor" is absent from lexical and hybrid rank 2.
 - **Smoke set.** 10 of 10 questions retrieve the expected source document.
-- **Eval gates green, measured 2026-09-08.** Faithfulness **0.988** against a 0.90 floor. Structural compliance **100%**, zero uncited claims. Refusal rate **13.3%**, inside the ok band. Bucket A accuracy **25/28**. The build passes all three thresholds; Stage 5's baseline was 0.803, 76% and 17/30.
+- **Eval gates green with the whole set enforced, measured 2026-09-08.** Faithfulness **1.000** against a 0.90 floor. Structural compliance **100%**. Refusal rate **13.3%**. Bucket A **27/30**, bucket B **8/8**, bucket C **10/10**. All **50 of 50** cases are now enforced; Stage 5's baseline was 0.803, 76%, 17/30 with only 29 enforced.
+- **Bucket C guardrails.** Ten triggers as deterministic rules evaluated before retrieval, so a guarded question never reaches the model. Emergencies are their own outcome kind and give 911 guidance rather than a refusal script.
+- **Escalation.** Callback request pre-filled with question, plan context and documents searched, stored and confirmed, sending nothing anywhere. Loop breaker arms after two consecutive refusals, read from the turn log.
+- **Rate limiting.** 20 questions per session per hour, 60 per IP per hour, counted in Postgres, answered with a readable message and the phone number.
 - **The answer contract holds.** The model returns typed claims each carrying their own citation ids; a claim without one fails validation and is never rendered, so an uncited claim is structurally impossible rather than merely detectable. Refusal is a typed branch. Unanswered parts are named explicitly.
 - **Every named Stage 6 edge verified** by `scripts/stage6-checks.ts`: datastore unreachable produces no factual claim, a below-floor question refuses, a partially covered question answers the supported part and names the gap, conflicting sources return the Evidence of Coverage value and state the disagreement, a citation with no plan year refuses rather than rendering, and tokens stream.
 - **Judge calibrated.** 14 sentence-level judgements across six fixtures, zero disagreements. The deliberately unfaithful fixture scores 0.00, the partial one 0.67.
@@ -47,7 +50,7 @@
 - **Chat surface.** React 19 and Vite in `web/`, a Node API in `src/server.ts` streaming server-sent events. Host page with launcher, a 40% viewport panel that is full width on mobile, and a `/assistant` full-page route sharing one component.
 - **Lazy plan context works both ways, verified live.** "how do I file an appeal" answers without asking. "what is my specialist copay" returns the plan chips first, then answers $10 for plan 004. This is what the mock README calls the subtlest thing to get right.
 - **Type scale is two-tier** (D-042). The reading surface, question and answer, sits at 18px/1.6 with a 68ch measure; interface chrome uses the DESIGN.md scale. The composer input stays at 18px because iOS zooms fields below 16px, and the citation sits at 14px rather than the mock's 11px chip.
-- **Tests.** 236 passing. 10 failing, all `not implemented` stubs belonging to Stage 8 (FR-23 loop breaker, FR-24 language detection).
+- **Tests.** **307 passing, zero failing.** Every stub written in session one is now implemented.
 
 **Known verification gap, the largest in the project.** Five of Stage 7's eleven acceptance criteria need browser tooling that was approved but deferred to P3 (D-040): the axe scan, the keyboard walk, computed-style focus and target checks, 200% reflow, and the throttled Lighthouse run. The surface is built to WCAG 2.2 AA and guarded by 22 static assertions, but conformance is **asserted, not tested**. Also unverified: contrast ratios, screen-reader reading order, keyboard traps.
 
@@ -70,10 +73,11 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 
 ## 4. What's next
 
-1. **Stage 8** - bucket C guardrails, the loop breaker (FR-23), language detection (FR-24), the callback form and the refusal surface. The 10 remaining red tests are its stubs.
+1. **Stage 9** - voice integration, against Stage 2's measurements. Stage 2 was skipped, so NFR-PERF-03 and 04 are still unmeasured and the budgets are guesses.
 2. **Accessibility verification** is the largest outstanding risk. A single browser-tooling session at P3 closes five acceptance criteria at once.
 3. **Two register variants still refuse.** A-03 and A-18 score 0.0006 and 0.0002, below the 0.001 floor. The floor cannot separate them from nonsense, which is the cost D-038 records rather than hides.
 4. **No screen-reader pass has been done.** Stage 7's eleventh criterion, and the one no tooling replaces.
+5. **ADV-01 refuses rather than answering.** The injection attempt is declined outright, which is safe but not what the golden case expects.
 3. **Stage 2, deferred** - the voice latency spike was skipped. NFR-PERF-03 and 04 stay unmeasured until Stage 9.
 4. **Gemini key** - rejected as invalid, so the D-034 fallback has never executed.
 
@@ -227,3 +231,18 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 - **The mock's own README was the most valuable file in the design folder.** It listed six conflicts with frozen requirements before a line was written, and the type scale conflict alone would have failed four acceptance criteria.
 
 **Open:** accessibility verification deferred; no screen-reader pass; Stage 8 stubs.
+
+## 2026-09-08 - Stage 8: guardrails and escalation
+
+**Did:** Implemented the ten bucket C triggers as rules before retrieval, the loop breaker, language detection, the callback request, and per-session and per-IP rate limiting. Flipped bucket B and C from observed to enforced and re-ran the eval.
+
+**Files:** created `src/guardrails.ts`, `web/src/components/CallbackPanel.tsx`, `migrations/003_guardrails_escalation.sql`, `scripts/stage8-checks.ts`, `tests/unit/{guardrails,escalation}.test.ts`. Implemented `src/session.ts` and `src/language.ts`, the last two stubs from session one. Extended `src/server.ts` and `src/rag/store.ts`.
+
+**Measured:** all 50 cases enforced, up from 29. Faithfulness 1.000, structural 100%, refusal 13.3%, bucket A 27/30, B 8/8, C 10/10. Every Stage 8 acceptance criterion passes against the live database.
+
+**What the run taught:**
+- **Rules over-refuse, and the eval found where within one run.** "If I end up in the emergency room what am I looking at paying" matched the bare word "emergency"; "how long do I have to file an appeal" matched filing without matching the exception for explaining it. Bucket A fell to 25/30 until both were fixed, then rose to 27/30. Neither would have been visible without enforcing the whole set.
+- **Enforcing a bucket is what makes its number mean anything.** Bucket B and C had been passing since Stage 5 purely because the model happened to decline. Marking them enforced changed nothing about the code and everything about what the report claims.
+- **A guardrail that runs after generation is not a guardrail.** Deciding before retrieval means a guarded question never reaches the model, so there is no partial answer to leak on the way to a refusal.
+
+**Open:** voice budgets unmeasured, accessibility verification deferred, two register variants below the floor.

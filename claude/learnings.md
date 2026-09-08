@@ -99,3 +99,15 @@ _<How this concept will apply to future work in this project.>_
 **Some of a deferred check is usually available for free.** With axe and Playwright unavailable, a static pass over the CSS and JSX still enforced the type floor, the target minimum, the focus ring, the no-hover rule and the presence of every required surface: 22 assertions, no new dependency. It is not conformance, and it is a regression guard that would catch the exact defect the mock would have introduced.
 
 **Budgets written before code are guesses wearing a number.** 800ms for time to first token was set months of decisions before anything ran, and the measured path is 1632ms of which two thirds is a hosted model round trip. Amending it to the measured value with the reasoning attached is more useful than either failing the criterion silently or trading away per-claim citation to chase it.
+
+## Stage 8 - what enforcing the guardrails taught
+
+**Marking a bucket enforced is what makes its number mean anything.** Bucket B and C had been passing since Stage 5, entirely because the model happened to decline. No code changed when they were flipped to enforced, but the report stopped flattering the build and started making a claim. The habit worth keeping is separating "this behaviour is guaranteed" from "this behaviour was observed", in the artifact itself rather than in someone's memory.
+
+**Rules over-refuse, and that is the right failure to have.** Within one run the guardrails wrongly refused a cost question containing the word "emergency" and an appeal-deadline question containing the word "file". Both are now regression tests. Over-refusal is visible in the refusal rate and diagnosable to a single pattern; under-refusal is a regulatory breach nobody notices. Choosing the noisy failure mode was worth more than choosing the accurate-sounding one.
+
+**A boundary cannot rest on a signal that was never calibrated for it.** Two earlier measurements ruled out the alternatives before a line was written: bucket C questions score near zero on the reranker, and the model's own refusal branch fires inconsistently at temperature zero. Neither was discovered here; both were already in the results files, which is the argument for writing measurements down at the time.
+
+**Run the boundary before the expensive step, not after.** Deciding bucket C before retrieval means a guarded question never reaches the model, so there is no half-formed answer to leak while the refusal is being assembled. It is also free, which is a pleasant coincidence rather than the reason.
+
+**The schema knew before I did.** FR-26's turn record specified `session_id` from the beginning. Stage 3 omitted it, and Stage 8 needed it for the loop breaker. Following the specified shape at the point of writing would have cost nothing; adding it later cost a migration.

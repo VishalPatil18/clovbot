@@ -556,3 +556,79 @@ Applied without asking, per the mock README: attach button removed (P4, auth-gat
 
 **Defect found:** `src/rag/payload.ts` shipped Clover's real support number in every refusal, violating D-026. Fixed, with a regression test.
 
+
+---
+
+## Feature: Guardrails and escalation (Stage 8)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | 2026-09-08           |
+| Cycle            | 7                    |
+| Stage of plan.md | `plan-p1.md` Stage 8 |
+| Owner            | user + claude        |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How are the ten bucket C triggers detected | Rules, not a classifier |
+| 2 | Where does the guardrail run | Before retrieval |
+| 3 | Ambiguous phrasing: refuse or answer | Refuse |
+| 4 | Rate limit storage | Postgres |
+| 5 | Callback storage | New table |
+| 6 | C-06 gives directive emergency guidance | Confirmed intended |
+
+### Phase 2 - Architecting
+
+**Options considered:** rules per trigger · a model classifier · a hybrid.
+
+**Chosen:** rules, logged as D-043. Stage 5 measured bucket C scoring near zero on the reranker and Stage 6 measured the model's own refusal branch firing inconsistently, so neither signal can carry a regulatory boundary. A guardrail that is non-deterministic is not a guardrail.
+
+### Phase 3 - Product Specs
+
+- **UI:** refusal surface showing what was searched, a pre-filled callback panel, a rate-limit notice, all with the phone number visible.
+- **Entities:** `GuardrailHit`, `CallbackRequest`, `RateVerdict`, `LoopState`.
+- **DB schema:** `callbacks` (question, plan_context, documents_searched, refusal_trigger, note, session_id); `rate_events` plus a `rate_check` function; `turns` gains `session_id` and `refusal_trigger`, which FR-26's record specified and Stage 3 omitted.
+
+### Phase 4 - Tech Specs
+
+- **Detection:** ordered regular expressions with per-rule exception patterns. *Rejected:* a model call, for determinism and latency.
+- **Session identity:** server-issued opaque UUID in an HttpOnly cookie. Carries no member identity.
+- **Rate limiting:** counted in Postgres so it survives a restart and is auditable. *Rejected:* in-memory, which resets silently.
+- **Loop breaker state:** read from the turn log rather than server memory, for the same reason.
+
+### Phase 5 - Planning
+
+| Sub-stage | Goal | Acceptance |
+| --- | --- | --- |
+| 8a | Ten trigger rules | Each refuses; the A-11 pair splits |
+| 8b | Loop breaker and language | The two remaining stubs pass |
+| 8c | Migration | Callbacks, rate events, session columns |
+| 8d | Server wiring | Guardrail before retrieval, limits, callback endpoint |
+| 8e | Escalation surface | Pre-filled form, limit notice |
+| 8f | Enforce buckets B and C | Whole golden set enforced, eval re-run |
+
+### Phase 6 - Writing Code
+
+**Measured, 2026-09-08:**
+
+| Metric | Stage 6 | Stage 8 |
+| --- | --- | --- |
+| Cases enforced | 29 of 50 | **50 of 50** |
+| Faithfulness | 0.988 | **1.000** |
+| Structural compliance | 100% | 100% |
+| Refusal rate | 13.3% | 13.3% |
+| Bucket A | 25/28 | **27/30** |
+| Bucket B | not enforced | **8/8** |
+| Bucket C | not enforced | **10/10** |
+
+Every Stage 8 acceptance criterion passes against the live database, verified by `scripts/stage8-checks.ts`: ten triggers refuse, the A-11 and C-01 pair splits, a clinical question yields no hedged advice, plan selection refuses without comparing, an injected instruction does not change citation behaviour, the loop breaker arms at two and resets on an answer, the callback stores its pre-fill, the rate limit cuts off with a readable message, Spanish refuses in English, and a dead datastore logs `upstream_failure` with no factual claim.
+
+**Defects the run surfaced, both fixed:**
+
+1. **"If I end up in the emergency room what am I looking at paying" fired C-06**, because the bare word "emergency" is also a benefit name. The rule now needs an acute symptom or the member saying they are in one.
+2. **"How long do I have to file an appeal" fired C-05**, because the exception covered "how do I" but not "how long". Bucket A fell to 25/30 until both were fixed.
+
+**All 66 stubs written in session one are now implemented. The suite is 307 green, zero failing.**
+

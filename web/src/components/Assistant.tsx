@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ask, type AskEvent, type Citation, type PlanOption } from "../api.ts";
+import { ask, type AskEvent, type CallbackDraft, type Citation, type Claim, type PlanOption } from "../api.ts";
+import { AnswerBody } from "./AnswerBody.tsx";
+import { CallbackPanel } from "./CallbackPanel.tsx";
 
 /** FR-14. Drawn from the highest-volume bucket A drivers in docs/call-drivers.md. */
 const STARTERS = [
@@ -17,7 +19,9 @@ interface Turn {
   id: number;
   question: string;
   answer: string;
+  claims: Claim[];
   citations: Citation[];
+  citationNumbers: Record<string, number>;
   unanswered: string[];
   outcome: "answered" | "refused" | "upstream_failure" | "pending";
   feedback: "yes" | "no" | null;
@@ -37,6 +41,8 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
   const [plan, setPlan] = useState<PlanOption | null>(null);
   const [planPrompt, setPlanPrompt] = useState<{ plans: PlanOption[]; question: string } | null>(null);
   const [status, setStatus] = useState("");
+  const [callback, setCallback] = useState<CallbackDraft | null>(null);
+  const [limited, setLimited] = useState<string | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
 
@@ -53,10 +59,12 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
       nextId.current += 1;
       setBusy(true);
       setPlanPrompt(null);
+      setCallback(null);
+      setLimited(null);
       setStatus("Searching your plan documents");
       setTurns((previous) => [
         ...previous,
-        { id, question: trimmed, answer: "", citations: [], unanswered: [], outcome: "pending", feedback: null },
+        { id, question: trimmed, answer: "", claims: [], citations: [], citationNumbers: {}, unanswered: [], outcome: "pending", feedback: null },
       ]);
 
       const apply = (event: AskEvent): void => {
@@ -68,6 +76,21 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
         }
         if (event.type === "progress") {
           setStatus("Writing your answer");
+          return;
+        }
+        if (event.type === "rate_limited") {
+          setTurns((previous) => previous.filter((turn) => turn.id !== id));
+          setLimited(event.message);
+          return;
+        }
+        // FR-23: after two refusals in a row, stop offering to try again.
+        if (event.type === "offer_callback") {
+          setCallback({
+            question: event.question,
+            planContext: event.planContext,
+            documentsSearched: event.documentsSearched,
+            refusalTrigger: event.refusalTrigger,
+          });
           return;
         }
         if (event.type === "error") {
@@ -90,7 +113,9 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
               ? {
                   ...turn,
                   answer: event.answer,
+                  claims: event.claims,
                   citations: event.citations,
+                  citationNumbers: event.claimCitationNumbers ?? {},
                   unanswered: event.unanswered,
                   outcome: event.outcome,
                 }
@@ -182,22 +207,14 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
               <p className="turn__pending">{status || "Working on it"}</p>
             ) : (
               <div className={`turn__answer turn__answer--${turn.outcome}`}>
-                {turn.answer.split("\n").map((line, index) =>
-                  line.trim().length === 0 ? null : <p key={index}>{line}</p>,
-                )}
-
-                {turn.citations.length > 0 && (
-                  <div className="citations">
-                    <h4 className="citations__title">Where this comes from</h4>
-                    <ul>
-                      {turn.citations.map((citation) => (
-                        <li key={citation.id} className="citation">
-                          {citation.label}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <AnswerBody
+                  turnId={turn.id}
+                  claims={turn.claims}
+                  citations={turn.citations}
+                  citationNumbers={turn.citationNumbers}
+                  unanswered={turn.unanswered}
+                  fallback={turn.answer}
+                />
 
                 {/* FR-27, on answered turns only. */}
                 {turn.outcome === "answered" && (
@@ -228,6 +245,17 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
             )}
           </article>
         ))}
+
+        {limited !== null && (
+          <div className="notice notice--limit" role="alert">
+            <p>{limited}</p>
+            <a className="button button--quiet" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
+              Call {MEMBER_SERVICES_DISPLAY}
+            </a>
+          </div>
+        )}
+
+        {callback !== null && <CallbackPanel draft={callback} />}
 
         {planPrompt !== null && (
           <div className="plan-prompt">

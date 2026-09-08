@@ -2,15 +2,20 @@ import type { LoopState } from "./types.ts";
 
 export const INITIAL_LOOP_STATE: LoopState = { consecutiveRefusals: 0 };
 
+/** Two refusals in a row is the point at which trying again stops helping. */
+const LOOP_LIMIT = 2;
+
 /** An answered turn resets the count; a refusal advances it. FR-23. */
 export function advanceLoopState(
-  _state: LoopState,
-  _outcome: "answered" | "refused",
+  state: LoopState,
+  outcome: "answered" | "refused",
 ): LoopState {
-  throw new Error("not implemented");
+  return {
+    consecutiveRefusals: outcome === "refused" ? state.consecutiveRefusals + 1 : 0,
+  };
 }
 
 /** Two consecutive refusals arm the callback form for the next turn. FR-23. */
-export function shouldPresentCallbackForm(_state: LoopState): boolean {
-  throw new Error("not implemented");
+export function shouldPresentCallbackForm(state: LoopState): boolean {
+  return state.consecutiveRefusals >= LOOP_LIMIT;
 }

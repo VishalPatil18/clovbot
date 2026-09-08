@@ -134,14 +134,17 @@ export interface TurnRecord {
   outcome: "answered" | "refused" | "upstream_failure";
   provider: string;
   latencyMs: Record<string, number>;
+  sessionId?: string;
+  refusalTrigger?: string | null;
 }
 
 /** FR-26. The question written here is already redacted per FR-31. */
 export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<string> {
   const { rows } = await client.query(
     `insert into turns
-       (question, plan_context, chunk_ids, corpus_snapshot_id, outcome, provider, latency_ms)
-     values ($1,$2,$3,$4,$5,$6,$7)
+       (question, plan_context, chunk_ids, corpus_snapshot_id, outcome, provider,
+        latency_ms, session_id, refusal_trigger)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      returning id`,
     [
       turn.question,
@@ -151,6 +154,85 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
       turn.outcome,
       turn.provider,
       JSON.stringify(turn.latencyMs),
+      turn.sessionId ?? null,
+      turn.refusalTrigger ?? null,
+    ],
+  );
+  return String(rows[0]?.["id"]);
+}
+
+/**
+ * Consecutive refusals for a session, newest first. Read from the turn log so
+ * the loop breaker survives a restart rather than living in server memory. FR-23.
+ */
+export async function consecutiveRefusals(
+  client: pg.Client,
+  sessionId: string,
+): Promise<number> {
+  const { rows } = await client.query(
+    "select outcome from turns where session_id = $1 order by asked_at desc limit 10",
+    [sessionId],
+  );
+  let count = 0;
+  for (const row of rows) {
+    if (String(row["outcome"]) === "answered") break;
+    if (String(row["outcome"]) === "refused") count += 1;
+  }
+  return count;
+}
+
+export interface RateVerdict {
+  allowed: boolean;
+  used: number;
+  remaining: number;
+}
+
+/** FR-30, NFR-SEC-02. */
+export async function checkRate(
+  client: pg.Client,
+  key: string,
+  limit: number,
+  window: string,
+): Promise<RateVerdict> {
+  const { rows } = await client.query("select * from rate_check($1,$2,$3::interval)", [
+    key,
+    limit,
+    window,
+  ]);
+  const row = rows[0] ?? {};
+  return {
+    allowed: row["allowed"] === true,
+    used: Number(row["used"] ?? 0),
+    remaining: Number(row["remaining"] ?? 0),
+  };
+}
+
+export interface CallbackRequest {
+  question: string;
+  planContext: string | null;
+  documentsSearched: string[];
+  refusalTrigger: string | null;
+  note: string | null;
+  sessionId: string;
+}
+
+/** Validates, stores and confirms. Nothing is sent anywhere. D-026. */
+export async function writeCallback(
+  client: pg.Client,
+  request: CallbackRequest,
+): Promise<string> {
+  const { rows } = await client.query(
+    `insert into callbacks
+       (question, plan_context, documents_searched, refusal_trigger, note, session_id)
+     values ($1,$2,$3,$4,$5,$6)
+     returning id`,
+    [
+      request.question,
+      request.planContext,
+      request.documentsSearched,
+      request.refusalTrigger,
+      request.note,
+      request.sessionId,
     ],
   );
   return String(rows[0]?.["id"]);

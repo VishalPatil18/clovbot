@@ -1,4 +1,6 @@
 import { findContainmentViolations, validateAnswerPayload } from "../answer.ts";
+import { checkGuardrails } from "../guardrails.ts";
+import { detectLanguage } from "../language.ts";
 import { applyConfidenceGate } from "../retrieval.ts";
 import { redactIdentifiers } from "../logging.ts";
 import type { AnswerPayload } from "../types.ts";
@@ -56,6 +58,37 @@ export async function answerTurn(
     confidenceFloor: CONFIDENCE_FLOOR,
     provider: "none",
   };
+
+  // FR-24. Answered in English, with the human path, and no partial attempt.
+  if (detectLanguage(question) === "other") {
+    return {
+      ...base,
+      answer: refusalText(
+        "I can only answer in English today. A person at the plan can help you in your language.",
+      ),
+      rerankTopScore: Number.NEGATIVE_INFINITY,
+      outcome: "refused",
+      refusalTrigger: "unsupported_language",
+      latencyMs: { total: Date.now() - started },
+    };
+  }
+
+  // FR-21. Bucket C is decided before retrieval, so a guarded question never
+  // reaches the model and cannot leak a partial answer on its way to refusal.
+  const guard = checkGuardrails(question);
+  if (guard !== null) {
+    return {
+      ...base,
+      answer:
+        guard.kind === "emergency"
+          ? `${guard.explanation}\n\nOnce you are safe, Member Services can help with anything about your plan: ${MEMBER_SERVICES}.`
+          : refusalText(guard.explanation),
+      rerankTopScore: Number.NEGATIVE_INFINITY,
+      outcome: "refused",
+      refusalTrigger: guard.trigger,
+      latencyMs: { total: Date.now() - started },
+    };
+  }
 
   let retrieved: RerankedChunk[] = [];
   let retrievedAt = started;
