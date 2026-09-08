@@ -182,3 +182,82 @@ Run before any code, because Stage 1's whole purpose is to replace assumptions w
 | 1e | Synthetic provider directory | Generated directory carries `status: synthetic` and a provenance flag; no synthetic entry is representable without it |
 | 1f | Report and wiring | `corpus:report` renders every failure with a reason; npm scripts wired; full suite green |
 
+
+### Phase 6 - Writing Code (Stage 1)
+
+- **Files touched:** `src/corpus/{types,discover,fetch,convert,columns,synthetic,report,snapshot,cli}.ts`, `tests/unit/corpus-{discover,columns,fetch,convert,synthetic,report}.test.ts`, `tests/fixtures/corpus/live/*`, `.env.example`, `.gitignore`, `package.json`, `tsconfig.json`, `docs/corpus-report.md`.
+- **Tests added:** 76 unit tests. No integration tests, by the user's call.
+- **Dependencies added:** `@types/node@26.5.0` (types only). `pdftotext` and `pdfinfo` from poppler are documented system prerequisites, not packages.
+- **Result:** 14 documents fetched, 0 failed, 0 blocked, 2 synthetic. Both plans' Summary of Benefits extracted to separate markdown with no cross-plan leakage.
+
+**Defects the live run surfaced, all fixed:**
+
+1. The formulary and pharmacy directory are linked from `/members/formulary`, not `/members/plan-documents`. Discovery scans both.
+2. `/about-us/investors` redirects off-domain to an investor-relations host that does not respond. Dropped from the corpus, since the corpus is cloverhealth.com public content.
+3. The Summary of Benefits conversion wrote raw two-column text over the extracted column, because it looped over both plans inside each plan's own entry. Each entry now converts its own column.
+4. The header midpoint is not the column break, since headers are centred within their column. Replaced with a gutter search for the x-coordinate that the fewest words cross; crossings fell from 5-25 per page to zero on 11 of 12 table pages.
+5. Page 15 mixes a two-column rewards table with full-width disclaimer prose. A page-level split truncated every disclaimer sentence. Splitting is now decided per line.
+
+---
+
+## Feature: Thinnest end-to-end answer (Stage 3)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | 2026-09-07           |
+| Cycle            | 2                    |
+| Stage of plan.md | `plan-p1.md` Stage 3 |
+| Owner            | user + claude        |
+
+### Phase 1 - Requirements
+
+Stage 2, the voice latency spike, was skipped at the user's instruction. It is a spike rather than a dependency of Stage 3, so ordering permits it. The cost is that NFR-PERF-03 and NFR-PERF-04 stay unmeasured until Stage 9, which is the risk the plan put Stage 2 early to avoid.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1-3 | Datastore | Supabase, project created by the user, schema applied by hand through the dashboard |
+| 4 | Azure credentials | Exist. Embeddings verified at 1536 dimensions; chat verified |
+| 5 | Fallback if Azure unavailable | Add Gemini as a fallback |
+| 6 | Which plan answers "the specialist copay" now that two are indexed | Index both, CLI takes `--plan` |
+| 7 | Postgres client | `pg` |
+| 8 | Azure SDK | Raw `fetch`, no vendor SDK |
+| 9 | `@types/node` | Approved |
+| 10 | Integration tests | None for now |
+
+### Phase 2 - Architecting
+
+**Options considered:**
+
+1. **Fallback for generation and embeddings alike** - symmetrical, and silently wrong: two providers embed into different vector spaces, so a Gemini-embedded query against an Azure-embedded corpus returns numerically valid, semantically meaningless chunks. Retrieval would not error; cite-or-refuse would dress the result as a confident cited wrong answer.
+2. **Fallback for generation only** - the chunks are already retrieved and passed in the prompt, so the fallback reads the same evidence and cites the same identifiers.
+3. **No fallback** - an Azure outage ends the demonstration.
+
+**Chosen:** 2. Logged as D-034, together with the exposure the user accepted: Google may train on free-tier input, so FR-31 redaction had to move ahead of the model call rather than only ahead of the log write.
+
+### Phase 3 - Product Specs
+
+- **UI:** None. A command-line entry point: `npm run ask -- "<question>" --plan <004|007>`.
+- **UX flow:** question in, redact identifiers, embed, retrieve top-5 filtered by plan, generate with citations, print answer then a Sources block naming document, contract, plan, plan year and section, write the turn log.
+- **Backend entities:** `CorpusChunk`, `PromptChunk`, `RetrievedChunk`, `TurnRecord`.
+- **DB schema:** `chunks` (id, snapshot_id, document_id, kind, contract_id, plan_id, plan_year, section, content, `vector(1536)`, created_at) with an HNSW cosine index per D-005 and a `(contract_id, plan_id, plan_year)` index per D-033. `turns` per FR-26.
+
+### Phase 4 - Tech Specs
+
+- **Framework:** none; Node scripts. *Rejected:* a CLI framework, for two commands.
+- **Language:** TypeScript, strict.
+- **Deployment:** none this stage. Developer machine against hosted Supabase.
+- **Data store:** Supabase Postgres with pgvector. *Rejected:* local Postgres in Docker, which adds a system prerequisite; the free tier is enough for one plan year of one document. **Known cost:** the free tier pauses after 7 days idle and must be woken before a demonstration.
+- **Model access:** raw `fetch` against both REST APIs. *Rejected:* the `openai` and Google SDKs, since two endpoints do not justify two dependencies. **Cost:** retry and streaming are hand-written when Stage 6 and FR-08 need them.
+- **TLS:** Supabase's pooler serves a self-signed chain. Their CA is pinned at `certs/supabase-ca.crt` with verification left on, rather than disabling certificate checking.
+
+### Phase 5 - Planning
+
+| Sub-stage | Goal | Acceptance |
+| --- | --- | --- |
+| 3a | FR-31 redaction | Identifier shapes removed, ordinary numbers, dollar amounts and plan years survive |
+| 3b | Naive chunker | Header-aware, stable ids, provenance on every chunk, no amount lost |
+| 3c | Prompt and citation containment | Sources fenced as data, citation required, a citation to an unretrieved chunk detected |
+| 3d | Providers | Azure embeddings with no fallback, Azure generation falling back to Gemini |
+| 3e | Store and retrieval | Plan filtered in SQL before ranking, idempotent re-ingest |
+| 3f | CLI and turn log | Cited answer at a terminal, turn row written |
+
