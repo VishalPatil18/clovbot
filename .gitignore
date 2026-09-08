@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# OS
+.DS_Store
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Editors
+.vscode/
+.idea/
+
+# Logs
+*.log
+.claude/settings.json
+data/
+dist-web/
+data/audio/

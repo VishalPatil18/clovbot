@@ -1,0 +1,63 @@
+name: Deploy API
+
+# The same deploy the local script performs, so CI and a developer's machine
+# cannot drift apart. Runs only after checks pass.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "certs/**"
+      - "Dockerfile"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Secrets reach the service as environment variables. Nothing is baked
+      # into the image. NFR-SEC-03.
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE || 'clovbot-api' }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --region "${{ vars.CLOUD_RUN_REGION || 'us-east1' }}" \
+            --source . \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 2Gi --cpu 2 --timeout 120 --concurrency 20 \
+            --min-instances 1 --max-instances 3 \
+            --set-env-vars "^@@^CORPUS_SNAPSHOT_ID=${{ vars.CORPUS_SNAPSHOT_ID }}@@DATABASE_URL=${{ secrets.DATABASE_URL }}@@AZURE_OPENAI_ENDPOINT=${{ secrets.AZURE_OPENAI_ENDPOINT }}@@AZURE_OPENAI_API_KEY=${{ secrets.AZURE_OPENAI_API_KEY }}@@AZURE_OPENAI_API_VERSION=${{ vars.AZURE_OPENAI_API_VERSION }}@@AZURE_OPENAI_DEPLOYMENT=${{ vars.AZURE_OPENAI_DEPLOYMENT }}@@AZURE_OPENAI_EMBEDDING_DEPLOYMENT=${{ vars.AZURE_OPENAI_EMBEDDING_DEPLOYMENT }}@@ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}@@ELEVENLABS_VOICE_ID=${{ vars.ELEVENLABS_VOICE_ID }}@@FISH_AUDIO_API_KEY=${{ secrets.FISH_AUDIO_API_KEY }}@@GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+
+      - name: Smoke test the deployed service
+        run: |
+          URL="$(gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE || 'clovbot-api' }}" \
+                  --project "${{ vars.GCP_PROJECT_ID }}" \
+                  --region "${{ vars.CLOUD_RUN_REGION || 'us-east1' }}" \
+                  --format 'value(status.url)')"
+          echo "Deployed to ${URL}"
+          curl -fsS --max-time 30 "${URL}/api/plans" | head -c 200

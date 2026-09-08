@@ -1,0 +1,113 @@
+/*
+ * Tokens from design/DESIGN.md.
+ *
+ * Two tiers, on purpose. The message thread is the reading surface and holds the
+ * 18px floor NFR-A11Y-03 asks for; interface chrome uses the DESIGN.md scale.
+ * The gap between them is the hierarchy: the answer should dominate the frame.
+ *
+ * The citation sits at UI body size rather than the mock's 11px chip. It is the
+ * surface the product's trustworthiness rests on, and the smallest type on the
+ * screen is the wrong place for it.
+ */
+:root {
+  --color-forest-ink: #0f3e17;
+  --color-sage-mist: #b1dbb8;
+  --color-keylime-wash: #e1f4df;
+  --color-mint-veil: #cfe7d3;
+  --color-slate-hush: #b6ced5;
+  --color-cream-paper: #fffefc;
+  --color-charcoal: #222222;
+  --color-border-mist: #efeeeb;
+  --color-forest-shadow: #0c2f10;
+
+  --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-body: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Reading surface: the member's question and the assistant's answer. */
+  --text-message: 18px;
+  --leading-message: 1.6;
+
+  /* Interface chrome, per design/DESIGN.md. */
+  --text-caption: 10px;
+  --leading-caption: 1.61;
+  --text-body: 14px;
+  --leading-body: 1.5;
+  --text-cite: 14px;
+  --text-subheading: 18px;
+  --leading-subheading: 1.3;
+  --text-heading-sm: 23px;
+  --leading-heading-sm: 1.5;
+  --text-heading: 40px;
+  --leading-heading: 1.35;
+  --tracking-heading: -0.4px;
+
+  /* Text inputs stay at 16px or above: below that, iOS zooms the page on focus. */
+  --text-input: 18px;
+
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+
+  --spacing-4: 4px;
+  --spacing-8: 8px;
+  --spacing-12: 12px;
+  --spacing-16: 16px;
+  --spacing-24: 24px;
+  --spacing-32: 32px;
+  --spacing-48: 48px;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  /* NFR-A11Y-02: the AAA target size, not the AA minimum. */
+  --target-min: 44px;
+  /* NFR-A11Y-04: at least 2px at 3:1 contrast. */
+  --focus-ring: 3px solid #0f3e17;
+  --focus-offset: 2px;
+}
+
+* { box-sizing: border-box; }
+
+html { color-scheme: light; }
+
+body {
+  margin: 0;
+  background: var(--color-cream-paper);
+  color: var(--color-charcoal);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Visible focus on every focusable element, never removed. */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius-sm);
+}
+
+button, a, input, textarea, [tabindex] { font: inherit; }
+
+button, a[role="button"], .target {
+  min-height: var(--target-min);
+  min-width: var(--target-min);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* NFR-A11Y-03: reflow at 200% zoom without horizontal scroll. */
+html, body { overflow-x: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

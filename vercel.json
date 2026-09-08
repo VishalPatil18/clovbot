@@ -1,0 +1,38 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build:web",
+  "outputDirectory": "dist-web",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://clovbot-api-dlns3wfx2a-ue.a.run.app/api/:path*"
+    },
+    {
+      "source": "/assistant",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "microphone=(self), geolocation=(), camera=()"
+        }
+      ]
+    }
+  ]
+}

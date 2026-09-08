@@ -1,0 +1,205 @@
+{
+  "ranAt": "2026-09-08T09:56:39.477Z",
+  "model": "Xenova/ms-marco-MiniLM-L-6-v2",
+  "pool": 10,
+  "best": {
+    "floor": 0.001,
+    "correct": 36,
+    "falseRefusals": 2,
+    "falseAnswers": 0
+  },
+  "positives": [
+    {
+      "id": "A-01",
+      "question": "what is my copay for a specialist visit",
+      "score": 0.9966970974631152
+    },
+    {
+      "id": "A-02",
+      "question": "what is my copay for a specialist visit",
+      "score": 0.995348668701276
+    },
+    {
+      "id": "A-03",
+      "question": "my wife needs to see her regular doctor, is there a charge for that",
+      "score": 0.0005102318994780572
+    },
+    {
+      "id": "A-04",
+      "question": "what do I pay to see a specialist out of network",
+      "score": 0.9934289218317078
+    },
+    {
+      "id": "A-05",
+      "question": "what is my maximum out of pocket for the year",
+      "score": 0.9994715188523758
+    },
+    {
+      "id": "A-06",
+      "question": "what is my combined in and out of network out of pocket maximum",
+      "score": 0.9987669368971618
+    },
+    {
+      "id": "A-07",
+      "question": "is there a medical deductible on this plan",
+      "score": 0.9891605074711146
+    },
+    {
+      "id": "A-08",
+      "question": "if I end up in the emergency room what am I looking at paying",
+      "score": 0.032893830376888464
+    },
+    {
+      "id": "A-09",
+      "question": "there's an urgent care down the street, what would that run me",
+      "score": 0.07528463286653012
+    },
+    {
+      "id": "A-10",
+      "question": "if they keep me overnight in the hospital how much is that a day",
+      "score": 0.4683862542408541
+    },
+    {
+      "id": "A-11",
+      "question": "what do I pay for outpatient surgery at a hospital",
+      "score": 0.9995710741719493
+    },
+    {
+      "id": "A-12",
+      "question": "what is the copay at an ambulatory surgery center",
+      "score": 0.9972803897921396
+    },
+    {
+      "id": "A-13",
+      "question": "what do x-rays cost",
+      "score": 0.887497323730575
+    },
+    {
+      "id": "A-14",
+      "question": "do I pay anything for lab work at LabCorp",
+      "score": 0.8279393120524355
+    },
+    {
+      "id": "A-17",
+      "question": "is there help paying my Part B premium",
+      "score": 0.9912680853276921
+    },
+    {
+      "id": "A-18",
+      "question": "we're going to visit our daughter in Portugal, am I covered over there if something happens",
+      "score": 0.00022897645610830917
+    },
+    {
+      "id": "A-19",
+      "question": "what tier is atorvastatin on",
+      "score": 0.16079821153246304
+    },
+    {
+      "id": "A-20",
+      "question": "is ORSERDU on the drug list",
+      "score": 0.3816635040433649
+    },
+    {
+      "id": "A-21",
+      "question": "what does the PA code next to a drug mean",
+      "score": 0.005793343295125459
+    },
+    {
+      "id": "A-22",
+      "question": "how do I file an appeal",
+      "score": 0.9807618097416608
+    },
+    {
+      "id": "A-23",
+      "question": "how long do I have to file an appeal",
+      "score": 0.9918055587650879
+    },
+    {
+      "id": "A-24",
+      "question": "how does the grievance process work",
+      "score": 0.9809096286885016
+    },
+    {
+      "id": "A-25",
+      "question": "which services need prior authorization",
+      "score": 0.946647761337529
+    },
+    {
+      "id": "A-26",
+      "question": "do I have to get my doctor to sign off before I see a specialist",
+      "score": 0.5757725293611353
+    },
+    {
+      "id": "A-27",
+      "question": "what happens if I see a doctor outside the network",
+      "score": 0.986164206223362
+    },
+    {
+      "id": "A-28",
+      "question": "what is the service area for this plan",
+      "score": 0.9976048237383973
+    },
+    {
+      "id": "A-29",
+      "question": "my doctor said I need to see a heart specialist and I wanted to know what that costs me before I go",
+      "score": 0.00904995575460982
+    },
+    {
+      "id": "A-30",
+      "question": "is dental covered on my plan",
+      "score": 0.9996140359331052
+    }
+  ],
+  "negatives": [
+    {
+      "id": "OOC-1",
+      "question": "what is the capital of France",
+      "score": 0.000017215295316953136
+    },
+    {
+      "id": "OOC-2",
+      "question": "how do I change the oil in my car",
+      "score": 0.00008624086450301459
+    },
+    {
+      "id": "OOC-3",
+      "question": "what is my dog's vaccination schedule",
+      "score": 0.000015152641126866433
+    },
+    {
+      "id": "OOC-4",
+      "question": "how do I reset my email password",
+      "score": 0.00021191404239729962
+    },
+    {
+      "id": "OOC-5",
+      "question": "what time does the supermarket close",
+      "score": 0.000048929401181912525
+    },
+    {
+      "id": "OOC-6",
+      "question": "who won the football game last night",
+      "score": 0.000015877866562504365
+    },
+    {
+      "id": "OOC-7",
+      "question": "how do I cook a turkey",
+      "score": 0.00003731345312978068
+    },
+    {
+      "id": "OOC-8",
+      "question": "what is the weather tomorrow",
+      "score": 0.000026221131000333738
+    },
+    {
+      "id": "OOC-9",
+      "question": "can you write me a poem about the sea",
+      "score": 0.000014549818065131292
+    },
+    {
+      "id": "OOC-10",
+      "question": "what is the square root of 1444",
+      "score": 0.00002659663013154027
+    }
+  ]
+}

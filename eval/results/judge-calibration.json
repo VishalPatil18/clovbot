@@ -1,0 +1,124 @@
+{
+  "ranAt": "2026-09-08T09:22:36.025Z",
+  "handChecked": 14,
+  "rows": [
+    {
+      "label": "known good",
+      "score": 1,
+      "expected": ">= 0.9",
+      "agrees": true,
+      "sentences": [
+        {
+          "sentence": "Your specialist copay is $10 in network [sob-doctor-01].",
+          "supported": true,
+          "reason": "The source [sob-doctor-01] explicitly states that the specialist visit copay in-network is $10."
+        }
+      ]
+    },
+    {
+      "label": "uncited",
+      "score": 1,
+      "expected": "unconstrained",
+      "agrees": true,
+      "sentences": [
+        {
+          "sentence": "Your specialist copay is $10 in network.",
+          "supported": true,
+          "reason": "The source [sob-doctor-01] explicitly states that the specialist visit copay in-network is $10."
+        }
+      ]
+    },
+    {
+      "label": "unfaithful",
+      "score": 0,
+      "expected": "< 0.5",
+      "agrees": true,
+      "sentences": [
+        {
+          "sentence": "Your specialist copay is $75 in network [sob-doctor-01].",
+          "supported": false,
+          "reason": "The source states that the in-network specialist copay is $10, not $75."
+        },
+        {
+          "sentence": "Referrals are required before every visit [sob-doctor-01].",
+          "supported": false,
+          "reason": "The source does not mention anything about referrals being required."
+        },
+        {
+          "sentence": "There is an annual limit of 12 visits [sob-doctor-01].",
+          "supported": false,
+          "reason": "The source does not mention any annual limit on visits."
+        }
+      ]
+    },
+    {
+      "label": "correct refusal",
+      "score": 1,
+      "expected": ">= 0.9",
+      "agrees": true,
+      "sentences": [
+        {
+          "sentence": "I could not find that in the plan documents I searched.",
+          "supported": true,
+          "reason": "This sentence does not make a factual claim about the plan and is supported by definition."
+        },
+        {
+          "sentence": "Please call Member Services at 1-888-778-1478 (TTY 711).",
+          "supported": true,
+          "reason": "This sentence does not make a factual claim about the plan and is supported by definition."
+        }
+      ]
+    },
+    {
+      "label": "partially faithful",
+      "score": 0.6666666666666666,
+      "expected": ">= 0.5",
+      "agrees": true,
+      "sentences": [
+        {
+          "sentence": "Emergency care is a $115 copay per visit [sob-emergency-01].",
+          "supported": true,
+          "reason": "The source explicitly states that emergency care has a $115 copay per visit."
+        },
+        {
+          "sentence": "The copay is waived if you are admitted within 24 hours [sob-emergency-01].",
+          "supported": true,
+          "reason": "The source explicitly states that the copay is waived if you are admitted to the hospital within 24 hours."
+        },
+        {
+          "sentence": "Ambulance rides are included at no charge [sob-emergency-01].",
+          "supported": false,
+          "reason": "The source does not mention ambulance rides or their cost, so this claim is not supported."
+        }
+      ]
+    },
+    {
+      "label": "faithful multi-claim",
+      "score": 1,
+      "expected": ">= 0.9",
+      "agrees": true,
+      "sentences": [
+        {
+          "sentence": "Your specialist copay is $10 in network",
+          "supported": true,
+          "reason": "The source [sob-doctor-01] explicitly states that the specialist visit copay in-network is $10."
+        },
+        {
+          "sentence": "Out of network it is $20",
+          "supported": true,
+          "reason": "The source [sob-doctor-01] explicitly states that the specialist visit copay out-of-network is $20."
+        },
+        {
+          "sentence": "Your primary care visits are $0",
+          "supported": true,
+          "reason": "The source [sob-doctor-01] explicitly states that the primary care physician visit copay in-network is $0."
+        },
+        {
+          "sentence": "Emergency care is $115 per visit",
+          "supported": true,
+          "reason": "The source [sob-emergency-01] explicitly states that emergency care has a $115 copay per visit."
+        }
+      ]
+    }
+  ]
+}

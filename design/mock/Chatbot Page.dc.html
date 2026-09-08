@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#fffefc;-webkit-font-smoothing:antialiased}
+a{color:#0f3e17;text-decoration:none}
+a:hover{color:#0c2f10;text-decoration:underline}
+*{box-sizing:border-box}
+@keyframes cvFadeUp{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+</style>
+</helmet>
+<div style="font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#222222;background:#fffefc;height:100vh;display:flex;overflow:hidden">
+
+  <sc-if value="{{ showSidebar }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:288px;flex:none;background:#f7f6f2;border-right:1px solid #efeeeb;display:flex;flex-direction:column;padding:18px 18px 21px;overflow-y:auto;min-height:0">
+    <a href="Landing Page.dc.html" style="display:flex;align-items:center;gap:11px;padding:7px 4px 18px">
+      <div style="width:40px;height:40px;border-radius:14px;background:#0f3e17;flex:none"></div>
+      <div>
+        <div style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:23px;line-height:1;color:#0f3e17">Clover</div>
+        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;color:#222222;margin-top:4px">Member Assistant</div>
+      </div>
+    </a>
+
+    <div style="display:flex;align-items:center;gap:9px;background:#fffefc;border:1px solid #efeeeb;border-radius:14px;padding:10px 14px;margin-bottom:18px">
+      <span style="width:11px;height:11px;border:1.5px solid #0f3e17;border-radius:999px;flex:none"></span>
+      <input placeholder="Search conversations" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font-family:Inter,sans-serif;font-size:14px;color:#222222">
+    </div>
+
+    <nav style="display:flex;flex-direction:column;gap:4px">
+      <span style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:7px;background:#e1f4df;color:#0f3e17;font-size:14px;font-weight:500;min-height:44px"><span style="width:8px;height:8px;border-radius:2px;background:#0f3e17"></span>New question</span>
+      <a href="#coverage" style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:7px;color:#222222;font-size:14px;min-height:44px" style-hover="background:#efeeeb"><span style="width:8px;height:8px;border-radius:2px;background:#b1dbb8"></span>Coverage &amp; costs</a>
+      <a href="#drugs" style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:7px;color:#222222;font-size:14px;min-height:44px" style-hover="background:#efeeeb"><span style="width:8px;height:8px;border-radius:2px;background:#cfe7d3"></span>Drugs &amp; pharmacy</a>
+      <a href="#network" style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:7px;color:#222222;font-size:14px;min-height:44px" style-hover="background:#efeeeb"><span style="width:8px;height:8px;border-radius:2px;background:#b6ced5"></span>Find a provider</a>
+      <a href="#docs" style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:7px;color:#222222;font-size:14px;min-height:44px" style-hover="background:#efeeeb"><span style="width:8px;height:8px;border-radius:2px;background:#efeeeb"></span>Plan documents</a>
+    </nav>
+
+    <div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#0f3e17;margin:28px 0 11px;padding:0 14px">Recent</div>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <a href="#r1" style="padding:9px 14px;border-radius:7px;font-size:14px;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:#efeeeb">Hearing aid coverage and copay</a>
+      <a href="#r2" style="padding:9px 14px;border-radius:7px;font-size:14px;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:#efeeeb">Atorvastatin tier and cost</a>
+      <a href="#r3" style="padding:9px 14px;border-radius:7px;font-size:14px;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:#efeeeb">Dentists in Hudson County</a>
+      <a href="#r4" style="padding:9px 14px;border-radius:7px;font-size:14px;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:#efeeeb">How the appeals process works</a>
+    </div>
+
+    <div style="margin-top:auto;flex:none;background:#e1f4df;border-radius:14px;padding:21px">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">
+        <span style="background:#0f3e17;color:#fffefc;font-size:10px;font-weight:600;letter-spacing:0.08em;padding:4px 9px;border-radius:999px">LIVE</span>
+        <span style="font-size:11px;color:#222222">8am–8pm, 7 days</span>
+      </div>
+      <div style="font-size:14px;line-height:1.5;color:#222222;margin-bottom:14px">A person can pick this up whenever you want one.</div>
+      <a href="tel:18887781478" style="display:flex;align-items:center;justify-content:center;background:#0f3e17;color:#fffefc;font-size:14px;padding:11px 18px;border-radius:14px;min-height:44px">Talk to a person</a>
+    </div>
+  </aside>
+  </sc-if>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+    <header style="height:64px;flex:none;display:flex;align-items:center;justify-content:space-between;gap:21px;padding:0 24px;border-bottom:1px solid #efeeeb">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="background:#fffefc;border:1px solid #efeeeb;color:#0f3e17;font-size:12px;padding:7px 14px;border-radius:999px">Plan year 2026</span>
+        <span style="background:#fffefc;border:1px solid #efeeeb;color:#0f3e17;font-size:12px;padding:7px 14px;border-radius:999px">New Jersey · H5141-001</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <button type="button" onClick="{{ toggleMode }}" style="background:transparent;border:1px solid #efeeeb;border-radius:999px;padding:9px 14px;font-family:Inter,sans-serif;font-size:12px;color:#0f3e17;cursor:pointer;min-height:36px">{{ modeLabel }}</button>
+        <div style="display:flex;align-items:center;gap:11px">
+          <div style="text-align:right">
+            <div style="font-size:14px;font-weight:600;color:#0f3e17">Guest member</div>
+            <div style="font-size:10px;color:#222222">Not signed in · no member data</div>
+          </div>
+          <div style="width:40px;height:40px;border-radius:999px;background:#b6ced5;flex:none"></div>
+        </div>
+      </div>
+    </header>
+
+    <div data-scroller="1" style="flex:1;overflow-y:auto;padding:42px 24px 21px">
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ true }}">
+        <div style="max-width:768px;margin:0 auto;animation:cvFadeUp .6s cubic-bezier(.22,.61,.36,1) both">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#0f3e17;text-align:center">Ask anything about your plan</div>
+          <h1 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:64px;line-height:1.05;letter-spacing:-2px;color:#0f3e17;margin:18px 0 14px;text-align:center;text-wrap:pretty">Good afternoon. What would you like to know?</h1>
+          <p style="font-size:18px;line-height:1.5;font-weight:300;color:#222222;text-align:center;margin:0 auto;max-width:52ch">I answer only from the 2026 Evidence of Coverage, Summary of Benefits, formulary and directories — and I show you the section every time.</p>
+
+          <div style="display:grid;grid-template-columns:{{ cardCols }};gap:14px;margin-top:42px">
+            <sc-for list="{{ cards }}" as="c" hint-placeholder-count="6">
+              <button type="button" onClick="{{ c.ask }}" style="text-align:left;border:none;cursor:pointer;font-family:Inter,sans-serif;border-radius:14px;padding:21px;background:{{ c.bg }};display:flex;flex-direction:column;gap:11px;min-height:150px" style-hover="transform:translateY(-4px)">
+                <span style="width:40px;height:40px;border-radius:14px;background:#fffefc;display:block"></span>
+                <span style="font-size:14px;font-weight:600;color:#0f3e17;line-height:1.35">{{ c.title }}</span>
+                <span style="font-size:12px;line-height:1.5;color:#222222">{{ c.desc }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="max-width:768px;margin:0 auto;display:flex;flex-direction:column;gap:21px">
+        <sc-for list="{{ messages }}" as="m" hint-placeholder-count="0">
+          <div style="display:flex;flex-direction:column;animation:cvFadeUp .6s cubic-bezier(.22,.61,.36,1) both">
+            <sc-if value="{{ m.isUser }}">
+              <div style="align-self:flex-end;max-width:80%;background:#0f3e17;color:#fffefc;font-size:18px;line-height:1.5;padding:14px 21px;border-radius:14px">{{ m.text }}</div>
+            </sc-if>
+            <sc-if value="{{ m.isBot }}">
+              <div style="background:#fffefc;border:1px solid #efeeeb;border-radius:14px;padding:28px">
+                <div style="font-size:18px;line-height:1.55;color:#222222;white-space:pre-wrap">{{ m.text }}</div>
+                <sc-if value="{{ m.citation }}">
+                  <div style="margin-top:18px;padding-top:14px;border-top:1px solid #efeeeb;display:flex;flex-wrap:wrap;gap:9px;align-items:center">
+                    <span style="background:#e1f4df;color:#0f3e17;font-size:11px;padding:7px 14px;border-radius:999px">{{ m.citation }}</span>
+                    <a href="#docs" style="font-size:11px;color:#0f3e17">Open the document</a>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ m.plans }}">
+                  <div style="display:flex;flex-wrap:wrap;gap:9px;margin-top:18px">
+                    <sc-for list="{{ m.plans }}" as="p" hint-placeholder-count="3">
+                      <button type="button" onClick="{{ p.pick }}" style="background:#e1f4df;border:none;border-radius:999px;padding:11px 18px;font-family:Inter,sans-serif;font-size:14px;color:#0f3e17;cursor:pointer;min-height:44px">{{ p.name }}</button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ m.refused }}">
+                  <div style="margin-top:18px;background:#e1f4df;border-radius:14px;padding:21px">
+                    <div style="font-size:14px;font-weight:600;color:#0f3e17;margin-bottom:9px">Request a callback</div>
+                    <div style="font-size:14px;line-height:1.5;color:#222222">Pre-filled with your question, your plan context and the documents already searched.</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:9px;margin-top:14px">
+                      <span style="background:#0f3e17;color:#fffefc;font-size:12px;padding:9px 18px;border-radius:999px">Call me back</span>
+                      <span style="background:#fffefc;color:#0f3e17;font-size:12px;padding:9px 18px;border-radius:999px">1-888-778-1478 · TTY 711</span>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ m.showFeedback }}">
+                  <div style="display:flex;align-items:center;gap:11px;margin-top:18px;font-size:12px;color:#222222">
+                    <span>Did this answer your question?</span>
+                    <span style="background:#e1f4df;color:#0f3e17;padding:7px 14px;border-radius:999px">Yes</span>
+                    <span style="background:#e1f4df;color:#0f3e17;padding:7px 14px;border-radius:999px">No</span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="flex:none;padding:0 24px 21px">
+      <div style="max-width:896px;margin:0 auto">
+        <sc-if value="{{ isVoice }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:14px;background:#e1f4df;border-radius:14px;padding:28px">
+            <button type="button" onClick="{{ toggleListening }}" style="width:112px;height:112px;border-radius:999px;border:none;background:#0f3e17;color:#fffefc;cursor:pointer;font-family:Inter,sans-serif;font-size:14px">{{ micLabel }}</button>
+            <div style="font-size:18px;line-height:1.4;color:#222222;text-align:center;min-height:25px">{{ voiceStatus }}</div>
+            <div style="font-size:12px;color:#222222">Hold to talk, or tap to start and tap to stop. The transcript is editable before it sends.</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isText }}" hint-placeholder-val="{{ true }}">
+          <form onSubmit="{{ submit }}" style="display:flex;align-items:center;gap:11px;background:#fffefc;border:1px solid #efeeeb;border-radius:999px;padding:9px 9px 9px 24px">
+            <input value="{{ draft }}" onChange="{{ onDraft }}" placeholder="Ask about coverage, costs, drugs or providers" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font-family:Inter,sans-serif;font-size:18px;color:#222222;padding:12px 0">
+            <button type="button" aria-label="Attach" style="width:44px;height:44px;border-radius:999px;border:1px solid #efeeeb;background:transparent;color:#0f3e17;cursor:pointer;font-size:16px">＋</button>
+            <button type="button" onClick="{{ toggleMode }}" aria-label="Switch to voice" style="width:44px;height:44px;border-radius:999px;border:1px solid #efeeeb;background:transparent;color:#0f3e17;cursor:pointer;font-size:16px">◉</button>
+            <button type="submit" aria-label="Send" style="width:44px;height:44px;border-radius:999px;border:none;background:#0f3e17;color:#fffefc;cursor:pointer;font-size:16px" style-hover="background:#0c2f10">↑</button>
+          </form>
+        </sc-if>
+        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:9px;font-size:11px;color:#222222;margin-top:14px;text-align:center">
+          <span>An assistant, not a clinician. It answers only from plan documents and never decides coverage.</span>
+          <a href="tel:18887781478">Talk to a person</a>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;text&quot;,&quot;voice&quot;],&quot;default&quot;:&quot;text&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showSidebar&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;promptCardColumns&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:3,&quot;min&quot;:2,&quot;max&quot;:3,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { mode: p.defaultMode === "voice" ? "voice" : "text", draft: "", listening: false, plan: null, messages: [] };
+  }
+
+  bank = [
+    { title: "Is a hearing aid covered?", desc: "What the plan pays, and how often", bg: "#e1f4df",
+      a: "Yes. Your plan covers one hearing aid per ear every three years, with a $699 copay per aid. Fitting and evaluation visits are covered at no cost to you.",
+      c: "Evidence of Coverage 2026 · H5141-001 · Ch. 4, Medical Benefits Chart" },
+    { title: "What is my specialist copay?", desc: "In-network cost sharing per visit", bg: "#cfe7d3", needsPlan: true,
+      a: "In network, a specialist visit is $40 per visit. No referral is required for in-network specialists.",
+      c: "Summary of Benefits 2026 · H5141-001 · p. 7" },
+    { title: "Is my drug on the formulary?", desc: "Listing and tier for a named drug", bg: "#b1dbb8",
+      a: "Atorvastatin 20mg is on the 2026 formulary at Tier 1. A 30-day supply at a preferred pharmacy is $0 after the deductible is met.",
+      c: "Formulary 2026 · H5141-001 · Tier chart, p. 14" },
+    { title: "Find a dentist near me", desc: "In-network providers by county", bg: "#b6ced5",
+      a: "The 2026 directory lists 46 in-network general dentists in Hudson County, New Jersey. Tell me your town and I will read back the closest ones with addresses.",
+      c: "Provider Directory 2026 · H5141-001 · §Dental, New Jersey" },
+    { title: "What is my OTC allowance?", desc: "Quarterly amount and what it covers", bg: "#e1f4df",
+      a: "The plan gives a $75 quarterly over-the-counter allowance, usable on approved items through the OTC catalog. Unused amounts do not roll over.",
+      c: "Supplemental Benefits 2026 · H5141-001 · OTC catalog, p. 2" },
+    { title: "How do I appeal a denial?", desc: "The process, timelines and forms", bg: "#cfe7d3",
+      a: "You have 60 days from the date on the denial notice to file a Level 1 appeal, in writing or by phone. The plan must answer a standard appeal within 30 days, or 72 hours if it is expedited.\n\nI can explain the process, but I cannot comment on any specific denial.",
+      c: "Evidence of Coverage 2026 · H5141-001 · Ch. 9, §5" }
+  ];
+
+  refusal = {
+    a: "I cannot evaluate a denial, decide coverage or give clinical advice — those belong to a person at the plan.\n\nWhat I did find: your appeal rights and the 60-day filing window in the Evidence of Coverage.",
+    refuse: true
+  };
+
+  stick = () => {
+    requestAnimationFrame(() => {
+      const el = document.querySelector('[data-scroller]');
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  };
+
+  push = (m) => this.setState(s => ({ messages: s.messages.concat([m]) }), this.stick);
+
+  answer = (text) => {
+    const hit = this.bank.find(b => b.title.toLowerCase() === text.toLowerCase());
+    const bad = /denial|should i|switch to|stop taking|is it right/i.test(text);
+    this.push({ role: "user", text });
+    setTimeout(() => {
+      if (!hit && bad) { this.push({ role: "bot", text: this.refusal.a, refused: true }); return; }
+      if (!hit) { this.push({ role: "bot", text: "I could not find that in the 2026 plan documents with enough confidence to answer. Rather than guess, here is the human path.", refused: true }); return; }
+      if (hit.needsPlan && !this.state.plan) {
+        this.push({ role: "bot", text: "Before I answer a cost question I need to know which plan you are on.", pending: hit, plans: ["Clover Choice PPO", "Clover Value PPO", "Clover Simple HMO"] });
+        return;
+      }
+      this.push({ role: "bot", text: hit.a, citation: hit.c, feedback: true });
+    }, 240);
+  };
+
+  renderVals() {
+    const s = this.state;
+    return {
+      isEmpty: s.messages.length === 0,
+      showSidebar: this.props.showSidebar !== false,
+      cardCols: "repeat(" + (this.props.promptCardColumns ?? 3) + ",minmax(0,1fr))",
+      isVoice: s.mode === "voice",
+      isText: s.mode === "text",
+      modeLabel: s.mode === "voice" ? "Switch to typing" : "Switch to voice",
+      micLabel: s.listening ? "Listening" : "Hold or tap",
+      voiceStatus: s.listening ? "“what is my copay for a specialist…”" : "Answers are spoken and written at the same time.",
+      toggleListening: () => this.setState(p => ({ listening: !p.listening })),
+      toggleMode: () => this.setState(p => ({ mode: p.mode === "text" ? "voice" : "text" })),
+      draft: s.draft,
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      submit: (e) => { e.preventDefault(); const t = this.state.draft.trim(); if (!t) return; this.setState({ draft: "" }); this.answer(t); },
+      cards: this.bank.map(b => ({ title: b.title, desc: b.desc, bg: b.bg, ask: () => this.answer(b.title) })),
+      messages: s.messages.map((m, i) => ({
+        key: i,
+        isUser: m.role === "user",
+        isBot: m.role === "bot",
+        text: m.text,
+        citation: m.citation || null,
+        refused: !!m.refused,
+        showFeedback: !!m.feedback,
+        plans: m.plans ? m.plans.map(name => ({
+          name,
+          pick: () => { this.setState({ plan: name }); const h = m.pending; this.push({ role: "user", text: name }); setTimeout(() => this.push({ role: "bot", text: h.a, citation: h.c, feedback: true }), 200); }
+        })) : null
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

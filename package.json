@@ -1,0 +1,43 @@
+{
+  "name": "clovbot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "typecheck": "tsc --noEmit",
+    "corpus:discover": "node --experimental-strip-types src/corpus/cli.ts discover",
+    "corpus:fetch": "node --experimental-strip-types src/corpus/cli.ts fetch",
+    "corpus:convert": "node --experimental-strip-types src/corpus/cli.ts convert",
+    "corpus:report": "node --experimental-strip-types src/corpus/cli.ts report",
+    "ingest": "node --env-file=.env --experimental-strip-types src/rag/cli.ts ingest",
+    "ask": "node --env-file=.env --experimental-strip-types src/rag/cli.ts ask",
+    "eval": "node --env-file=.env --experimental-strip-types eval/harness/run.ts",
+    "eval:calibrate": "node --env-file=.env --experimental-strip-types eval/harness/calibrate.ts",
+    "api": "node --env-file=.env --experimental-strip-types src/server.ts",
+    "web": "vite",
+    "build:web": "vite build",
+    "reproduce": "node --env-file=.env --experimental-strip-types src/ops.ts reproduce",
+    "insights": "node --env-file=.env --experimental-strip-types src/ops.ts insights",
+    "deploy:api": "./scripts/deploy-api.sh"
+  },
+  "devDependencies": {
+    "@types/node": "26.5.0",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.2.0",
+    "pg": "8.23.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-icons": "5.7.0"
+  }
+}

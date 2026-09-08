@@ -1,0 +1,34 @@
+{
+  "ranAt": "2026-09-08T12:48:21.644Z",
+  "note": "Unthrottled, uncached. Stage 2 was skipped, so these are the first voice measurements taken.",
+  "targets": {
+    "firstAudioMs": 1500,
+    "completeMs": 4000
+  },
+  "runs": [
+    {
+      "question": "what is my specialist copay",
+      "answerMs": 2732,
+      "firstAudioMs": 3579,
+      "totalMs": 3579,
+      "provider": "elevenlabs",
+      "characters": 299
+    },
+    {
+      "question": "what do I pay for an emergency room visit",
+      "answerMs": 2839,
+      "firstAudioMs": 4140,
+      "totalMs": 4140,
+      "provider": "elevenlabs",
+      "characters": 553
+    },
+    {
+      "question": "do I need a referral to see a specialist",
+      "answerMs": 3009,
+      "firstAudioMs": 4007,
+      "totalMs": 4007,
+      "provider": "elevenlabs",
+      "characters": 400
+    }
+  ]
+}
