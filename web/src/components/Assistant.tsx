@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ask, type AskEvent, type CallbackDraft, type Citation, type Claim, type PlanOption } from "../api.ts";
+import { ask, sendFeedback, type AskEvent, type CallbackDraft, type Citation, type Claim, type PlanOption } from "../api.ts";
 import {
   IoCall, IoChatbubbleEllipses, IoClose, IoExpand, IoMic, IoMicOff,
   IoPlay, IoSend, IoStop, IoThumbsDown, IoThumbsUp, IoVolumeHigh, IoWarning,
@@ -32,6 +32,8 @@ interface Turn {
   unanswered: string[];
   outcome: "answered" | "refused" | "upstream_failure" | "pending";
   feedback: "yes" | "no" | null;
+  /** Server id, so a feedback response can name the turn it answers. FR-27. */
+  turnId: string | null;
 }
 
 interface Props {
@@ -76,7 +78,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
       setStatus("Searching your plan documents");
       setTurns((previous) => [
         ...previous,
-        { id, question: trimmed, answer: "", claims: [], citations: [], citationNumbers: {}, unanswered: [], outcome: "pending", feedback: null },
+        { id, question: trimmed, answer: "", claims: [], citations: [], citationNumbers: {}, unanswered: [], outcome: "pending", feedback: null, turnId: null },
       ]);
 
       const apply = (event: AskEvent): void => {
@@ -88,6 +90,12 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
         }
         if (event.type === "progress") {
           setStatus("Writing your answer");
+          return;
+        }
+        if (event.type === "turn") {
+          setTurns((previous) =>
+            previous.map((turn) => (turn.id === id ? { ...turn, turnId: event.turnId } : turn)),
+          );
           return;
         }
         if (event.type === "rate_limited") {
@@ -281,13 +289,15 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
                           type="button"
                           className="button button--quiet"
                           aria-pressed={turn.feedback === value}
-                          onClick={() =>
+                          onClick={() => {
                             setTurns((previous) =>
                               previous.map((item) =>
                                 item.id === turn.id ? { ...item, feedback: value } : item,
                               ),
-                            )
-                          }
+                            );
+                            // Recorded, not just shown. FR-27.
+                            if (turn.turnId !== null) void sendFeedback(turn.turnId, value === "yes");
+                          }}
                         >
                           {value === "yes" ? <IoThumbsUp aria-hidden="true" /> : <IoThumbsDown aria-hidden="true" />}
                           {value === "yes" ? "Yes" : "No"}

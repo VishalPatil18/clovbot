@@ -9,6 +9,7 @@ import {
   checkRate,
   connect,
   consecutiveRefusals,
+  recordFeedback,
   writeCallback,
   writeTurn,
 } from "./rag/store.ts";
@@ -65,6 +66,11 @@ const server = createServer((req, res) => {
   if (req.method === "GET" && req.url === "/api/plans") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ plans: PLANS, planYear: PLAN_YEAR, contractId: CONTRACT_ID }));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/feedback") {
+    collect(req, (body) => void handleFeedback(body, res));
     return;
   }
 
@@ -131,6 +137,39 @@ function collectBinary(
   req.on("end", () =>
     done(new Uint8Array(Buffer.concat(parts)), String(req.headers["content-type"] ?? "audio/webm")),
   );
+}
+
+/** FR-27. Responses are logged against the turn they answer. */
+async function handleFeedback(body: string, res: ServerResponse): Promise<void> {
+  let turnId = "";
+  let resolved: boolean | null = null;
+  try {
+    const parsed = JSON.parse(body) as { turnId?: unknown; resolved?: unknown };
+    turnId = typeof parsed.turnId === "string" ? parsed.turnId : "";
+    resolved = typeof parsed.resolved === "boolean" ? parsed.resolved : null;
+  } catch {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "malformed request" }));
+    return;
+  }
+  if (turnId.length === 0 || resolved === null) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "turnId and resolved are required" }));
+    return;
+  }
+
+  const client = connect();
+  try {
+    await client.connect();
+    const recorded = await recordFeedback(client, turnId, resolved);
+    res.writeHead(recorded ? 200 : 404, { "content-type": "application/json" });
+    res.end(JSON.stringify(recorded ? { recorded: true } : { error: "no such turn" }));
+  } catch (error) {
+    res.writeHead(503, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+  } finally {
+    await client.end().catch(() => {});
+  }
 }
 
 /** FR-19, FR-20. Synthesis runs here so the provider keys stay off the page. */
@@ -370,7 +409,7 @@ async function handleAsk(
       latencyMs: turn.latencyMs,
     });
 
-    await writeTurn(client, {
+    const turnId = await writeTurn(client, {
       question: turn.question,
       planContext: `${CONTRACT_ID}-${planId ?? PLANS[0].id}`,
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
@@ -387,6 +426,8 @@ async function handleAsk(
     });
 
     // FR-23. After two consecutive refusals, stop offering to try again.
+    send(res, { type: "turn", turnId });
+
     const refusals = await consecutiveRefusals(client, session);
     if (shouldPresentCallbackForm({ consecutiveRefusals: refusals })) {
       send(res, {

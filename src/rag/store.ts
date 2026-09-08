@@ -161,6 +161,73 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
   return String(rows[0]?.["id"]);
 }
 
+/** FR-27. Recorded against the turn it answers. */
+export async function recordFeedback(
+  client: pg.Client,
+  turnId: string,
+  resolved: boolean,
+): Promise<boolean> {
+  const { rowCount } = await client.query(
+    "update turns set member_feedback = $2 where id = $1",
+    [turnId, resolved ? "resolved" : "not_resolved"],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export interface RetrievedTurn {
+  id: string;
+  question: string;
+  chunkIds: string[];
+  corpusSnapshotId: string;
+  outcome: string;
+  planContext: string | null;
+}
+
+/** NFR-OPS-02. Every answer is reproducible from its logged chunk ids. */
+export async function readTurn(client: pg.Client, turnId: string): Promise<RetrievedTurn | null> {
+  const { rows } = await client.query(
+    `select id, question, chunk_ids, corpus_snapshot_id, outcome, plan_context
+       from turns where id = $1`,
+    [turnId],
+  );
+  const row = rows[0];
+  if (row === undefined) return null;
+  return {
+    id: String(row["id"]),
+    question: String(row["question"]),
+    chunkIds: (row["chunk_ids"] as string[]) ?? [],
+    corpusSnapshotId: String(row["corpus_snapshot_id"]),
+    outcome: String(row["outcome"]),
+    planContext: row["plan_context"] === null ? null : String(row["plan_context"]),
+  };
+}
+
+/** The chunks exactly as they were retrieved, by id and snapshot. NFR-OPS-02. */
+export async function readChunksByIds(
+  client: pg.Client,
+  chunkIds: string[],
+  snapshotId: string,
+): Promise<{ id: string; documentId: string; section: string; content: string }[]> {
+  const { rows } = await client.query(
+    `select id, document_id, section, content
+       from chunks where id = any($1::text[]) and snapshot_id = $2`,
+    [chunkIds, snapshotId],
+  );
+  const byId = new Map(
+    rows.map((row: Record<string, unknown>) => [
+      String(row["id"]),
+      {
+        id: String(row["id"]),
+        documentId: String(row["document_id"]),
+        section: String(row["section"]),
+        content: String(row["content"]),
+      },
+    ]),
+  );
+  // Returned in the order they were retrieved, not the order Postgres found them.
+  return chunkIds.map((id) => byId.get(id)).filter((chunk) => chunk !== undefined);
+}
+
 /**
  * Consecutive refusals for a session, newest first. Read from the turn log so
  * the loop breaker survives a restart rather than living in server memory. FR-23.

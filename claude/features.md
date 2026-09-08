@@ -710,3 +710,70 @@ Both budgets amended by D-046. The second was not missed but unachievable: speec
 1. **The cache looked up only the primary provider.** After a fall-through it wrote under `fishaudio` and read `elevenlabs`, a permanent miss that also mislabelled the provider. Now checks the chain in order.
 2. **A TypeScript parameter property crashed the server on boot** while 343 tests passed, because Vitest transpiles and Node's strip-only loader does not. Nothing in the suite covers "does the process start".
 
+
+---
+
+## Feature: Deploy and release verification (Stage 10)
+
+| Field            | Value                 |
+| ---------------- | --------------------- |
+| Shipped          | 2026-09-08            |
+| Cycle            | 9                     |
+| Stage of plan.md | `plan-p1.md` Stage 10 |
+| Owner            | user + claude         |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Where the API runs, given Vercel cannot host it | Google Cloud, with credits available; one-command deploy plus CI |
+| 3 | Whether a secret scan is needed at all | Kept, but as a test rather than a new tool |
+| 4 | Instrumentation as a route or a command | Command line |
+| 5 | DNS for `clovbot.v-ai.org` | name.com, user owns it |
+| 6 | Real-device latency pass | User runs it from a template |
+
+Two defects found while scoping, not asked about: **FR-27 feedback recorded nothing** since Stage 7, and **`reproduceTurn` had been deleted** at Stage 4 while NFR-OPS-02 still depends on it.
+
+### Phase 2 - Architecting
+
+**Options considered:**
+
+1. **A container on Cloud Run**, Vercel proxying `/api`. No refactor; the reranker model loads once per instance.
+2. **Vercel functions.** Would need the snapshot id moved off disk, the audio cache moved to object storage, and a 2453ms model load accepted on every cold start.
+3. **Backend local only.** Fails the first acceptance criterion, since the deployed URL could not answer.
+
+**Chosen:** 1. The proxy is not cosmetic: the session cookie is `HttpOnly; SameSite=Lax`, so a cross-origin API would drop it and take rate limiting and the loop breaker with it.
+
+### Phase 3 - Product Specs
+
+- **UI:** unchanged, plus the feedback control now posting its answer.
+- **Operator surface:** `npm run insights` and `npm run reproduce -- <turn-id>`, both command line.
+- **DB schema:** `turns` gains `member_feedback` (`resolved` | `not_resolved`), plus indexes on outcome and refusal trigger.
+
+### Phase 4 - Tech Specs
+
+- **Container:** `node:26-slim`, source only. *Rejected:* baking the corpus, since chunks come from Postgres and only the snapshot id is needed at query time.
+- **Deployment:** Cloud Run via `gcloud run deploy --source .`, so Cloud Build builds remotely and no local Docker is required. *Rejected:* Vercel functions, per Phase 2.
+- **Secret scan:** a test over git-tracked files. *Rejected:* `gitleaks`, which would add a tool for something the existing gate already runs.
+- **Instrumentation:** command line. *Rejected:* a route, which would publish the member question log.
+
+### Phase 5 - Planning
+
+| Sub-stage | Goal | Acceptance |
+| --- | --- | --- |
+| 10a | Make the runtime host-agnostic | Snapshot id and audio path configurable |
+| 10b | FR-27 | The response is stored against its turn |
+| 10c | NFR-OPS-02 | A turn id rebuilds its exact retrieved context |
+| 10d | Instrumentation | Containment, refusal reasons, unanswered questions |
+| 10e | Secret scan | A planted key fails the build |
+| 10f | Deploy | One command, plus CI, plus written steps |
+
+### Phase 6 - Writing Code
+
+- **375 tests pass**, 12 of them the secret scan. The scan was verified by planting an ElevenLabs-shaped key and confirming it failed with the file named.
+- The container's runtime imports are `pg` and `@huggingface/transformers`, both production dependencies, so `npm ci --omit=dev` produces a working image.
+
+**Left for the user, with steps in `README.md`:** apply `migrations/004_release.sql`, run the Google Cloud setup, `npm run deploy:api`, put the Cloud Run URL in `vercel.json`, add the CNAME at name.com, and fill `eval/results/real-device-latency.md` from a phone.
+
+**Not verified, and not claimed:** the deployed URL answering, the throttled latency numbers, and the accessibility criteria D-040 deferred. All three need the deploy and a real device.
+

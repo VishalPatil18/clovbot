@@ -40,6 +40,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Fixed
 
+- **"Did this answer your question?" now records the answer.** The control had been showing your choice without saving it anywhere since it was added. Regression covered by `migrations/004_release.sql` and the feedback endpoint.
 - **Spoken answers no longer read the source list aloud.** The assistant was reading the citation markers and every "Where this comes from" line, so a 191-character answer took 400 characters to say. Regression test: `tests/unit/spoken-answer.test.ts`.
 
 - _<bug fixes; populated by `/spec-bug`>_

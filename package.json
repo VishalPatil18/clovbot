@@ -18,7 +18,10 @@
     "eval:calibrate": "node --env-file=.env --experimental-strip-types eval/harness/calibrate.ts",
     "api": "node --env-file=.env --experimental-strip-types src/server.ts",
     "web": "vite",
-    "build:web": "vite build"
+    "build:web": "vite build",
+    "reproduce": "node --env-file=.env --experimental-strip-types src/ops.ts reproduce",
+    "insights": "node --env-file=.env --experimental-strip-types src/ops.ts insights",
+    "deploy:api": "./scripts/deploy-api.sh"
   },
   "devDependencies": {
     "@types/node": "26.5.0",

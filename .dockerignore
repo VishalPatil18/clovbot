@@ -1,0 +1,14 @@
+node_modules
+data
+dist-web
+web
+eval/results
+.git
+.env
+.env.*
+!.env.example
+tests
+scripts
+docs
+claude
+design

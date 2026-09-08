@@ -33,6 +33,7 @@ export type AskEvent =
       claimCitationNumbers?: Record<string, number>;
       latencyMs: Record<string, number>;
     }
+  | { type: "turn"; turnId: string }
   | { type: "rate_limited"; message: string }
   | {
       type: "offer_callback";
@@ -64,6 +65,20 @@ export async function requestCallback(
   return response.ok
     ? { ok: true, message: "Your request is saved. A person will pick this up." }
     : { ok: false, message: body.error ?? "The request could not be saved." };
+}
+
+/** FR-27. Recorded against the turn, so a "no" can be traced to its answer. */
+export async function sendFeedback(turnId: string, resolved: boolean): Promise<boolean> {
+  try {
+    const response = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ turnId, resolved }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 /** Reads the server-sent stream one event at a time. */

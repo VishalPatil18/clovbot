@@ -125,3 +125,15 @@ _<How this concept will apply to future work in this project.>_
 **Skipping a spike defers the cost, it does not remove it.** Stage 2 existed to measure the voice budgets at hour six with a throwaway page. Skipping it meant the numbers arrived at Stage 9 with a voice loop already built on top of them. Nothing needed rebuilding, but that was luck: had first audio come in at fifteen seconds rather than four, the loop would have been the wrong shape and the discovery would have come after the work rather than before it.
 
 **A cache key must include everything that changes the artifact.** Keying audio on the text alone would have served yesterday's voice after a provider fell through. Keying on text, voice and provider was right, but the lookup then checked only the primary provider, so every recording made while degraded was invisible. The key and the lookup have to agree, and testing one does not test the other.
+
+## Stage 10 - what preparing a release taught
+
+**A control that looks finished can be wired to nothing.** The "Did this answer your question?" buttons were built in Stage 7, styled, given `aria-pressed`, and tested for their accessible name. They set React state and stopped there. Three stages passed before a Stage 10 acceptance criterion asked whether responses were recorded and the answer turned out to be no. Everything about it was right except the part that mattered, and nothing in the suite asked where the value went.
+
+**Deleting an abstraction deletes what depended on it.** `reproduceTurn` went with `pipeline.ts` at Stage 4, correctly, because that module encoded a data model that no longer existed. But NFR-OPS-02 depended on the capability rather than the module, and nothing connected the two. A requirement with no test is a requirement that can be removed by accident.
+
+**The deployment target is a design input, not a final step.** Two assumptions were invisible until a container was on the table: that a gitignored directory would exist at runtime, and that the filesystem was the developer's. Both were two-line fixes because the coupling happened to be shallow. Had the corpus been read from disk per request rather than from Postgres, Stage 10 would have been a rewrite.
+
+**Ask what a gate is for before adding a tool for it.** The secret scan looked like a dependency decision. It is a question about what must never be in the repository, and the existing test suite already runs on every push. Writing it as a test kept the gate and skipped the tool, and it was worth proving by planting a key and watching it fail rather than trusting that the patterns were right.
+
+**Write down what has not been verified, in the same place as what has.** This stage produces a deployment that nobody has run, latency numbers nobody has taken on a phone, and accessibility criteria deferred two stages ago. Recording those beside the passing tests is the difference between a release and a claim about one.

@@ -7,8 +7,8 @@
 | Field                | Value                          |
 | -------------------- | ------------------------------ |
 | Snapshot date        | 2026-09-08                     |
-| Current stage        | P1 Stage 9 complete. Stage 2 skipped. Next is Stage 10. |
-| Last feature shipped | Voice: talk to it, hear a cited answer, read the same text. |
+| Current stage        | P1 Stage 10 built. Deploy steps are the user's to run. |
+| Last feature shipped | Release tooling: deploy, instrumentation, reproduction. |
 
 ---
 
@@ -52,7 +52,10 @@
 - **Chat surface.** React 19 and Vite in `web/`, a Node API in `src/server.ts` streaming server-sent events. Host page with launcher, a 40% viewport panel that is full width on mobile, and a `/assistant` full-page route sharing one component.
 - **Lazy plan context works both ways, verified live.** "how do I file an appeal" answers without asking. "what is my specialist copay" returns the plan chips first, then answers $10 for plan 004. This is what the mock README calls the subtlest thing to get right.
 - **Type scale is two-tier** (D-042). The reading surface, question and answer, sits at 18px/1.6 with a 68ch measure; interface chrome uses the DESIGN.md scale. The composer input stays at 18px because iOS zooms fields below 16px, and the citation sits at 14px rather than the mock's 11px chip.
-- **Tests.** **345 passing, zero failing.**
+- **Deployment.** `npm run deploy:api` deploys the API to Cloud Run in one command, and `.github/workflows/deploy-api.yml` does the same on a push to `main` after tests pass. Vercel serves the static build at `clovbot.v-ai.org` and proxies `/api` to Cloud Run, which keeps the session cookie first-party. Steps are in `README.md`.
+- **Operator tools.** `npm run insights` reports containment, refusal reasons, top unanswered questions and feedback. `npm run reproduce -- <turn-id>` rebuilds the exact retrieved context behind a past answer, per NFR-OPS-02. Both are command line only, because the turn log holds member questions.
+- **Secret scan.** `tests/unit/no-secrets.test.ts` scans every git-tracked file for credential shapes and runs in the existing CI gate. Verified by planting a key-shaped string and watching it fail.
+- **Tests.** **375 passing, zero failing.**
 
 **Known verification gap, the largest in the project.** Five of Stage 7's eleven acceptance criteria need browser tooling that was approved but deferred to P3 (D-040): the axe scan, the keyboard walk, computed-style focus and target checks, 200% reflow, and the throttled Lighthouse run. The surface is built to WCAG 2.2 AA and guarded by 22 static assertions, but conformance is **asserted, not tested**. Also unverified: contrast ratios, screen-reader reading order, keyboard traps.
 
@@ -75,9 +78,10 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 
 ## 4. What's next
 
-1. **Stage 10** - deploy, instrument, verify the release. The last P1 stage.
-2. **Accessibility verification** is the largest outstanding risk. A single browser-tooling session at P3 closes five acceptance criteria at once.
-3. **Nothing is measured under the NFR-PERF-05 throttled profile.** Every latency figure recorded so far is unthrottled. Stage 10 owns that, and the numbers will be worse.
+1. **Run the deployment.** `migrations/004_release.sql` is not applied yet, and FR-27 feedback does not record until it is. Then Google Cloud setup, `npm run deploy:api`, the Cloud Run URL into `vercel.json`, and the CNAME at name.com.
+2. **Nothing is measured under the NFR-PERF-05 throttled profile.** Every figure so far is unthrottled and on a laptop. `eval/results/real-device-latency.md` is the template to fill from a phone.
+3. **Accessibility verification** remains the largest outstanding risk. A single browser-tooling session at P3 closes five acceptance criteria at once.
+4. **Spanish** is specified as P3 Stage 4, with the Spanish corpus already confirmed available in the catalog.
 3. **Two register variants still refuse.** A-03 and A-18 score 0.0006 and 0.0002, below the 0.001 floor. The floor cannot separate them from nonsense, which is the cost D-038 records rather than hides.
 4. **No screen-reader pass has been done.** Stage 7's eleventh criterion, and the one no tooling replaces.
 5. **ADV-01 refuses rather than answering.** The injection attempt is declined outright, which is safe but not what the golden case expects.
@@ -266,3 +270,17 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 - **Skipping Stage 2 cost what the plan said it would.** These numbers were available at hour 6 for the price of a throwaway page and arrived at Stage 9 with the loop already built on them. Nothing needed rebuilding, which was luck.
 
 **Open:** nothing measured under the throttled profile; accessibility verification deferred; ElevenLabs key is scoped without quota read, so the free-tier ceiling is unknown.
+
+## 2026-09-08 - Stage 10: release tooling
+
+**Did:** Built everything Stage 10 needs that is not a manual step: container, one-command deploy, CI deploy, secret scan, instrumentation, answer reproduction, and the FR-27 feedback path that had never been wired.
+
+**Files:** created `Dockerfile`, `.dockerignore`, `vercel.json`, `scripts/deploy-api.sh`, `.github/workflows/deploy-api.yml`, `src/ops.ts`, `migrations/004_release.sql`, `tests/unit/no-secrets.test.ts`, `eval/results/real-device-latency.md`. Extended `src/rag/store.ts`, `src/server.ts`, the browser client, and `README.md`.
+
+**What building it surfaced:**
+- **FR-27 recorded nothing.** The "Did this answer your question?" control had been React state since Stage 7: never sent, never stored, and a Stage 10 acceptance criterion depends on it. Three stages passed with the control looking finished.
+- **`reproduceTurn` had been deleted at Stage 4** along with `pipeline.ts`, and NFR-OPS-02 depends on it. Rebuilt against the turn log rather than the removed abstraction, and it now reports a chunk that is no longer in its snapshot as a finding rather than skipping it.
+- **The deployment target changed what the code could assume.** `latestSnapshotId()` read a gitignored directory on every request, and the audio cache wrote to a fixed path. Neither survives a container. Both are configurable now, which took two lines because the coupling was shallow.
+- **A secret scan did not need a new tool.** Scanning git-tracked files for credential shapes inside the existing suite satisfies NFR-SEC-03 and gates CI already. Proven by planting a key-shaped string and watching the test name the file.
+
+**Open:** migration 004 unapplied; the deploy itself; throttled real-device numbers.
