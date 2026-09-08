@@ -11,6 +11,12 @@ export interface Claim {
   citationIds: string[];
 }
 
+export interface Headline {
+  label: string;
+  amount: string;
+  citationIds: string[];
+}
+
 export interface PlanOption {
   contractId: string;
   id: string;
@@ -29,6 +35,9 @@ export type AskEvent =
       claims: Claim[];
       unanswered: string[];
       refusal: { trigger: string; explanation: string } | null;
+      headline: Headline | null;
+      /** Non-null once the calendar has passed the corpus plan year. FR-P2-17. */
+      staleness: string | null;
       citations: Citation[];
       /** Cited chunk id to display number, including ids merged onto one source. */
       claimCitationNumbers?: Record<string, number>;

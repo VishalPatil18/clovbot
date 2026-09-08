@@ -81,17 +81,17 @@
 - **Scope in:** Answer card format - one-sentence direct answer, the amount in large type, source line beneath. Plan year and document version on every citation. Corpus ingestion date recorded and surfaced. Stale-document warning when the plan year rolls over.
 - **Scope out:** Appearance customization. That is P4.
 - **Acceptance criteria:**
-  - [ ] A cost answer renders the amount as the visually dominant element.
-  - [ ] Every citation displays document, plan year and section.
-  - [ ] A citation missing a plan year fails rendering rather than displaying incomplete, asserted by test.
-  - [ ] The corpus ingestion date is visible from the interface.
-  - [ ] With the system clock advanced past a plan-year boundary, a staleness warning appears.
-  - [ ] Card format degrades to readable prose when the answer is not a single amount.
-  - [ ] Accessibility scan stays clean on the new format, and the large amount still meets contrast requirements.
+  - [-] A cost answer renders the amount as the visually dominant element. **Not delivered (D-069):** filling the headline needs a system-prompt rule, and that rule measurably weakened the refusal rule - a pharmacy question D-036 says the corpus cannot answer began answering, and faithfulness fell to 0.989. Card markup and CSS ship dormant.
+  - [x] Every citation displays document, plan year and section. Already true since Stage 6; now asserted at the render layer too.
+  - [x] A citation missing a plan year fails rendering rather than displaying incomplete, asserted by test. Also asserted that the browser builds no label itself.
+  - [x] The corpus ingestion date is visible from the interface. Both dates recorded; the document date is served on `/api/plans`.
+  - [x] With the system clock advanced past a plan-year boundary, a staleness warning appears. Clock is a parameter, compared in UTC.
+  - [x] Card format degrades to readable prose when the answer is not a single amount. The degradation path is the shipped path.
+  - [x] Accessibility scan stays clean on the new format, and the large amount still meets contrast requirements. 12.10:1, computed.
 - **Test plan:** Snapshot tests on three answer shapes - single amount, multi-part, prose-only. Clock-manipulation test for staleness. Accessibility regression scan.
 - **Effort:** M
 - **Exit signal:** A copay answer reads as a card with the number prominent and its plan year visible.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [~] partial, 2026-09-08. Freshness, staleness and citation completeness delivered. The card is built but never populated: D-069 records the measurement that stopped it.
 
 ---
 
@@ -202,7 +202,7 @@
 
 - [x] Stage 1 - Second plan indexed
 - [x] Stage 2 - Structured lookup and router
-- [ ] Stage 3 - Answer card and freshness
+- [~] Stage 3 - Answer card and freshness (card not delivered, D-069)
 - [ ] Stage 4 - Session UX cluster
 - [ ] Stage 5 - Synthetic member records
 - [ ] Stage 6 - Email OTP authentication

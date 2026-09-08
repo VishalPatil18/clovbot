@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ask, sendFeedback, type AskEvent, type CallbackDraft, type Citation, type Claim, type PlanOption } from "../api.ts";
+import {
+  ask,
+  sendFeedback,
+  type AskEvent,
+  type CallbackDraft,
+  type Citation,
+  type Claim,
+  type Headline,
+  type PlanOption,
+} from "../api.ts";
 import {
   IoCall, IoChatbubbleEllipses, IoClose, IoExpand, IoMic, IoMicOff,
   IoPlay, IoSend, IoStop, IoThumbsDown, IoThumbsUp, IoVolumeHigh, IoWarning,
@@ -30,6 +39,8 @@ interface Turn {
   citations: Citation[];
   citationNumbers: Record<string, number>;
   unanswered: string[];
+  headline: Headline | null;
+  staleness: string | null;
   outcome: "answered" | "refused" | "upstream_failure" | "pending";
   feedback: "yes" | "no" | null;
   /** Server id, so a feedback response can name the turn it answers. FR-27. */
@@ -78,7 +89,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
       setStatus("Searching your plan documents");
       setTurns((previous) => [
         ...previous,
-        { id, question: trimmed, answer: "", claims: [], citations: [], citationNumbers: {}, unanswered: [], outcome: "pending", feedback: null, turnId: null },
+        { id, question: trimmed, answer: "", claims: [], citations: [], citationNumbers: {}, unanswered: [], headline: null, staleness: null, outcome: "pending", feedback: null, turnId: null },
       ]);
 
       const apply = (event: AskEvent): void => {
@@ -156,6 +167,8 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
                   citations: event.citations,
                   citationNumbers: event.claimCitationNumbers ?? {},
                   unanswered: event.unanswered,
+                  headline: event.headline,
+                  staleness: event.staleness,
                   outcome: event.outcome,
                 }
               : turn,
@@ -293,6 +306,8 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
                   citations={turn.citations}
                   citationNumbers={turn.citationNumbers}
                   unanswered={turn.unanswered}
+                  headline={turn.headline}
+                  staleness={turn.staleness}
                   fallback={turn.answer}
                 />
 

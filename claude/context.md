@@ -382,3 +382,27 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** provider search is not built and will not be (D-051). The router cannot match a misspelled drug name and falls through to prose. Two albuterol rows collapse on the primary key, identical in tier and requirements, differing only in which brand they are the generic of.
 
 **Next:** Stage 3, answer card and freshness.
+
+## 2026-09-08 - P2 Stage 3: freshness delivered, the answer card was not
+
+**Did:** Built everything Stage 3 asks for, measured that the last piece cost more than it was worth, and shipped without it on the user's call.
+
+**Files:** created `src/freshness.ts`, `migrations/007_corpus_snapshots.sql`, three test files. Changed `src/types.ts`, `src/answer.ts`, `src/rag/{payload,store,cli}.ts`, `src/server.ts`, the web client and CSS.
+
+**Delivered:** the `headline` field in the answer contract, validated and bound by cite-or-refuse; both corpus dates stored where the container can reach them; the staleness warning on every answer and in speech, compared in UTC; citation completeness asserted at the render layer, including that the browser builds no label itself; card markup and CSS at 40px, 12.10:1 contrast, shipping dormant.
+
+**Not delivered: FR-P2-13.** Filling the headline needs a system-prompt rule. Measured at temperature 0 against an identical index, it moved faithfulness 1.000 to 0.989, bucket A 37/40 to 36/40, and turned A-31 - a pharmacy question D-036 says the corpus cannot answer - from a refusal into an answer. Rewording the rule as display-only did not help. Only removing it did. D-069.
+
+**Then a second finding:** with the rule gone but the field still named in the declared JSON shape, A-22's faithfulness sat at 0.667 instead of 1.0 with retrieval unchanged. Removing the field from the shape returned `src/rag/payload.ts` byte-identical to Stage 2, and the final run reads faithfulness 1.000, bucket A 37/40, refusal 10.0%, router 1.000, four known failures. 479 tests pass.
+
+**What building it surfaced:**
+
+- **A prompt is a budget.** Seven rules became eight and the refusal rule got quieter. Nothing in the new rule mentioned refusing.
+- **A disclaimer is not an exemption.** Stating in the rule that it changed nothing about refusals did not stop it changing them.
+- **Naming an unused field is not free.** One token in the declared shape moved a faithfulness score.
+- **"Corpus ingestion date" is two dates.** Members mean the document fetch; the pipeline only knew the ingest, and incremental ingest makes that one misleading.
+- **`getFullYear` is local time**, so a year-boundary check would have moved with the container's timezone.
+
+**Open:** the answer card. The likely route if it is picked up is a second model call over the validated claims only, which cannot change answering behaviour by construction, at one extra call on cost answers. `srs-p2.md` still states FR-P2-13 as a requirement and has not been amended.
+
+**Next:** Stage 4, the session UX cluster.

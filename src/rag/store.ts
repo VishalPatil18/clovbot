@@ -212,6 +212,48 @@ export async function upsertDrugs(
   }
 }
 
+export interface CorpusFreshness {
+  snapshotId: string;
+  /** When Clover's documents were fetched. What a member is asking about. */
+  documentsFetchedAt: string;
+  /** When they were indexed. An operator concern. */
+  ingestedAt: string;
+  planYear: number;
+}
+
+export async function recordCorpusSnapshot(
+  client: pg.Client,
+  snapshot: { snapshotId: string; documentsFetchedAt: string; planYear: number },
+): Promise<void> {
+  await client.query(
+    `insert into corpus_snapshots (snapshot_id, documents_fetched_at, plan_year)
+     values ($1,$2,$3)
+     on conflict (snapshot_id) do update
+       set documents_fetched_at = excluded.documents_fetched_at,
+           ingested_at = now(),
+           plan_year = excluded.plan_year`,
+    [snapshot.snapshotId, snapshot.documentsFetchedAt, snapshot.planYear],
+  );
+}
+
+export async function readCorpusFreshness(
+  client: pg.Client,
+  snapshotId: string,
+): Promise<CorpusFreshness | null> {
+  const { rows } = await client.query(
+    "select snapshot_id, documents_fetched_at, ingested_at, plan_year from corpus_snapshots where snapshot_id = $1",
+    [snapshotId],
+  );
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (row === undefined) return null;
+  return {
+    snapshotId: String(row["snapshot_id"]),
+    documentsFetchedAt: new Date(String(row["documents_fetched_at"])).toISOString(),
+    ingestedAt: new Date(String(row["ingested_at"])).toISOString(),
+    planYear: Number(row["plan_year"]),
+  };
+}
+
 export interface TurnRecord {
   question: string;
   planContext: string;

@@ -122,6 +122,31 @@
 .turn__answer p { font-size: var(--text-message); line-height: var(--leading-message); margin: 0 0 var(--spacing-12); max-width: 68ch; }
 .turn__answer--refused, .turn__answer--upstream_failure { background: var(--color-slate-hush); padding: var(--spacing-16); border-radius: var(--radius-md); }
 
+/*
+ * The amount is the thing a member came for, so it is the dominant element on
+ * the card. Label first: a bare figure does not say copay, deductible or
+ * maximum. Forest ink on cream clears AA well past the large-text threshold.
+ * D-068.
+ */
+.headline { margin: 0 0 var(--spacing-16); }
+
+.headline__label {
+  margin: 0; font-size: var(--text-caption); font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-forest-ink);
+}
+
+.headline__amount {
+  margin: var(--spacing-4) 0 0; font-family: var(--font-display);
+  font-size: var(--text-heading); line-height: 1.05; letter-spacing: -0.4px;
+  color: var(--color-forest-ink);
+}
+
+/* Rides with the source block so it survives print, copy and speech. D-067. */
+.citations__staleness {
+  margin: 0 0 var(--spacing-8); font-size: var(--text-body);
+  line-height: 1.5; color: var(--color-charcoal);
+}
+
 .claim { position: relative; }
 
 /*

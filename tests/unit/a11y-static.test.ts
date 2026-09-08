@@ -314,3 +314,28 @@ describe("plan identity is never shown raw [D-055]", () => {
     expect(Number(height)).toBeGreaterThanOrEqual(MIN_TARGET_PX);
   });
 });
+
+describe("answer card [FR-P2-13, NFR-P2-06, D-068]", () => {
+  // The amount is the dominant element, so it must outrank the reading surface
+  // rather than merely differ from it.
+  it("sets the amount above the 18px reading surface", () => {
+    const amount = rule(".headline__amount");
+    expect(amount).toContain("var(--text-heading)");
+    expect(token("text-heading")).toBeGreaterThan(MIN_TEXT_PX);
+  });
+
+  it("labels the amount, so a bare figure is never shown alone", () => {
+    expect(markup).toContain("headline__label");
+    expect(rule(".headline__label").length).toBeGreaterThan(0);
+  });
+
+  it("keeps the citation at the reading size, not the mock's 11px", () => {
+    expect(rule(".citations__staleness")).toContain("var(--text-body)");
+    expect(token("text-body")).toBeGreaterThanOrEqual(14);
+  });
+
+  // Forest ink on cream paper. Large text needs 3:1, normal text 4.5:1.
+  it("renders the amount in the darkest ink on the page", () => {
+    expect(rule(".headline__amount")).toContain("var(--color-forest-ink)");
+  });
+});

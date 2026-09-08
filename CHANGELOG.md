@@ -17,6 +17,8 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Drug list and Clover information answers work under every plan rather than only the plans on one contract.
 - Drug tier answers now come from the drug list itself rather than from a search over its text, and cite the drug they read. Asking what tier a drug is on returns its tier, its therapeutic class and any prior-authorization, quantity or step-therapy limit.
 - Asking about a drug and a rule in one sentence answers both. "Is Eliquis covered and how do I appeal a denial" returns the tier from the drug list and the appeal process from the Evidence of Coverage, each with its own source.
+- Once the calendar passes the plan year the documents cover, every answer says so in plain words and tells you to call and check. The notice is read aloud with the answer too, since audio cannot be scrolled back to.
+- The date the plan documents were collected is now recorded and served alongside the plan list.
 
 ### Fixed
 

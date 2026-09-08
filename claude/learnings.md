@@ -175,3 +175,17 @@ _<How this concept will apply to future work in this project.>_
 **Reuse the contract, not just the code.** A drug row could have had its own answer format, its own citation renderer and its own validation. Projecting it into the shape a retrieved chunk already has meant cite-or-refuse, the structured payload and the citation numbering all applied to it without a line of new logic - and it made "structured answers carry citations in the same format" true by construction rather than by a second implementation that has to be kept in step.
 
 **A deterministic gate is only as good as its index.** Routing on drug names that are actually indexed makes tier-to-prose misrouting impossible for any drug we hold, which is a stronger guarantee than any accuracy figure. It also means the failure mode moved: a drug missing from the table, or a name spelled differently than the row, now falls through quietly. The confusion matrix measures a lookup, so a miss is a gap in the data rather than a model needing a better prompt.
+
+## P2 Stage 3 - what a prompt change cost
+
+**A system prompt is a budget, not a list.** Adding an eighth rule to seven diluted rule 4, the refusal rule. A pharmacy question the corpus deliberately cannot answer started being answered from adjacent prose, and faithfulness fell from 1.000 to 0.989. Nothing about the new rule mentioned refusing; it simply took up room. Any addition to a standing prompt has to be measured against the golden set, because the cost lands somewhere other than where the change was made.
+
+**Saying "this instruction changes nothing" does not make it so.** The rule was rewritten to state explicitly that it was display-only and altered nothing about what was answered or refused. The regression survived the rewrite. Only deleting the rule restored the behaviour. A model does not read a disclaimer as an exemption.
+
+**Even naming an unused field costs something.** With the instruction gone but the field still listed in the declared JSON shape, one case's faithfulness sat at 0.667 instead of 1.0 with retrieval byte-identical. The field was removed from the shape entirely, which returned the file to exactly what it had been. The cheapest way to be sure a prompt has no effect is for it to be unchanged.
+
+**Put the clock in the signature.** The staleness rule takes `now` as a parameter, so the plan-year boundary is five assertions rather than a date to wait for. It also surfaced that `getFullYear` is local time, which would have moved the boundary with wherever the container happened to run.
+
+**Two dates that sound like one.** "Corpus ingestion date" reads as a single fact and is two: when the documents were fetched, and when they were indexed. A member asking whether an answer is current means the first; the pipeline only knew the second. Incremental ingest makes the second actively misleading, since re-embedding a third of the index moves it to today while most of the corpus is older.
+
+**A feature can be finished and still not shippable.** The contract, the validation, the layout, the contrast and the degradation rule were all built and all pass. The one thing that fills them cost more than they were worth. Shipping the parts that hold and recording precisely why the last one does not is a better outcome than a card that is right about a number and wrong about a refusal.

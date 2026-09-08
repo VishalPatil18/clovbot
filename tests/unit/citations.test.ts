@@ -25,7 +25,7 @@ const PAYLOAD: AnswerPayload = {
     { text: "The out-of-network specialist copay is $20 per visit.", citationIds: ["a"] },
   ],
   unanswered: [],
-  refusal: null,
+  refusal: null, headline: null,
 };
 
 describe("citationLabel trimming", () => {
@@ -69,7 +69,7 @@ describe("numberCitations", () => {
     const payload: AnswerPayload = {
       claims: [{ text: "x", citationIds: ["ghost"] }],
       unanswered: [],
-      refusal: null,
+      refusal: null, headline: null,
     };
     expect(numberCitations(payload, CHUNKS)).toHaveLength(0);
   });
@@ -191,5 +191,42 @@ describe("contract-wide citations [D-056]", () => {
 
   it("still refuses a citation with no plan year", () => {
     expect(() => citationLabel({ ...wide, planYear: Number.NaN })).toThrow(/plan year/);
+  });
+});
+
+describe("incomplete citations never reach a member [FR-P2-15]", () => {
+  const complete = {
+    id: "x",
+    documentId: "H5141-004-2026-summary_of_benefits",
+    kind: "summary_of_benefits" as const,
+    contractId: "H5141",
+    planId: "004",
+    planYear: 2026,
+    section: "Doctor’s Office",
+    content: "",
+  };
+
+  it("renders document, plan year and section when all three are present", () => {
+    const label = citationLabel(complete);
+    expect(label).toContain("Summary of Benefits");
+    expect(label).toContain("2026");
+    expect(label).toContain("Doctor’s Office");
+  });
+
+  // Rendering an incomplete citation is worse than refusing: it looks sourced.
+  it("throws rather than rendering a citation with no plan year", () => {
+    expect(() => citationLabel({ ...complete, planYear: Number.NaN })).toThrow(/plan year/);
+  });
+
+  it("throws rather than rendering a citation with no contract", () => {
+    expect(() => citationLabel({ ...complete, contractId: "" })).toThrow(/contract/);
+  });
+
+  it("builds no label in the browser, so the server rule cannot be bypassed", () => {
+    const source = readFileSync("web/src/components/AnswerBody.tsx", "utf8");
+    // Comments explain the rule; only shipped code is asserted against.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toContain("citation.label");
+    expect(code).not.toMatch(/planYear/);
   });
 });

@@ -64,8 +64,21 @@ export interface Refusal {
 }
 
 /** FR-32. Claims carry their own citations, so an uncited claim cannot be represented. */
+/**
+ * The one number a cost answer is about, rendered as the dominant element. Cited
+ * like a claim, because the largest thing on the screen cannot be uncited. D-064.
+ */
+export interface Headline {
+  /** What the amount measures. "$10" alone does not say copay or deductible. */
+  label: string;
+  amount: string;
+  citationIds: string[];
+}
+
 export interface AnswerPayload {
   claims: Claim[];
+  /** Null when the answer is not a single amount, which is the prose path. D-065. */
+  headline: Headline | null;
   unanswered: string[];
   refusal: Refusal | null;
 }

@@ -1041,3 +1041,67 @@ Planned inline rather than by dispatching `spec-planner`: the four architectural
 **Not delivered, by decision:** provider search. D-051 narrowed D-007 because the directory is ten invented rows, and exact search over invented data produces a confident wrong answer about a member's own doctor. Provider questions keep the v1 refuse-and-route behaviour. Stage 2's first acceptance criterion in `plan-p2.md` is therefore **not met, deliberately**, and is marked as such rather than ticked.
 
 **Known limits:** the router cannot match a misspelled drug name; the fallback is prose search rather than a failure. Two rows collapse on the primary key - the same albuterol strength listed three times as the generic of three different brands, identical in tier and requirements.
+
+---
+
+## Feature: Answer card and freshness (P2 Stage 3)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-08, partially            |
+| Cycle            | 12                               |
+| Stage of plan.md | `plan-p2.md` Stage 3             |
+| Requirements     | `srs-p2.md` FR-P2-13 to FR-P2-17 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Where the amount comes from | Extend the answer contract with a cited headline (D-064) |
+| 2 | Which freshness date | Both: document date to members, ingest date to operators (D-066) |
+| 3 | What decides card versus prose | The headline's presence, one rule one source (D-065) |
+| 4 | Where the staleness warning appears | On every answer, with the citation block (D-067) |
+| 5 | Card layout and type scale | Label, amount at 40px, sentence, source (D-068) |
+| 6 | Where the document date is stored | A `corpus_snapshots` table (D-066) |
+| 7 | Staleness wording | Names both years, the consequence and the action (D-067) |
+
+### Phase 2 - Architecting
+
+Nothing in the system knew what "the amount" was: the payload returns claim sentences. Server- or client-side regex extraction was rejected because "there is no $0 deductible" yields `$0` and a two-amount sentence yields whichever comes first - a wrong number rendered at 40px is the most legible possible way to be wrong.
+
+### Phase 3 and 4 - Specs
+
+`AnswerPayload` gains `headline: { label, amount, citationIds } | null`, validated by the same hand-rolled parser that guards claims. `corpus_snapshots` holds both dates. `stalenessWarning(planYear, now)` takes the clock as a parameter so the boundary is tested rather than waited for. No new dependencies.
+
+### Phase 5 - Planning
+
+Contract, prompt, storage, API, web, verification. Planned inline; the forks were settled before sequencing began.
+
+### Phase 6 - Writing Code
+
+**Delivered and verified:**
+
+- **The contract field.** `headline` is validated like a claim: rejected without a citation, without a label, without an amount, and rejected outright on a refusal. A bare figure never renders, because "$10" alone does not say copay, deductible or maximum.
+- **Both corpus dates.** `migrations/007_corpus_snapshots.sql`, written at ingest, read at boot. The manifest that holds the document date lives under `data/`, gitignored and absent from the container - the 2026-09-08 outage class, avoided by storing it.
+- **Staleness.** Fires when the wall-clock year passes the corpus plan year, compared in **UTC**: the container runs UTC while members are in Eastern, and a local comparison would move the boundary with the deployment. Erring up to five hours early only tells a member to check sooner. Attached to the citation block and appended to the spoken answer, so it survives print, copy and speech.
+- **Citation completeness.** `citationLabel` throws rather than rendering a citation missing a plan year or contract, and a test asserts the browser builds no label itself, so the server rule cannot be bypassed.
+- **Card markup and CSS**, shipped dormant. Amount at `--text-heading` (40px) in forest ink on cream: **12.10:1**, past AA large-text (3:1) and normal-text (4.5:1).
+
+**Not delivered: FR-P2-13, the amount as the dominant element.** See D-069. Filling the headline needs an instruction in the system prompt, and the instruction is not free. Measured at temperature 0 against an identical index:
+
+| | Without | With the headline rule |
+| --- | --- | --- |
+| Faithfulness | 1.000 | 0.989 |
+| Bucket A | 37/40 | 36/40 |
+| A-22 faithfulness | 1.0 | 0.6 |
+| A-31, a pharmacy question D-036 says the corpus cannot answer | refused | **answered** |
+
+Seven standing rules became eight, and rule 4 is the refusal rule. Rewording it as display-only, explicitly stating it changes nothing about what is refused, did **not** help; only removing it did, isolated by changing that one line.
+
+**Then a second, smaller finding.** With the rule gone but the field still named in the declared JSON shape, A-22's faithfulness sat at 0.667 rather than 1.0, retrieval unchanged. Naming a field the model is never asked to fill still perturbs it. The field was removed from the shape, leaving `src/rag/payload.ts` byte-identical to Stage 2.
+
+**Recorded for every future prompt change:** adding to `SYSTEM` can weaken the rules already there. Measure against the golden set before keeping it.
+
+**Final verification, prompt byte-identical to Stage 2:** faithfulness **1.000**, structural **100%**, refusal **10.0%**, bucket A **37/40**, B **8/8**, C **10/10**, router **1.000** with zero structured misses. Failing set is the four known cases. A-22 back to 1.0. Written to `eval/results/2026-09-08T2050Z.json`. 479 tests pass.
+
+**Not covered by an automated test:** the plan asks for snapshot tests on three answer shapes. Two of the three - multi-part and prose-only - are the shipped path and are covered. The single-amount card cannot be snapshot-tested because nothing produces a headline, and there is still no component harness; that remains the deferred dependency decision from Stage 1.

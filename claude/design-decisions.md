@@ -2344,6 +2344,253 @@ Routing is a classification problem with a confusion matrix, and the 60 answer c
 
 ---
 
+## Decision D-064 - The headline amount is part of the answer contract
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | extends D-038 |
+
+### Context
+
+`FR-P2-13` requires the amount to be the visually dominant element of a cost answer. Nothing in the system knows what the amount is: the structured payload returns claim sentences such as "The specialist copay is $10", and the renderer receives prose.
+
+### Options considered
+
+1. Extend the payload with an optional headline the model fills, validated like every other field.
+2. Extract the first currency token from the leading claim on the server.
+3. Extract it in the browser.
+
+### Decision
+
+Option 1. `AnswerPayload` gains an optional `headline: { label, amount, citationIds }`, validated by the same hand-rolled parser that guards claims, and bound by cite-or-refuse exactly as a claim is.
+
+### Rationale
+
+Options 2 and 3 are a regular expression making a claim about money. "There is no $0 deductible" yields `$0`; "in-network $10, out-of-network $20" yields whichever comes first; an out-of-pocket maximum in the same sentence as a copay is indistinguishable. A wrong number rendered at 40px is the most legible possible way to be wrong, on the surface the product's trustworthiness rests on.
+
+The model already returns typed claims each carrying citation ids, and D-038 made an uncited claim structurally impossible rather than merely detectable. A headline is one more field on that contract, and it can be left empty, which is what makes the degradation rule in D-065 possible.
+
+### Consequences
+
+- The prompt gains an instruction and the validator a branch. An invalid headline fails the payload rather than rendering.
+- A headline without a citation is rejected, so the largest element on the screen cannot be uncited.
+- The model can decline to fill it, and a question with no single amount simply has none.
+
+---
+
+## Decision D-065 - The card appears only when the headline is filled
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-14` requires the card to degrade to readable prose when the answer is not a single amount. Something has to decide which shape an answer takes.
+
+### Options considered
+
+1. Card when the payload carries a headline; today's claim rendering otherwise.
+2. Card when exactly one claim contains exactly one amount.
+3. Card for cost-driver questions, decided from the question.
+
+### Decision
+
+Option 1. One rule, one source: the headline's presence.
+
+### Rationale
+
+Option 2 silently drops the card for "$10 in-network, $20 out-of-network", which is precisely the answer a member most wants a number from. Option 3 decides before the answer exists and fires the card on questions that turn out to have no amount.
+
+Degradation is then not a second layout but the absence of a first: a headline-less payload renders exactly as it does today, so the prose path is the one already tested by every existing case.
+
+### Consequences
+
+- Card coverage depends on the model filling the field, so the eval measures it rather than assuming it.
+- No client-side inference about answer shape.
+
+---
+
+## Decision D-066 - Two corpus dates, stored where the server can reach them
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-16` requires the corpus ingestion date to be visible from the interface. Two dates exist and mean different things: when Clover's documents were fetched, recorded in the snapshot manifest, and when they were indexed, recorded in `chunks.created_at`.
+
+The manifest lives under `data/`, which is gitignored and absent from the container. Reading it at query time is the assumption behind the 2026-09-08 production incident.
+
+### Options considered
+
+1. A `corpus_snapshots` table holding both dates, written at ingest and read at boot.
+2. `min` and `max` of `chunks.created_at`.
+3. An environment variable set at deploy.
+
+### Decision
+
+Option 1. Members see the document date; the ingest date stays in the operator tools.
+
+### Rationale
+
+A member asking whether an answer is current is asking about the documents, not about our pipeline. Option 2 cannot supply that date at all, and its ingest window is misleading besides: ingest is incremental, so after Stage 2 re-embedded 675 of 1,913 chunks the maximum reads as today while most of the corpus is older.
+
+Option 3 is a value that can drift from the corpus it describes, with nothing to detect the drift.
+
+Storing it follows the pattern D-060 set for drugs and D-055 set for the plan list: what the server needs at query time lives in the database, not on a disk the container does not have.
+
+### Consequences
+
+- A third migration in P2.
+- The date is as accurate as the last ingest, which is the correct coupling.
+
+---
+
+## Decision D-067 - The staleness warning rides on the answer, not on the chrome
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-17` requires a plain-language warning once the wall-clock year passes the corpus plan year.
+
+### Options considered
+
+1. On every answer, attached to the citation block.
+2. One persistent banner in the assistant header.
+3. Both.
+
+### Decision
+
+Option 1, with this copy:
+
+> These are your 2026 plan documents. It is now 2027, so your costs may have changed. Call to check before you rely on this.
+
+### Rationale
+
+A member reads one answer and may never scroll to a header. An answer that is printed, copied or read aloud carries its own warning only if the warning is part of it, and Stage 4 adds exactly those surfaces.
+
+The copy names both years so the member can see the gap rather than trust the word "stale", and it ends with what to do. "Plan year changed" was rejected as jargon.
+
+### Consequences
+
+- Repetition in a long transcript, accepted deliberately.
+- The warning travels into print, export and the spoken answer for free.
+
+---
+
+## Decision D-068 - Card layout: label, amount, sentence, source
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`claude/plan-p2.md` Stage 3 references the mock's bot message block and notes its citation chip is set at 11px, the smallest type on the screen, on the surface the product's trustworthiness rests on. D-042 already resolved that to 14px.
+
+### Options considered
+
+1. Label above, amount, then the sentence, then the source. Amount at `--text-heading`, 40px.
+2. Amount first at `--text-heading-lg`, 56px, label beneath.
+3. Sentence first with the amount pulled out into a side rail.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+The label first means the figure is never ambiguous on its own: "$10" alone does not say whether it is a copay, a deductible or a maximum, and a member glancing at a large number will read it as whichever they were worried about.
+
+Option 3's side rail collapses under the text on a phone, where most of this audience reads, and stops being dominant exactly where the requirement matters.
+
+40px is on the DESIGN.md scale and is dominant against an 18px reading surface without shouting.
+
+### Consequences
+
+- The reading surface stays 18px at a 68ch measure and the citation 14px, per D-042.
+- The amount must meet AA contrast at its rendered size, asserted statically.
+
+---
+
+## Decision D-069 - The headline field ships dormant; the answer card is not delivered
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | amends D-064 and D-065 |
+
+### Context
+
+D-064 put the headline amount in the answer contract on the reasoning that the model already returns typed claims, so one more field is cheap. The field, its validation and the card were built. Filling it needs an instruction in the system prompt, and that instruction is not free.
+
+Measured at temperature 0, against the identical corpus and index:
+
+| | Stage 2 run | With the headline rule |
+| --- | --- | --- |
+| Faithfulness | 1.000 | 0.989 |
+| Bucket A | 37/40 | 36/40 |
+| Refusal rate | 10.0% | 7.5% |
+| A-22 faithfulness | 1.0 | 0.6 |
+| A-31, a pharmacy question the corpus cannot answer | refused | **answered** |
+
+A-31 is the one that matters. D-036 excluded the pharmacy directory, so "which pharmacies near me are in network" must refuse. With the rule present it answers from the Evidence of Coverage's prose about network pharmacies instead.
+
+Rewording the rule as display-only, explicitly stating it changes nothing about what is answered or refused, did not restore the behaviour. Removing it did, verified by isolating that single change.
+
+The mechanism is dilution: seven standing rules became eight, and rule 4 is the refusal rule.
+
+### Options considered
+
+1. A second model call over the validated claims only, leaving the answering prompt untouched.
+2. Ship Stage 3 without the card. The contract field, validation, card markup, freshness and staleness all land; nothing fills the headline.
+3. Accept the regression and keep the rule.
+4. Deterministic extraction from the claims, reversing D-064.
+
+### Decision
+
+Option 2. The user's call. `FR-P2-13` - the amount as the visually dominant element - is **not delivered**.
+
+### Rationale
+
+Option 3 trades a refusal the corpus requires for a layout improvement. A member asking which pharmacies are in network would receive an answer the product cannot support, which is the failure the whole design exists to prevent, and it breaches NFR-P2-04 besides.
+
+Option 4 puts a regular expression in charge of which number is the headline, with the failure modes D-064 rejected it for.
+
+Option 1 remains open and is the likely route if the card is picked up later: it cannot change answering behaviour by construction, at the cost of one extra call on cost answers.
+
+### Consequences
+
+- **`FR-P2-13` is not met**, recorded like D-051's provider search rather than quietly dropped. The plan's first Stage 3 acceptance criterion is marked accordingly.
+- `AnswerPayload.headline` stays in the contract, validated and tested, and is always null. `parseHeadline` still rejects an uncited or unlabelled headline, so whatever fills it later is bound by cite-or-refuse.
+- The card markup and CSS ship dormant. `AnswerBody` renders it when a headline is present and renders today's prose when it is not, which is D-065's degradation rule doing its job with the card side unexercised.
+- Everything else in Stage 3 ships: both corpus dates, the staleness warning on every answer and in speech, and the citation completeness assertions.
+- **Recorded for the next model change:** a prompt whose rule count grows can weaken the rules already there. Any future addition to `SYSTEM` should be measured against the golden set before it is kept.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

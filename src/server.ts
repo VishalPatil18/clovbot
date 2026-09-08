@@ -14,11 +14,13 @@ import {
   type PlanChoice,
 } from "./corpus/scope.ts";
 import type { PlanRef } from "./types.ts";
+import { stalenessWarning } from "./freshness.ts";
 import {
   checkRate,
   connect,
   consecutiveRefusals,
   indexedPlans,
+  readCorpusFreshness,
   recordFeedback,
   writeCallback,
   writeTurn,
@@ -39,6 +41,13 @@ const PLAN_YEAR = CORPUS_SCOPE.planYear;
  */
 /** Populated at boot from the index, so the picker cannot outrun the corpus. */
 export let PLANS: PlanChoice[] = [];
+
+/** FR-P2-16. Read at boot from the index, never from a disk the container lacks. */
+export let CORPUS: { documentsFetchedAt: string; ingestedAt: string; planYear: number } | null = null;
+
+/** A spoken answer carries its own warning; audio cannot be scrolled back to. */
+const withStaleness = (spoken: string, warning: string | null): string =>
+  warning === null ? spoken : `${spoken} ${warning}`;
 
 /** The plan answered when a question needs no plan context. Retrieval always scopes. */
 function firstIndexedPlan(): PlanRef {
@@ -85,7 +94,7 @@ const send = (res: ServerResponse, event: unknown): void => {
 const server = createServer((req, res) => {
   if (req.method === "GET" && req.url === "/api/plans") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ plans: PLANS, planYear: PLAN_YEAR }));
+    res.end(JSON.stringify({ plans: PLANS, planYear: PLAN_YEAR, corpus: CORPUS }));
     return;
   }
 
@@ -414,11 +423,17 @@ async function handleAsk(
       { onToken: () => send(res, { type: "progress" }) },
     );
 
+    // FR-P2-17. Computed once so the written, spoken and printed copies agree.
+    const stale = stalenessWarning(CORPUS?.planYear ?? PLAN_YEAR, new Date());
+
     send(res, {
       type: "answer",
       answer: turn.answer,
       // The written answer carries the source list; the spoken one must not.
-      spokenAnswer: turn.payload === null ? turn.answer : spokenAnswer(turn.payload),
+      spokenAnswer: withStaleness(
+        turn.payload === null ? turn.answer : spokenAnswer(turn.payload),
+        stale,
+      ),
       outcome: turn.outcome,
       claims: turn.payload?.claims ?? [],
       unanswered: turn.payload?.unanswered ?? [],
@@ -437,6 +452,8 @@ async function handleAsk(
       // marker resolves even when two chunks render the same citation.
       claimCitationNumbers:
         turn.payload === null ? {} : Object.fromEntries(citationNumbers(turn.payload, turn.retrieved)),
+      headline: turn.payload?.headline ?? null,
+      staleness: stale,
       latencyMs: turn.latencyMs,
     });
 
@@ -500,6 +517,14 @@ async function boot(): Promise<void> {
     const refs = await indexedPlans(client);
     if (refs.length === 0) throw new Error("no plans are indexed; run npm run ingest");
     PLANS = toPlanChoices(refs);
+    const freshness = await readCorpusFreshness(client, latestSnapshotId());
+    if (freshness !== null) {
+      CORPUS = {
+        documentsFetchedAt: freshness.documentsFetchedAt,
+        ingestedAt: freshness.ingestedAt,
+        planYear: freshness.planYear,
+      };
+    }
     console.log(`indexed plans: ${PLANS.map((p) => `${p.contractId}-${p.id}`).join(", ")}`);
   } finally {
     await client.end();
