@@ -977,6 +977,160 @@ Phone users have no keyboard and custom Ctrl+Shift bindings collide with screen-
 
 ---
 
+## Decision D-030 - Corpus discovery through the plan-documents API, snapshotted and replayed
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-07 |
+| Cycle / Feature | Corpus spike (P1 Stage 1) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Clover's plan-documents page renders no document links in server HTML; it is a React app. Reconnaissance found two undocumented JSON endpoints behind it: `/api/zipcode/counties?zipcode=<zip>` and `/api/plans/document-search?county_id=<fips>&year=<yyyy>`. The second returns a structured catalog carrying contract id, plan id, plan year, network type, drug-coverage flag, and direct CDN URLs for Summary of Benefits, Evidence of Coverage and ANOC. `robots.txt` is `Allow: /` and places no restriction on these paths.
+
+The fetcher needs a source of truth for what to download. An undocumented endpoint is a dependency that can change without notice; a hardcoded URL list goes stale without saying so.
+
+### Options considered
+
+1. Live API discovery on every run. Self-updating, but nothing runs offline and the endpoint is a single point of failure.
+2. Pinned URL list committed to the repo. Reproducible, but stale silently, and the nightly upstream-drift test in `docs/testing-strategy.md` §8 could not exist.
+3. Discovery snapshot, replayed. `--discover` hits the API and writes a timestamped catalog snapshot; the default run replays the committed snapshot.
+
+### Decision
+
+Option 3. `corpus:fetch --discover` calls the API and writes a timestamped snapshot containing the verbatim catalog response. `corpus:fetch` without the flag replays the most recent committed snapshot. Conversion always reads from a named snapshot.
+
+### Rationale
+
+Reproducibility and drift detection are both required and this is the only option delivering both. Re-running `--discover` and diffing against the committed snapshot is the nightly upstream-drift test, at no additional cost. The snapshot is also the immutable identified artifact Stage 4 needs for ingest idempotency, arriving one stage early for roughly one flag and one branch of extra code. If the undocumented endpoint disappears, the committed snapshot still builds the corpus and the failure surfaces as a loud diff rather than a silent 404.
+
+### Consequences
+
+- Two code paths in the fetcher rather than one.
+- Committed snapshots make the corpus auditable: any answer traces to a catalog response captured at a known time.
+- The project now depends on an endpoint Clover does not document and owes no stability guarantee. The replay path is the mitigation, not a fix.
+- `zipcode=` is accepted by the endpoint and silently ignored; only `county_id` filters. Passing the wrong parameter returns all ten plans across five states with no error, so the fetcher must assert the returned set is county-scoped rather than trusting the request.
+
+---
+
+## Decision D-031 - Summary of Benefits columns disambiguated by bounding-box x-position
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-07 |
+| Cycle / Feature | Corpus spike (P1 Stage 1) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The 2026 NJ Summary of Benefits is a single PDF covering two plans side by side, 004 and 007. Converted with `pdftotext -layout`, both plans' amounts land on one text line - `Specialist visit: $10 copay` and `Specialist visit: $2 copay` - and the header naming the columns appears once per page section, roughly eighteen lines above the rows it governs.
+
+A chunker reading that output has no way to attribute an amount to a plan. The resulting answer would retrieve real content, cite a real document, pass a faithfulness check, and be wrong for one of the two plans, on the highest-volume bucket A call driver.
+
+### Options considered
+
+1. Character-offset splitting. Split each `-layout` line at a fixed column derived from the header row.
+2. Bounding-box splitting. Use `pdftotext -bbox-layout`, which emits per-word x and y coordinates, and assign each word to a plan column by x-position.
+3. Drop the Summary of Benefits and cite cost-sharing from the Evidence of Coverage only, which is single-column and plan-specific.
+
+### Decision
+
+Option 2. The Summary of Benefits is converted with `-bbox-layout` and each word assigned to plan 004 or 007 by x-position against the detected header. Only the 004 column is emitted. The Evidence of Coverage and formulary are single-column and continue to use plain `-layout`.
+
+### Rationale
+
+Option 1 fails silently: any row whose benefit name wraps past the split column places text in the wrong plan, producing exactly the defect this decision exists to prevent, with no signal that it happened. Option 3 is safe but discards the document members are actually mailed and the most readable cost-sharing summary in the corpus. Option 2 is deterministic, unit-testable against known coordinates, and adds no package.
+
+### Consequences
+
+- Two conversion modes to maintain rather than one.
+- Column detection must fail loudly. A page where the header cannot be located is a conversion failure, not a page emitted with unattributed amounts.
+- Qualifies D-019. "One plan, one service area" does not hold at the document level, because the source document is inherently two-plan. Scope cannot assume the ambiguity away; conversion has to resolve it.
+- The same pattern will recur for any plan pair sharing a Summary of Benefits, which from the catalog is all of them.
+
+---
+
+## Decision D-032 - Plan benefit package H5141-004, Clover Health Choice (PPO), Hudson County NJ
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-07 |
+| Cycle / Feature | Corpus spike (P1 Stage 1) |
+| Status | superseded by D-033 |
+| Supersedes | - |
+
+### Context
+
+`claude/srs.md` §10 carries this as a load-bearing open question: D-019 fixed the corpus at one plan year and one service area but did not name which. New Jersey was confirmed by the user. Hudson County (FIPS 34017) resolves to six 2026 plans under contracts H5141 and H8010, four of them PPO.
+
+### Options considered
+
+1. H5141-004, Choice (PPO), with Part D.
+2. H5141-054, Choice Giveback (PPO), with Part D.
+3. H5141-061, Valor (PPO), without Part D.
+4. Defer, and fetch all four NJ PPO plans.
+
+### Decision
+
+H5141-004, Clover Health Choice (PPO), 2026, Hudson County NJ.
+
+### Rationale
+
+PPO as D-019 requires, and `rx_coverage: true`, so formulary call drivers stay answerable. Option 3 has no drug coverage and would have silently removed an entire call-driver class from the demo. Option 2 shares its Summary of Benefits with Valor-061, pairing a Part D plan against a non-Part D plan in one comparison table, which is a worse column-confusion case than the 004/007 pairing.
+
+### Consequences
+
+- Resolves the load-bearing open question in `srs.md` §10. That checklist item can be closed.
+- The Summary of Benefits is shared with plan 007, which is what makes D-031 necessary.
+- The plan selector ships with one real option, per D-019's existing consequence.
+- Contract id H5141 and plan id 004 become required provenance fields on every chunk, per FR-04 and FR-06.
+
+---
+
+## Decision D-033 - Two plan benefit packages, H5141-004 and H5141-007
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-07 |
+| Cycle / Feature | Corpus spike (P1 Stage 1) |
+| Status | accepted |
+| Supersedes | D-032 |
+
+### Context
+
+D-032 fixed the corpus at one plan benefit package, H5141-004, following D-019's "one plan, one service area". D-019's own consequence conceded the cost: "the plan selector ships with one real option and the rest marked not yet indexed." FR-10 and FR-11 - plan context requested lazily, never answer a plan-scoped question without it - were therefore specified but not demonstrable, because with a single plan the picker is decorative.
+
+Hudson County NJ carries four PPO plans. They pair into two Summary of Benefits documents rather than four: 004 with 007, and 054 with 061.
+
+### Options considered
+
+1. One plan, 004. The picker stays decorative.
+2. Two plans, 004 and 007. They share one Summary of Benefits and both carry Part D.
+3. All four NJ PPO plans. Two shared Summary of Benefits documents, one of which pairs a Part D plan with a plan that has none.
+
+### Decision
+
+Two plans: H5141-004 Clover Health Choice (PPO) and H5141-007 Clover Health Choice Value (PPO), 2026, Hudson County NJ.
+
+### Rationale
+
+Two plans make FR-10 and FR-11 demonstrable rather than asserted: the assistant can be shown asking which plan a member is on and returning two different correct copays, which argues the safety case live instead of describing it. The pair shares a single Summary of Benefits, so the cost is one converter change and one additional Evidence of Coverage. Both carry Part D, so no plan-conditional refusal rule is needed.
+
+Option 3 was rejected for what it adds rather than what it costs to fetch. Valor-061 has `rx_coverage: false`, so formulary questions would be answerable for three plans and would have to refuse for the fourth - a plan-conditional refusal that appears nowhere in FR-21, whose triggers are all content-based. Its Evidence of Coverage is also named `eoc_nj_pa__ppo_061`, suggesting one document serving two states, which would introduce out-of-service-area provenance the corpus does not otherwise have. Neither buys demo value that two plans do not already deliver.
+
+### Consequences
+
+- The Summary of Benefits column extractor must support the right-hand column. Plan 007 sits there, and the benefit-label column is on the far side of plan 004's column, so extraction needs three zones and two gutters rather than one boundary.
+- **Cross-plan leakage stops being hypothetical.** `docs/testing-strategy.md` §4 lists a near-duplicate chunk from a different plan with a different amount as an adversarial fixture. With two indexed plans it is the real corpus: "what is my specialist copay" retrieves near-identical chunks reading $10 and $2. Retrieval must filter on plan id before ranking, not after, because the reranker scores prose similarity and the two chunks are interchangeable by that measure. This lands in Stage 4, not Stage 1.
+- The golden set in Stage 5 must carry plan context on every cost question, and hand-verification of pinned answers roughly doubles.
+- Chunk provenance carries plan id alongside contract id. FR-04 and FR-06 already require the contract identifier; plan id is the finer key that actually separates these two documents.
+- Qualifies D-019 further, alongside D-031. "One plan" is now "one contract, one service area, two plan benefit packages."
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.
