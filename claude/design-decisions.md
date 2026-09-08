@@ -1664,6 +1664,233 @@ Amending with evidence attached is the same treatment D-041 gave NFR-PERF-02, an
 
 ---
 
+## Decision D-047 - Zero real PHI, ever; synthetic member records permitted from v1.1
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 scope |
+| Status | accepted |
+| Supersedes | amends D-001 for v1.1 onward |
+
+### Context
+
+D-001 and `CLAUDE.md` rule 3 state "Zero PHI in v1. No member auth, no claims, no prior-auth status." P2 stages 5 through 8 build exactly those things over five synthetic member records. The rule as written forbids the plan the user has chosen to execute, so either the rule or the plan is wrong.
+
+The rule's real purpose was never to forbid authentication. It was to keep the project out of HIPAA scope, which is a statement about whose data is in the system, not about whether a login exists.
+
+### Options considered
+
+1. Amend the rule to "zero real PHI, ever" - synthetic records allowed, real member data never, at any version.
+2. Keep the rule and log a scoped override for stages 5 through 8.
+3. Keep the rule and drop stages 5 through 8 from v1.1.
+
+### Decision
+
+Option 1. `CLAUDE.md` rule 3 and `claude/context.md` section 3 are amended to forbid real PHI at every version rather than forbidding member identity in v1. Authentication and member-scoped answering are permitted from v1.1, over synthetic records only.
+
+### Rationale
+
+Option 2 leaves the working contract contradicting the build, which is the drift the contract exists to prevent. A rule every future cycle has to remember to override is a rule that will eventually not be overridden.
+
+The constraint that actually matters is unchanged and now stated for every version, not just v1: no real member data enters this system. That binds harder than the original, because the original expired at v1.
+
+### Consequences
+
+- Stages 5 through 8 are permitted. Synthetic records must be labelled synthetic in schema, seed and output, per P2-15.
+- Row-level security and audit logging remain P3. Until then, member scoping is application-layer only, and a code-path bug is not caught by the database. This is the residual risk `claude/plan-p2.md` already names.
+- D-001's v1 scope decision stands as history. It is amended, not reversed: the product still shipped v1 with no identity.
+
+---
+
+## Decision D-048 - The second indexed contract is H8010-002 Classic (HMO)
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`claude/plan-p2.md` Stage 1 requires a second benefit package under a distinct contract identifier, and offers "the HMO contract or a second PPO service area". The Hudson County catalog carries six plans across two contracts: H5141 004, 007, 054 and 061, all PPO, and H8010 002 Classic and 003 Value, both HMO.
+
+v1 already indexes H5141-004 and 007. Both sit on one contract and share one Summary of Benefits PDF, extracted per plan column.
+
+### Options considered
+
+1. H8010-002 Classic, one HMO plan on a distinct contract, same county.
+2. H8010-002 and 003, both HMO plans.
+3. H5141-054 Choice Giveback, a third PPO on the existing contract.
+4. H5141 in a second county or state.
+
+### Decision
+
+Option 1. H8010-002 Classic is indexed as a third plan under a second contract.
+
+### Rationale
+
+Option 3 fails the acceptance criterion outright: same contract id. Option 4 tests geography rather than benefit design and needs the county constants generalized first, which is P4's eleven-state work arriving early.
+
+HMO against PPO differs on more than price. Referral requirements and out-of-network coverage differ structurally, so paired cross-plan questions produce different answers of different shapes rather than two numbers. That is the stronger demonstration that plan scoping is load-bearing.
+
+Option 2 was rejected for cost, not correctness: a second HMO plan adds ingest surface and answers no question the first one does not.
+
+### Consequences
+
+- The corpus scope constants in `src/corpus/cli.ts` stop being a single contract with a plan list.
+- H8010's Summary of Benefits layout is unverified. `pdfToPlanColumn` handles the H5141 side-by-side two-column PDF; whether the HMO SB has the same shape is unknown until fetched, and is a Stage 1 risk.
+- Adding H8010-003 later is a one-line scope change, not a rebuild.
+
+---
+
+## Decision D-049 - Plan identity is a contract-and-plan pair throughout
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+v1 assumes one contract everywhere. `CONTRACT_ID` is a single environment variable in `src/server.ts`, `PLANS` is a list of bare plan ids, the retrieval scope passes `{ contractId, planId, planYear }` with the contract constant, the turn log writes `planContext` as a formatted string, and the web chips carry ids alone. D-048 introduces a second contract, which breaks that assumption at every one of those points.
+
+### Options considered
+
+1. Make plan identity an explicit contract-and-plan pair threaded through server, retrieval, turn log, golden set and web.
+2. Keep `planId` as the key and encode the contract into the string, as "H8010-002".
+3. Add a second contract environment variable.
+
+### Decision
+
+Option 1. One plan-reference shape carries contract and plan together, and every layer that scopes by plan takes it.
+
+### Rationale
+
+Option 2 turns the contract into an unvalidated substring. Cross-plan leakage is the failure this stage exists to prevent, and it produces a confidently wrong copay rather than an error; a leak that hides in string parsing is precisely the one no test catches. Stage 1's negative leakage assertion only means something if the thing being asserted on is typed.
+
+Option 3 is configuration for a case that is already known to grow: P4 expands to eleven states. A second variable would be removed by the next stage that touched it.
+
+### Consequences
+
+- Larger Stage 1 diff than the stage's "M" band assumed, touching files the stage description does not list.
+- The 49 golden cases keyed to plan "004" need their contract stated rather than implied.
+- P4's multi-state expansion inherits the right shape instead of paying to unwind the wrong one.
+
+---
+
+## Decision D-050 - P2 gets its own requirements document, srs-p2.md
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 requirements |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`claude/srs.md` v1.1.0 is frozen and covers P1. `claude/plan-p2.md` states in its own header that it has no frozen SRS behind it, and that the authenticated tier needs a requirements pass before Stage 5. `CLAUDE.md` rule 1 forbids production code without a spec entry. `/spec-feature` is explicitly forbidden from editing `srs.md`.
+
+### Options considered
+
+1. Write requirements per stage into `claude/features.md` inside each feature cycle.
+2. Run a full requirements pass before Stage 5 only, covering the auth tier.
+3. Run a full requirements pass now, covering all eight stages, into a new `claude/srs-p2.md`.
+
+### Decision
+
+Option 3. `claude/srs-p2.md` is written before Stage 1 begins and covers all eight P2 stages. `claude/srs.md` stays frozen at v1.1.0 as the P1 record.
+
+### Rationale
+
+The user's call. A single document covering the whole of P2 keeps the public-tier stages specified to the same standard as the authenticated ones, rather than treating stages 1 through 4 as self-evident because `docs/ideas.md` mentions them.
+
+Keeping P1's SRS frozen preserves it as the artefact v1.0.0 was actually built against, which is what makes the v1 record auditable.
+
+### Consequences
+
+- Stage 1 is delayed by a full requirements pass.
+- Two requirement documents exist, and requirement ids must not collide. P2 requirements are numbered in their own space.
+- `claude/srs.md` section 8's "deferred to v1.1, specified separately" now points at a document that exists.
+
+---
+
+## Decision D-051 - Structured lookup ships for the formulary only; provider search keeps refusing
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | narrows D-007 |
+
+### Context
+
+D-007 decided that provider search and formulary tier lookup both hit typed queries. `claude/plan-p2.md` Stage 2 carries that forward. But the provider directory in this corpus is not real: Clover publishes no downloadable directory, so `src/corpus/synthetic.ts` invents ten rows, and v1 answers provider questions by stating the directory is demo data and routing to a human.
+
+### Options considered
+
+1. Formulary only. Provider search keeps the v1 refuse-and-route behaviour.
+2. Both paths, with the demo-data label carried into every provider answer.
+3. Both, plus reversing D-036 to ingest the pharmacy directory as typed rows.
+
+### Decision
+
+Option 1. The formulary is ingested into typed rows and gets a typed tier lookup. Provider search is not built. The router is still built and still tested, selecting between one structured path and RAG.
+
+### Rationale
+
+Building exact structured search over invented data produces a confident, precise, wrong answer about whether a member's doctor is in network. That is the exact failure mode the whole product is built to avoid, and no label fully undoes a precise answer.
+
+The router, which `claude/plan-p2.md` calls the highest-uncertainty item in P2, is unaffected. It is exercised by the formulary path against RAG regardless.
+
+### Consequences
+
+- D-007's provider-search half is deferred with a reason, not delivered.
+- "Is my doctor in network" remains unanswerable and continues to route to a human.
+- Stage 2's routing test set covers formulary-versus-RAG selection. Provider questions belong to the guardrail path, not the router.
+- D-036's pharmacy exclusion stands unchanged.
+
+---
+
+## Decision D-052 - Email OTP delivery uses Resend on the free tier
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Stage 6 needs a six-digit code delivered to a seeded member's email address. `CLAUDE.md` rule 7 requires a defensible reason for any new dependency and rule "zero cost" requires free tier, open source or local.
+
+### Options considered
+
+1. Resend on the free tier: 3,000 emails a month, 100 a day.
+2. Print the code to the server log and surface it in a development-only panel, adding no dependency.
+
+### Decision
+
+Option 1. Resend, free tier, with the API key in an environment variable.
+
+### Rationale
+
+The user's call. A login whose code never leaves the server is not a login flow a reviewer can complete, and Stage 6's exit signal is receiving a code by email and pasting it into the panel.
+
+### Consequences
+
+- One new dependency and one new secret. The secret scan in `tests/unit/no-secrets.test.ts` already covers the key shape.
+- A sending domain must be verified with Resend, or delivery is limited to the account owner's own address.
+- Codes must never appear in any log, which Stage 6's test plan already asserts.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

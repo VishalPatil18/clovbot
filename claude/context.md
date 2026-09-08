@@ -67,7 +67,7 @@ Set by the user, binding for the whole project. Full statement in `CLAUDE.md` se
 
 - Spec before code. No production code without an entry in `srs.md` or `features.md`.
 - TDD, no exceptions. Failing test first.
-- **Zero PHI in v1.** No member auth, no claims, no prior-auth status. Anything needing member identity goes to the v2 roadmap.
+- **Zero real PHI, ever.** No real member data at any version. Auth, claims and prior-auth status are permitted from v1.1 over synthetic records only, labelled synthetic throughout. D-047 amends D-001; v1.0.0 shipped with no identity.
 - **Cite or refuse.** Every bot answer names its source document, or it declines and offers a human. No third path.
 - Design forks go to the user with options and tradeoffs. Claude does not decide. The call is logged as an ADR in `design-decisions.md`.
 - No invented Clover, Medicare, or CMS facts. Only `docs/research/` and the scraped corpus.
@@ -317,3 +317,24 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Measured at release:** faithfulness 1.000, structural validity 100%, refusal rate 13.3%, bucket A 27/30, B 8/8, C 10/10. 379 tests pass.
 
 **Open:** `--min-instances 1` bills about $21/month for an idle container; no budget alert on the billing account.
+
+## 2026-09-08 - P2 requirements pass and the contract amendment
+
+**Did:** Four rounds of cross-questioning covering all eight stages of `claude/plan-p2.md`, then wrote `claude/srs-p2.md`. No P2 code yet.
+
+**Files:** created `claude/srs-p2.md` (53 FR, 12 NFR, 8 open questions, 28 acceptance scenarios). Amended `CLAUDE.md` rule 3 and section 3 above. Appended D-047 through D-052.
+
+**The contract changed.** Rule 3 was "Zero PHI in v1. No member auth." P2 stages 5-8 build member auth over synthetic records, so the rule as written forbade the plan. It is now "Zero real PHI, ever" - which binds harder, because the original expired at v1. D-047.
+
+**What the questioning surfaced that the plan did not say:**
+
+- **Stage 1 is less done than v1.0.0 makes it look.** Plans 004 and 007 already return different amounts, but they share one contract, and the golden set has one paired question against the five the stage requires. The real work is a second *contract*, H8010-002 HMO, which exists in the Hudson County catalog alongside the four H5141 PPOs.
+- **`CONTRACT_ID` is a single environment variable.** Contract is assumed constant across the server, the retrieval scope, the turn log's `planContext` and the web chips. A second contract breaks all four, so plan identity becomes a typed pair (D-049) rather than a string with a hyphen in it.
+- **D-007's provider half cannot honestly ship.** The provider directory is ten invented rows. Exact structured search over invented data produces a confident, precise, wrong answer about a member's own doctor, which is the failure the product exists to avoid. Formulary only, provider questions keep refusing (D-051).
+- **"Member-specific" cannot mean "says my".** v1 already answers "what is my specialist copay" from public documents. The classifier's test is where the answer is stored, not how the question is worded, and the zero-tolerance false-negative gate is meaningless without that definition.
+- **The classifier cannot be the enforcement.** A zero-tolerance gate on a classifier is a wish. Member-scoped queries are unreachable without a bound session, so a classifier miss cannot disclose a record - the classifier decides what to *offer*, not what is *permitted*.
+- **Stage 4 and Stage 6 collide.** Local history plus sign-out on a shared family device: signing out clears member-sourced turns and leaves public ones.
+
+**Open:** H8010's Summary of Benefits layout is unverified and `pdfToPlanColumn` may not fit it. Resend needs a verified sending domain. Six other questions in `srs-p2.md` section 10.
+
+**Next:** `/spec-feature` Stage 1, second contract indexed.
