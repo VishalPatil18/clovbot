@@ -7,7 +7,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web",
     "corpus:discover": "node --experimental-strip-types src/corpus/cli.ts discover",
     "corpus:fetch": "node --experimental-strip-types src/corpus/cli.ts fetch",
     "corpus:convert": "node --experimental-strip-types src/corpus/cli.ts convert",

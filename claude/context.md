@@ -338,3 +338,26 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** H8010's Summary of Benefits layout is unverified and `pdfToPlanColumn` may not fit it. Resend needs a verified sending domain. Six other questions in `srs-p2.md` section 10.
 
 **Next:** `/spec-feature` Stage 1, second contract indexed.
+
+## 2026-09-08 - P2 Stage 1: second contract indexed
+
+**Did:** Indexed H8010-002 Classic (HMO) alongside the H5141 PPOs, and made plan scoping provably load-bearing. Eight sub-stages, each its own commit point.
+
+**Files:** created `src/corpus/scope.ts`, `migrations/005_contract_wildcard.sql`, `scripts/plan-scope-check.ts`, `web/tsconfig.json`, `web/src/vite-env.d.ts`, three test files and one corpus fixture. Changed `src/types.ts`, `src/corpus/{cli,columns,types,report}.ts`, `src/rag/{ingest,provenance,payload,store,cli}.ts`, `src/server.ts`, `eval/harness/run.ts`, `eval/golden/golden-set.json`, the web client, `.env.example`, `scripts/deploy-api.sh`, `tsconfig.json`, `package.json`.
+
+**Verified:** 1801 chunks across two contracts. "What is my out of pocket maximum" returns $6,000 under H8010-002 and $9,250 under H5141-004, each cited. 300 retrieved rows checked across three plans, zero cross-plan leaks, and the check shown capable of failing. Eval on 60 enforced cases: faithfulness 1.000, structural 100%, refusal 13.3% down to 10.0%, bucket A 90.0% up to 92.5%. The failing set is identical to v1.0.0 - A-03, A-18, A-28, ADV-01 - so nothing regressed. 419 tests pass.
+
+**What building it surfaced:**
+
+- **The stage looked half-done and was not.** Plans 004 and 007 already returned different amounts, so the exit signal appeared met. But they share one contract, the golden set held one paired question against the five required, and `CONTRACT_ID` was a single environment variable threaded through the server, retrieval, the turn log and the web chips. The visible half was finished; the load-bearing half had never been built.
+- **A latent extractor bug no document had triggered.** `extractPlanColumn` inherited a page's absolute column gutter to pages without a header row. H5141 escapes it because every one of its table pages carries a header. H8010's page 11 does not, and the document alternates recto and verso margins, so the inherited boundary cut a word in half. Measured: page 11's own gutter is 354.52, page 9's is 338.02, page 10's is 359.58. Fixing it by shifting an inherited boundary would have been wrong - the gutter is content-derived per page, not a rigid translation of the margin.
+- **Fetching the document first was worth more than the plan predicted.** The choice to pull one PDF into scratch before speccing turned two open questions into facts and found the bug before a line of stage code existed. The plan's own fallback - "spec first, treat layout as a risk" - would have found it mid-implementation.
+- **`convertAll` never retries a failed conversion.** An entry whose status is not `ok` is passed through untouched, so a fixed converter cannot prove itself without a full re-fetch. Named, not fixed.
+- **`web/` had never been typechecked.** The root tsconfig include listed `src`, `tests`, `eval`, `scripts`, and Vite strips types without checking them. Every browser type error since Stage 7 has been invisible. Now gated by `npm run typecheck`, which runs both projects.
+- **`connect()` never dialled.** It constructs a `pg.Client`, so the boot check threw on a missing `DATABASE_URL` or an unreadable CA and nothing else, despite a comment saying a broken environment must fail to start. A wrong password or an empty index started cleanly. Boot now queries the index and refuses to start without one.
+- **Two collisions that would have produced passing-but-meaningless tests.** H8010-002 and H5141-004 charge the same $10 specialist and $0 primary care copay, so those pairs prove nothing about scoping. Found by reading the converted corpus rather than by assuming the plans differ everywhere.
+- **A citation was one branch from printing "Plan \*"** to a member, once the formulary became contract-wide.
+
+**Open:** FR-P2-05 has no automated coverage; there is no component harness and adding one is a deferred dependency decision. The leakage check needs a live index and is not in CI. `migrations/005_contract_wildcard.sql` must be applied to any other environment.
+
+**Next:** Stage 2, structured formulary lookup and the router. D-051 narrowed it: formulary only, provider search keeps refusing.

@@ -12,6 +12,7 @@ export interface Claim {
 }
 
 export interface PlanOption {
+  contractId: string;
   id: string;
   name: string;
 }
@@ -39,6 +40,7 @@ export type AskEvent =
       type: "offer_callback";
       question: string;
       planContext: string;
+      planName: string;
       documentsSearched: string[];
       refusalTrigger: string | null;
     }
@@ -47,6 +49,7 @@ export type AskEvent =
 export interface CallbackDraft {
   question: string;
   planContext: string;
+  planName: string;
   documentsSearched: string[];
   refusalTrigger: string | null;
 }
@@ -84,14 +87,14 @@ export async function sendFeedback(turnId: string, resolved: boolean): Promise<b
 /** Reads the server-sent stream one event at a time. */
 export async function ask(
   question: string,
-  planId: string | null,
+  plan: PlanOption | null,
   onEvent: (event: AskEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const response = await fetch("/api/ask", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ question, planId }),
+    body: JSON.stringify({ question, planId: plan?.id ?? null, contractId: plan?.contractId ?? null }),
     ...(signal === undefined ? {} : { signal }),
   });
 

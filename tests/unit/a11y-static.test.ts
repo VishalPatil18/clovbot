@@ -299,3 +299,18 @@ describe("required surfaces", () => {
     expect(tsx).toMatch(/aria-live="polite"/);
   });
 });
+
+describe("plan identity is never shown raw [D-055]", () => {
+  // "H5141-004" is a contract number. A member reads a plan name or nothing.
+  it("renders no contract-plan id in shipped markup", () => {
+    const matches = markup.match(/["'>\s]H\d{4}-\d{3}["'<\s]/g) ?? [];
+    expect(matches).toEqual([]);
+  });
+
+  it("gives the plan change control a large enough target", () => {
+    const control = rule(".assistant__plan-change");
+    expect(control.length).toBeGreaterThan(0);
+    const height = /min-height:\s*(\d+)px/.exec(control)?.[1];
+    expect(Number(height)).toBeGreaterThanOrEqual(MIN_TARGET_PX);
+  });
+});

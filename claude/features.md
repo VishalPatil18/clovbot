@@ -784,7 +784,7 @@ Two defects found while scoping, not asked about: **FR-27 feedback recorded noth
 
 | Field            | Value                |
 | ---------------- | -------------------- |
-| Shipped          | in progress          |
+| Shipped          | 2026-09-08           |
 | Cycle            | 10                   |
 | Stage of plan.md | `plan-p2.md` Stage 1 |
 | Owner            | user + claude        |
@@ -884,3 +884,50 @@ Eight sub-stages, 22.5h against Stage 1's M band of ~7h. The overrun is entirely
 - Cross-plan leakage is asserted by `scripts/plan-scope-check.ts` against a live index, plus a pure unit test of the scope predicate in CI. The live half is not in `npm test`, which is the residual.
 - FR-P2-05, plan switching not altering prior answers, is verified by hand. No browser or component harness exists and adding one is a dependency decision deferred.
 - `srs-p2.md` amended to 1.0.1 so FR-P2-02 and FR-P2-03 match D-054 and D-056 rather than contradicting them.
+
+### Phase 6 - Writing Code
+
+**1.1 Scope module and PlanRef.** `src/corpus/scope.ts` became the only declaration of what the corpus covers, replacing module constants in `src/corpus/cli.ts` and three `CORPUS_*` environment variables read independently by `src/rag/cli.ts`, `src/server.ts` and `eval/harness/run.ts`. The dead `CORPUS_COUNTY_ID` went with them. `PlanRef` landed in `src/types.ts`; `Snapshot` moved from a contract plus a `"004+007"` string to a plan list. All 50 golden cases moved to `planRef` objects, guarded by a test that refuses any case referencing a plan the scope does not declare.
+
+**1.2 Contract wildcard.** Contract-wide documents carry `contractId: "*"` alongside the existing plan wildcard, mapped from the one `CONTRACT_WIDE` list and keyed on document kind rather than on what discover stamped. `migrations/005_contract_wildcard.sql` replaces `search_hybrid`; everything below the `scoped` CTE is byte-identical to 002, verified by diff. `citationLabel` was one branch away from printing **"Plan \*"** to a member and now names the document instead.
+
+The server migration was pulled forward from 1.6, because 1.1's `soleContractId()` guard throws once a second contract enters scope and the server would have been broken between 1.3 and 1.6. `planContext` is now written from the reference that answered the turn rather than from a module constant, and an unindexed plan returns 400 instead of retrieving nothing and reading as a refusal.
+
+**1.3 Fetch.** 17 documents discovered, 17 fetched. `context-prefixes.json` was copied forward before ingest, without which 36 generated prefixes would have been regenerated from a non-deterministic model and moved the answers the golden set is pinned to. The H8010 Summary of Benefits failed conversion with exactly the error D-057 predicted.
+
+**1.4 The column-gutter bug cycle.** Fixed as designed: `PlanHeaders` carries plan identity and header positions and is inherited; `columnsFor` computes both gutters on the page being rendered. `nearestHeaders` searches backward only. All 20 pre-existing column assertions still pass, including the H5141 page-15 inheritance case and the full-width prose that must not be cut.
+
+**Found while fixing it:** `convertAll` passes through any entry whose status is not `ok`, so a document that failed conversion is never retried and a fixed converter needs a full re-fetch to prove itself. Named, not fixed - it is outside this cycle's diff.
+
+**1.6 Derived plan list.** `PLANS` is populated at boot from `select distinct contract_id, plan_id, plan_year from chunks`, with display names from a typed map that raises rather than letting a contract number reach a member. `boot()` now actually connects and queries: `connect()` only constructs a `pg.Client`, so the previous boot check threw on a missing `DATABASE_URL` or unreadable CA and nothing else. A wrong password or an unindexed database used to start cleanly and 503 every question.
+
+**1.7 Web plan chrome.** `PlanOption` carries its contract, `ask()` sends both halves, and chips key on the pair. The chosen plan persists in the header with a Change plan control that re-opens the picker; answers already in the transcript keep the plan they were answered under. `CallbackPanel` showed a member the raw string "H5141-004" under a heading reading "Plan" and now shows the plan name, with the id kept on the stored record for operators.
+
+**`web/` had never been typechecked.** The root `tsconfig.json` include listed `src`, `tests`, `eval` and `scripts`, and Vite strips types without checking them. `web/tsconfig.json` now extends the root with `dom` and `jsx`, and `npm run typecheck` runs both projects, so CI gates the browser code for the first time. Three errors surfaced, all CSS side-effect imports.
+
+**1.8 Paired golden cases.** Ten cases as five pairs, each the same question under two plan references with different expected answers. Four numeric, one structural. Guarded by tests asserting at least five paired questions exist, that no pair expects the same answer from both halves, and that at least one pair crosses contracts.
+
+Specialist and primary-care copays **collide** between H8010-002 and H5141-004 at $10 and $0, so the specialist pair uses H5141-007 instead. Had the pairs been written from the plan document rather than from the converted corpus, two of the five would have proved nothing while appearing to pass.
+
+**Verified against the live index, not asserted:**
+
+- **1,801 chunks** indexed across three plans and two contracts, up from 1,476. The whole index re-embedded because both `existingChunkContent` and `readGeneratedContext` key on snapshot id.
+- **The exit signal.** "What is my out of pocket maximum" returns **$6,000** under H8010-002 and **$9,250** under H5141-004, each cited to its own plan's documents.
+- **The contract wildcard end to end.** "What tier is atorvastatin on" answers under H8010-002 citing `Drug List 2026 · ANTILIPEMICS, FIBRATES`, with no wildcard rendered.
+- **Leakage.** `scripts/plan-scope-check.ts` checked 300 rows across 3 plans and 10 questions: **0 leaks**. Inverting its predicate by hand reported 300, so the check is capable of failing rather than vacuously green.
+
+**Eval, 60 cases, all enforced:**
+
+| Metric | v1.0.0 | This stage |
+| --- | --- | --- |
+| Faithfulness | 1.000 | **1.000** |
+| Structural compliance | 100% | **100%** |
+| Refusal rate | 13.3% | **10.0%** |
+| Bucket A | 27/30 (90.0%) | **37/40 (92.5%)** |
+| Bucket B | 8/8 | **8/8** |
+| Bucket C | 10/10 | **10/10** |
+| Adversarial | 1/2 | **1/2** |
+
+The failing set is **identical before and after** - A-03, A-18, A-28, ADV-01 - so nothing regressed and nothing new broke. All ten paired cases pass. Written to `eval/results/2026-09-08T1755Z.json`.
+
+**Still not verified, and not claimed:** FR-P2-05, that switching plans mid-session leaves earlier answers untouched, is verified by reading the code rather than by running the browser. There is no component harness, and adding one is a dependency decision the user deferred. The leakage check needs a live index and does not run in CI; the pure predicate behind it does.

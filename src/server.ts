@@ -7,16 +7,18 @@ import { citationLabel, citationNumbers, numberCitations, spokenAnswer } from ".
 import { needsPlanContext } from "./rag/plan-scope.ts";
 import {
   CORPUS_SCOPE,
-  defaultContractId,
-  defaultPlanRef,
-  findPlanRef,
   formatPlanRef,
   planDisplayName,
+  resolveIndexedPlan,
+  toPlanChoices,
+  type PlanChoice,
 } from "./corpus/scope.ts";
+import type { PlanRef } from "./types.ts";
 import {
   checkRate,
   connect,
   consecutiveRefusals,
+  indexedPlans,
   recordFeedback,
   writeCallback,
   writeTurn,
@@ -35,11 +37,16 @@ const PLAN_YEAR = CORPUS_SCOPE.planYear;
  * placeholders, and a plan without one raises here rather than showing a member a
  * contract number. D-055.
  */
-export const PLANS = CORPUS_SCOPE.plans.map((ref) => ({
-  contractId: ref.contractId,
-  id: ref.planId,
-  name: planDisplayName(ref),
-}));
+/** Populated at boot from the index, so the picker cannot outrun the corpus. */
+export let PLANS: PlanChoice[] = [];
+
+/** The plan answered when a question needs no plan context. Retrieval always scopes. */
+function firstIndexedPlan(): PlanRef {
+  const first = PLANS[0];
+  if (first === undefined) throw new Error("no plans are indexed");
+  return { contractId: first.contractId, planId: first.id, planYear: first.planYear };
+}
+
 
 const MAX_QUESTION = 500;
 const MAX_NOTE = 1_000;
@@ -358,8 +365,7 @@ async function handleAsk(
 
   // An unindexed plan retrieves nothing and reads as a refusal. Say it is a bad
   // request instead. Contract defaults only while the corpus covers one.
-  const planRef =
-    planId === null ? null : findPlanRef(contractId ?? defaultContractId(), planId);
+  const planRef = planId === null ? null : resolveIndexedPlan(PLANS, contractId, planId);
   if (planId !== null && planRef === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "unknown plan" }));
@@ -404,7 +410,7 @@ async function handleAsk(
     const turn = await answerTurn(
       client,
       question,
-      planRef ?? defaultPlanRef(),
+      planRef ?? firstIndexedPlan(),
       { onToken: () => send(res, { type: "progress" }) },
     );
 
@@ -436,7 +442,7 @@ async function handleAsk(
 
     const turnId = await writeTurn(client, {
       question: turn.question,
-      planContext: formatPlanRef(planRef ?? defaultPlanRef()),
+      planContext: formatPlanRef(planRef ?? firstIndexedPlan()),
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,
@@ -458,7 +464,9 @@ async function handleAsk(
       send(res, {
         type: "offer_callback",
         question: turn.question,
-        planContext: formatPlanRef(planRef ?? defaultPlanRef()),
+        planContext: formatPlanRef(planRef ?? firstIndexedPlan()),
+        // The record keeps the id; the member reads the name.
+        planName: planDisplayName(planRef ?? firstIndexedPlan()),
         documentsSearched: [...new Set(turn.retrieved.map((chunk) => chunk.documentId))],
         refusalTrigger: turn.refusalTrigger,
       });
@@ -477,9 +485,26 @@ async function handleAsk(
   }
 }
 
-// A revision with a broken environment must fail to start, not answer /api/plans
-// and 503 every question. connect() throws here, so the deploy rolls it back.
-connect();
+/**
+ * A revision with a broken environment must fail to start, not answer /api/plans
+ * and 503 every question. Constructing a client only checks the URL and the CA,
+ * so the plan query is what actually proves the database is reachable and holds
+ * an index. An empty result is a deploy with nothing to answer from. D-055.
+ */
+async function boot(): Promise<void> {
+  const client = connect();
+  await client.connect();
+  try {
+    const refs = await indexedPlans(client);
+    if (refs.length === 0) throw new Error("no plans are indexed; run npm run ingest");
+    PLANS = toPlanChoices(refs);
+    console.log(`indexed plans: ${PLANS.map((p) => `${p.contractId}-${p.id}`).join(", ")}`);
+  } finally {
+    await client.end();
+  }
+}
+
+await boot();
 
 server.listen(PORT, () => {
   console.log(`api listening on http://localhost:${PORT}`);

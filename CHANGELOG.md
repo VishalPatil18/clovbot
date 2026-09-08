@@ -8,11 +8,13 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
-- _<new capabilities>_
+- A second Medicare contract is indexed: **Clover Health Classic (HMO), H8010-002**, alongside the two Choice PPO plans. The same question now returns each plan's own answer - the out-of-pocket maximum is $6,000 under the HMO and $9,250 under the PPO - each cited to that plan's own documents.
+- The chosen plan stays visible in the assistant header with a **Change plan** control. Switching re-scopes what you ask next and leaves earlier answers exactly as they were answered.
 
 ### Changed
 
-- _<changed behavior>_
+- Plans are named wherever they are shown. The callback request used to label a member's plan "H5141-004"; it now reads "Clover Health Choice (PPO)".
+- Drug list and Clover information answers work under every plan rather than only the plans on one contract.
 
 ### Fixed
 

@@ -23,6 +23,7 @@ export const CORPUS_SCOPE: CorpusScope = {
   plans: [
     { contractId: "H5141", planId: "004", planYear: 2026 },
     { contractId: "H5141", planId: "007", planYear: 2026 },
+    { contractId: "H8010", planId: "002", planYear: 2026 },
   ],
 };
 
@@ -65,3 +66,35 @@ export function defaultPlanRef(): PlanRef {
 }
 
 export const defaultContractId = (): string => defaultPlanRef().contractId;
+
+export interface PlanChoice {
+  contractId: string;
+  id: string;
+  planYear: number;
+  name: string;
+}
+
+export const toPlanChoices = (refs: PlanRef[]): PlanChoice[] =>
+  refs.map((ref) => ({
+    contractId: ref.contractId,
+    id: ref.planId,
+    planYear: ref.planYear,
+    name: planDisplayName(ref),
+  }));
+
+/**
+ * Resolves a request's plan against what is indexed. Both halves must match: a
+ * plan id repeats across contracts, and accepting one alone would scope a member
+ * to another contract's amounts. D-049, D-055.
+ */
+export function resolveIndexedPlan(
+  plans: PlanChoice[],
+  contractId: string | null,
+  planId: string,
+): PlanRef | null {
+  const contract = contractId ?? plans[0]?.contractId;
+  const match = plans.find((plan) => plan.contractId === contract && plan.id === planId);
+  return match === undefined
+    ? null
+    : { contractId: match.contractId, planId: match.id, planYear: match.planYear };
+}

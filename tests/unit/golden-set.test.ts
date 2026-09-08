@@ -5,7 +5,9 @@ import type { PlanRef } from "../../src/types.ts";
 
 interface GoldenCase {
   id: string;
+  question: string;
   planRef: PlanRef;
+  expect: { keyFact?: string | string[] };
 }
 
 const golden = JSON.parse(readFileSync("eval/golden/golden-set.json", "utf8")) as {
@@ -33,5 +35,35 @@ describe("golden set plan references", () => {
   it("carries no top-level contract id, which would hide the per-case reference", () => {
     const raw = JSON.parse(readFileSync("eval/golden/golden-set.json", "utf8")) as Record<string, unknown>;
     expect(raw["contractId"]).toBeUndefined();
+  });
+});
+
+describe("cross-plan pairs [FR-P2-06]", () => {
+  const byQuestion = new Map<string, GoldenCase[]>();
+  for (const testCase of golden.cases) {
+    byQuestion.set(testCase.question, [...(byQuestion.get(testCase.question) ?? []), testCase]);
+  }
+
+  const pairs = [...byQuestion.values()].filter(
+    (group) => new Set(group.map((c) => formatPlanRef(c.planRef))).size > 1,
+  );
+
+  it("carries at least five questions asked under more than one plan", () => {
+    expect(pairs.length).toBeGreaterThanOrEqual(5);
+  });
+
+  // A pair whose halves expect the same answer proves nothing about scoping.
+  it("expects a different answer from each half of every pair", () => {
+    for (const group of pairs) {
+      const facts = group.map((c) => JSON.stringify(c.expect.keyFact ?? null));
+      expect(new Set(facts).size, `pair "${group[0]?.question}"`).toBe(facts.length);
+    }
+  });
+
+  it("crosses contracts, not just plans within one contract", () => {
+    const crossContract = pairs.filter(
+      (group) => new Set(group.map((c) => c.planRef.contractId)).size > 1,
+    );
+    expect(crossContract.length).toBeGreaterThan(0);
   });
 });

@@ -65,7 +65,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
   }, [turns, planPrompt]);
 
   const submit = useCallback(
-    async (question: string, planId: string | null) => {
+    async (question: string, chosen: PlanOption | null) => {
       const trimmed = question.trim();
       if (trimmed.length === 0 || busy) return;
 
@@ -83,6 +83,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
 
       const apply = (event: AskEvent): void => {
         if (event.type === "needs_plan") {
+          setPlanOptions(event.plans);
           setTurns((previous) => previous.filter((turn) => turn.id !== id));
           setPlanPrompt({ plans: event.plans, question: event.question });
           setStatus("Which plan are you on?");
@@ -108,6 +109,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
           setCallback({
             question: event.question,
             planContext: event.planContext,
+            planName: event.planName,
             documentsSearched: event.documentsSearched,
             refusalTrigger: event.refusalTrigger,
           });
@@ -162,7 +164,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
       };
 
       try {
-        await ask(trimmed, planId, apply);
+        await ask(trimmed, chosen, apply);
       } catch {
         apply({ type: "error", message: "The assistant could not be reached." });
       } finally {
@@ -173,11 +175,19 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
     [busy, mode],
   );
 
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
+
+  // Re-scopes what comes next. Answers already in the transcript keep the plan
+  // they were answered under, so switching never rewrites history.
+  const changePlan = (): void => {
+    setPlanPrompt({ plans: planOptions, question: "" });
+  };
+
   const choosePlan = (option: PlanOption): void => {
     setPlan(option);
     const pending = planPrompt?.question ?? "";
     setPlanPrompt(null);
-    void submit(pending, option.id);
+    if (pending.length > 0) void submit(pending, option);
   };
 
   const heading = variant === "page" ? "Member Assistant" : "Member Assistant";
@@ -191,6 +201,14 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
           </h2>
           <p className="assistant__context">
             Plan year 2026 · New Jersey · {plan === null ? "No plan selected" : plan.name}
+            {plan !== null && planOptions.length > 1 && (
+              <>
+                {" "}
+                <button type="button" className="assistant__plan-change" onClick={changePlan}>
+                  Change plan
+                </button>
+              </>
+            )}
           </p>
           <p className="assistant__context">Not signed in. This assistant holds no member data.</p>
         </div>
@@ -244,7 +262,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
                   <button
                     type="button"
                     className="starter"
-                    onClick={() => void submit(starter.title, plan?.id ?? null)}
+                    onClick={() => void submit(starter.title, plan)}
                   >
                     {starter.title}
                   </button>
@@ -328,8 +346,15 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
             <p>Costs differ between plans, so I need this one before I answer.</p>
             <ul className="plan-prompt__options">
               {planPrompt.plans.map((option) => (
-                <li key={option.id}>
-                  <button type="button" className="starter" onClick={() => choosePlan(option)}>
+                <li key={`${option.contractId}-${option.id}`}>
+                  <button
+                    type="button"
+                    className="starter"
+                    aria-current={
+                      plan?.contractId === option.contractId && plan.id === option.id ? "true" : undefined
+                    }
+                    onClick={() => choosePlan(option)}
+                  >
                     {option.name}
                   </button>
                 </li>
@@ -345,7 +370,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
           <VoiceComposer
             busy={busy}
             responding={speakingTurn !== null}
-            onSend={(question) => void submit(question, plan?.id ?? null)}
+            onSend={(question) => void submit(question, plan)}
           />
           {spoken !== null && (
             <div className="voice__playback">
@@ -370,7 +395,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
             event.preventDefault();
             const question = draft;
             setDraft("");
-            void submit(question, plan?.id ?? null);
+            void submit(question, plan);
           }}
         >
           <label className="visually-hidden" htmlFor="composer-input">

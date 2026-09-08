@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import pg from "pg";
 import type { CorpusChunk } from "./chunk.ts";
 import type { DocumentKind } from "../corpus/types.ts";
+import type { PlanRef } from "../types.ts";
 import type { PromptChunk } from "./prompt.ts";
 
 export interface RetrievedChunk extends PromptChunk {
@@ -25,6 +26,24 @@ export function connect(): pg.Client {
 }
 
 const toVector = (values: number[]): string => `[${values.join(",")}]`;
+
+/**
+ * The plans the index can actually answer for. Offering a plan whose documents
+ * are missing produces a refusal that reads as a model failure, so the picker is
+ * derived from the rows rather than from a list someone remembered to update.
+ * Wildcard rows answer under every plan and name none. D-055.
+ */
+export async function indexedPlans(client: pg.Client): Promise<PlanRef[]> {
+  const { rows } = await client.query(
+    "select distinct contract_id, plan_id, plan_year from chunks " +
+      "where plan_id <> '*' and contract_id <> '*' order by contract_id, plan_id",
+  );
+  return rows.map((row: Record<string, unknown>) => ({
+    contractId: String(row["contract_id"]),
+    planId: String(row["plan_id"]),
+    planYear: Number(row["plan_year"]),
+  }));
+}
 
 /** What the snapshot already holds, so unchanged chunks are never re-embedded. */
 export async function existingChunkContent(

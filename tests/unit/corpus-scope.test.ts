@@ -7,7 +7,9 @@ import {
   formatPlanRef,
   isSamePlan,
   planDisplayName,
+  resolveIndexedPlan,
 } from "../../src/corpus/scope.ts";
+
 
 describe("corpus scope", () => {
   it("declares at least one plan", () => {
@@ -75,5 +77,35 @@ describe("plan resolution [D-049, D-055]", () => {
   it("defaults to the first declared plan", () => {
     expect(defaultPlanRef()).toEqual(CORPUS_SCOPE.plans[0]);
     expect(defaultContractId()).toBe(CORPUS_SCOPE.plans[0]?.contractId);
+  });
+});
+
+describe("resolveIndexedPlan [FR-P2-02, D-055]", () => {
+  const indexed = [
+    { contractId: "H5141", id: "004", planYear: 2026, name: "Clover Health Choice (PPO)" },
+    { contractId: "H8010", id: "002", planYear: 2026, name: "Clover Health Classic (HMO)" },
+  ];
+
+  it("resolves a plan the index actually holds", () => {
+    expect(resolveIndexedPlan(indexed, "H8010", "002")).toMatchObject({
+      contractId: "H8010",
+      planId: "002",
+    });
+  });
+
+  // Today's silent failure: an unknown plan retrieves nothing and reads as a refusal.
+  it("refuses a plan the index does not hold", () => {
+    expect(resolveIndexedPlan(indexed, "H5141", "007")).toBeNull();
+    expect(resolveIndexedPlan(indexed, "H9999", "004")).toBeNull();
+  });
+
+  it("refuses a plan id borrowed from the other contract", () => {
+    expect(resolveIndexedPlan(indexed, "H5141", "002")).toBeNull();
+    expect(resolveIndexedPlan(indexed, "H8010", "004")).toBeNull();
+  });
+
+  it("falls back to the first indexed contract when the request names none", () => {
+    expect(resolveIndexedPlan(indexed, null, "004")).toMatchObject({ contractId: "H5141" });
+    expect(resolveIndexedPlan(indexed, null, "002")).toBeNull();
   });
 });

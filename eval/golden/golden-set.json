@@ -1,5 +1,5 @@
 {
-  "note": "50 cases. Composition follows docs/testing-strategy.md section 5.1: 30 bucket A, 8 bucket B, 10 bucket C, 2 adversarial. Bucket A key facts were read from the converted corpus; the Summary of Benefits conversion was hand-verified against the source PDF in Stage 1. Cases marked enforced:false describe behaviour the build does not yet guarantee, so Stage 6 and Stage 8 gains are visible rather than assumed. Six questions are written in member register (rambling, no jargon, question buried mid-sentence); testing-strategy section 5.1 recommends eight, so this is two short and recorded as a known gap rather than silently missing. Refusal is a typed outcome from Stage 6 onward, and bucket C is decided by rule before retrieval from Stage 8, so these cases are enforced rather than observed.",
+  "note": "50 cases. Composition follows docs/testing-strategy.md section 5.1: 30 bucket A, 8 bucket B, 10 bucket C, 2 adversarial. Bucket A key facts were read from the converted corpus; the Summary of Benefits conversion was hand-verified against the source PDF in Stage 1. Cases marked enforced:false describe behaviour the build does not yet guarantee, so Stage 6 and Stage 8 gains are visible rather than assumed. Six questions are written in member register (rambling, no jargon, question buried mid-sentence); testing-strategy section 5.1 recommends eight, so this is two short and recorded as a known gap rather than silently missing. Refusal is a typed outcome from Stage 6 onward, and bucket C is decided by rule before retrieval from Stage 8, so these cases are enforced rather than observed. P2 Stage 1 adds ten cases as five cross-plan pairs (PAIR-01 to PAIR-05): the same question under two plan references with different expected answers, four numeric and one structural. They are what make plan scoping falsifiable rather than assumed.",
   "cases": [
     {
       "id": "A-01",
@@ -945,6 +945,234 @@
         "trigger": "C-01"
       },
       "note": "Elicits a coverage determination indirectly. Enforcement lands in Stage 8. Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+    },
+    {
+      "id": "PAIR-01a",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H8010",
+        "planId": "002",
+        "planYear": 2026
+      },
+      "question": "what is my out of pocket maximum",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Out-of-Pocket Responsibility",
+        "keyFact": [
+          "$6,000",
+          "6,000"
+        ],
+        "mustCite": true
+      },
+      "note": "Cross-plan pair. HMO $6,000 against PPO $9,250, both hand-verified against their Summary of Benefits."
+    },
+    {
+      "id": "PAIR-01b",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H5141",
+        "planId": "004",
+        "planYear": 2026
+      },
+      "question": "what is my out of pocket maximum",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Out-of-Pocket Responsibility",
+        "keyFact": [
+          "$9,250",
+          "9,250"
+        ],
+        "mustCite": true
+      },
+      "note": "Cross-plan pair. HMO $6,000 against PPO $9,250, both hand-verified against their Summary of Benefits."
+    },
+    {
+      "id": "PAIR-02a",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H8010",
+        "planId": "002",
+        "planYear": 2026
+      },
+      "question": "how much does an emergency room visit cost",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Emergency Care",
+        "keyFact": [
+          "$130",
+          "130"
+        ],
+        "mustCite": true
+      },
+      "note": "Cross-plan pair. Same benefit, different amount per contract."
+    },
+    {
+      "id": "PAIR-02b",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H5141",
+        "planId": "004",
+        "planYear": 2026
+      },
+      "question": "how much does an emergency room visit cost",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Emergency Care",
+        "keyFact": [
+          "$115",
+          "115"
+        ],
+        "mustCite": true
+      },
+      "note": "Cross-plan pair. Same benefit, different amount per contract."
+    },
+    {
+      "id": "PAIR-03a",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H8010",
+        "planId": "002",
+        "planYear": 2026
+      },
+      "question": "what do I pay for urgent care",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Urgently Needed Services",
+        "keyFact": [
+          "$25",
+          "25"
+        ],
+        "mustCite": true
+      },
+      "note": "Cross-plan pair."
+    },
+    {
+      "id": "PAIR-03b",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H5141",
+        "planId": "004",
+        "planYear": 2026
+      },
+      "question": "what do I pay for urgent care",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Urgently Needed Services",
+        "keyFact": [
+          "$35",
+          "35"
+        ],
+        "mustCite": true
+      },
+      "note": "Cross-plan pair."
+    },
+    {
+      "id": "PAIR-04a",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H5141",
+        "planId": "007",
+        "planYear": 2026
+      },
+      "question": "what is my copay for a specialist visit",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Doctor’s Office",
+        "keyFact": [
+          "$2"
+        ],
+        "mustCite": true
+      },
+      "note": "Cross-plan pair across contracts. 002 and 004 both charge $10, so this pair uses 007."
+    },
+    {
+      "id": "PAIR-04b",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H8010",
+        "planId": "002",
+        "planYear": 2026
+      },
+      "question": "what is my copay for a specialist visit",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Doctor’s Office",
+        "keyFact": [
+          "$10"
+        ],
+        "mustCite": true
+      },
+      "note": "Cross-plan pair across contracts. 002 and 004 both charge $10, so this pair uses 007."
+    },
+    {
+      "id": "PAIR-05a",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H8010",
+        "planId": "002",
+        "planYear": 2026
+      },
+      "question": "what does it cost to see a specialist outside the network",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Doctor’s Office",
+        "keyFact": [
+          "network provider",
+          "must use network",
+          "not covered"
+        ],
+        "mustCite": true
+      },
+      "note": "Structural pair, not numeric. The HMO has no out-of-network column at all and answers with the network rule; the PPO answers with an amount."
+    },
+    {
+      "id": "PAIR-05b",
+      "bucket": "A",
+      "driver": "A-02",
+      "planRef": {
+        "contractId": "H5141",
+        "planId": "004",
+        "planYear": 2026
+      },
+      "question": "what does it cost to see a specialist outside the network",
+      "enforced": true,
+      "expect": {
+        "outcome": "answered",
+        "sourceDocument": "summary_of_benefits",
+        "sourceSection": "Doctor’s Office",
+        "keyFact": [
+          "$20"
+        ],
+        "mustCite": true
+      },
+      "note": "Structural pair, not numeric. The HMO has no out-of-network column at all and answers with the network rule; the PPO answers with an amount."
     }
   ],
   "planYear": 2026

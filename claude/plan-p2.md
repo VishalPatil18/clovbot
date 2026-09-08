@@ -40,15 +40,15 @@
 - **Scope in:** Ingest a second plan benefit package - the HMO contract or a second PPO service area. Plan-scoped retrieval filtering. Plan switcher in the interface. Golden set extended with paired questions that differ only by plan.
 - **Scope out:** Full eleven-state expansion. That is P4.
 - **Acceptance criteria:**
-  - [ ] Both plans are indexed with distinct contract identifiers.
-  - [ ] The same question asked under each plan returns different, individually correct amounts, hand-verified against both source documents.
-  - [ ] Retrieval never returns a chunk from a plan other than the one in session context, asserted directly.
-  - [ ] Switching plans mid-session re-scopes subsequent answers and does not retroactively alter prior ones.
-  - [ ] The golden set contains at least five paired cross-plan questions.
+  - [x] Both plans are indexed with distinct contract identifiers. H5141-004, H5141-007 and H8010-002.
+  - [x] The same question asked under each plan returns different, individually correct amounts, hand-verified against both source documents. $6,000 against $9,250.
+  - [x] Retrieval never returns a chunk from a plan other than the one in session context, asserted directly. `scripts/plan-scope-check.ts`, 300 rows, 0 leaks, and shown capable of failing.
+  - [~] Switching plans mid-session re-scopes subsequent answers and does not retroactively alter prior ones. Built and read; not covered by an automated test, because no component harness exists.
+  - [x] The golden set contains at least five paired cross-plan questions. Five pairs, four numeric and one structural.
 - **Test plan:** Paired integration tests per question, asserting both correctness and difference. A negative test asserting cross-plan leakage never occurs - this is the one that matters, because leakage produces a confidently wrong copay.
 - **Effort:** M
 - **Exit signal:** Asking the same copay question under two plans returns two different correct numbers.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-08. Effort ran 22.5h against the M band's ~7h; the overrun is D-049, D-053, D-056 and D-057, all decided after this plan was written.
 
 ---
 
@@ -200,7 +200,7 @@
 
 ## Completion Checklist
 
-- [ ] Stage 1 - Second plan indexed
+- [x] Stage 1 - Second plan indexed
 - [ ] Stage 2 - Structured lookup and router
 - [ ] Stage 3 - Answer card and freshness
 - [ ] Stage 4 - Session UX cluster

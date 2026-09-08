@@ -84,6 +84,12 @@
 .assistant__header { display: flex; flex-wrap: wrap; gap: var(--spacing-16); justify-content: space-between; align-items: flex-start; }
 .assistant__title { font-family: var(--font-display); font-size: var(--text-heading-sm); color: var(--color-forest-ink); margin: 0; }
 .assistant__context { margin: var(--spacing-4) 0 0; font-size: var(--text-body); }
+.assistant__plan-change {
+  min-height: 44px; min-width: 44px; padding: 0 var(--spacing-8);
+  background: none; border: 0; font: inherit; color: var(--color-forest-ink);
+  text-decoration: underline; cursor: pointer;
+}
+
 .assistant__header-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
 
 .assistant__thread { display: flex; flex-direction: column; gap: var(--spacing-24); min-height: 12rem; }

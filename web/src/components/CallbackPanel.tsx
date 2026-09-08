@@ -42,7 +42,7 @@ export function CallbackPanel({ draft }: { draft: CallbackDraft }): React.JSX.El
         <dt>Your question</dt>
         <dd>{draft.question}</dd>
         <dt>Plan</dt>
-        <dd>{draft.planContext}</dd>
+        <dd>{draft.planName}</dd>
         <dt>Documents searched</dt>
         <dd>
           {draft.documentsSearched.length === 0
