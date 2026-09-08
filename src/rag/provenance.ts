@@ -13,6 +13,9 @@ const DOCUMENT_KINDS: DocumentKind[] = [
 /** Documents that cover the whole contract rather than one plan benefit package. */
 export const ALL_PLANS = "*";
 
+/** Documents that cover every contract, such as the formulary and corporate pages. */
+export const ALL_CONTRACTS = "*";
+
 /**
  * Raises rather than defaulting. A citation missing plan year or plan is not a
  * citation, so a chunk that cannot state its provenance must never be indexed.

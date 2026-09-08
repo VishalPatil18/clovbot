@@ -39,18 +39,29 @@ export const contractIds = (): string[] => [
   ...new Set(CORPUS_SCOPE.plans.map((ref) => ref.contractId)),
 ];
 
-/**
- * The contract stamped on documents that belong to no single plan. They are
- * contract-wide, so a corpus spanning two contracts cannot attribute them and
- * must say so rather than picking the first.
- */
-export function soleContractId(): string {
-  const contracts = contractIds();
-  const only = contracts[0];
-  if (contracts.length !== 1 || only === undefined) {
-    throw new Error(
-      `contract-wide documents cannot be stamped: the corpus spans ${contracts.join(", ")}`,
-    );
+/** Catalog names, so a member reads a plan name and never a contract number. D-055. */
+const PLAN_NAMES: Record<string, string> = {
+  "H5141-004": "Clover Health Choice (PPO)",
+  "H5141-007": "Clover Health Choice Value (PPO)",
+  "H8010-002": "Clover Health Classic (HMO)",
+};
+
+export function planDisplayName(ref: PlanRef): string {
+  const name = PLAN_NAMES[formatPlanRef(ref)];
+  if (name === undefined) {
+    throw new Error(`no display name for ${formatPlanRef(ref)}; a member must never read a contract id`);
   }
-  return only;
+  return name;
 }
+
+/**
+ * The plan answered when a question needs no plan context. Retrieval still runs
+ * scoped, so something has to be chosen; the first declared plan is that choice.
+ */
+export function defaultPlanRef(): PlanRef {
+  const first = CORPUS_SCOPE.plans[0];
+  if (first === undefined) throw new Error("corpus scope declares no plans");
+  return first;
+}
+
+export const defaultContractId = (): string => defaultPlanRef().contractId;

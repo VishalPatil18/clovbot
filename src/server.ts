@@ -5,7 +5,14 @@ import { redactIdentifiers } from "./logging.ts";
 import { answerTurn } from "./rag/answer-turn.ts";
 import { citationLabel, citationNumbers, numberCitations, spokenAnswer } from "./rag/payload.ts";
 import { needsPlanContext } from "./rag/plan-scope.ts";
-import { CORPUS_SCOPE, soleContractId } from "./corpus/scope.ts";
+import {
+  CORPUS_SCOPE,
+  defaultContractId,
+  defaultPlanRef,
+  findPlanRef,
+  formatPlanRef,
+  planDisplayName,
+} from "./corpus/scope.ts";
 import {
   checkRate,
   connect,
@@ -20,14 +27,19 @@ import { degradeNotice } from "./voice/chain.ts";
 import { speak, transcribe } from "./voice/providers.ts";
 
 const PORT = Number(process.env["PORT"] ?? "5174");
-const CONTRACT_ID = soleContractId();
 const PLAN_YEAR = CORPUS_SCOPE.planYear;
 
-/** Names come from the Stage 1 catalog, not from the mock's invented placeholders. */
-export const PLANS = [
-  { id: "004", name: "Clover Health Choice (PPO)" },
-  { id: "007", name: "Clover Health Choice Value (PPO)" },
-] as const;
+/**
+ * Offered plans, built from the corpus scope so the picker cannot name a plan the
+ * corpus does not cover. Names come from the catalog, not from the mock's invented
+ * placeholders, and a plan without one raises here rather than showing a member a
+ * contract number. D-055.
+ */
+export const PLANS = CORPUS_SCOPE.plans.map((ref) => ({
+  contractId: ref.contractId,
+  id: ref.planId,
+  name: planDisplayName(ref),
+}));
 
 const MAX_QUESTION = 500;
 const MAX_NOTE = 1_000;
@@ -66,7 +78,7 @@ const send = (res: ServerResponse, event: unknown): void => {
 const server = createServer((req, res) => {
   if (req.method === "GET" && req.url === "/api/plans") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ plans: PLANS, planYear: PLAN_YEAR, contractId: CONTRACT_ID }));
+    res.end(JSON.stringify({ plans: PLANS, planYear: PLAN_YEAR }));
     return;
   }
 
@@ -326,10 +338,12 @@ async function handleAsk(
 ): Promise<void> {
   let question = "";
   let planId: string | null = null;
+  let contractId: string | null = null;
   try {
-    const parsed = JSON.parse(body) as { question?: unknown; planId?: unknown };
+    const parsed = JSON.parse(body) as { question?: unknown; planId?: unknown; contractId?: unknown };
     question = typeof parsed.question === "string" ? parsed.question.slice(0, MAX_QUESTION).trim() : "";
     planId = typeof parsed.planId === "string" ? parsed.planId : null;
+    contractId = typeof parsed.contractId === "string" ? parsed.contractId : null;
   } catch {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
@@ -342,6 +356,16 @@ async function handleAsk(
     return;
   }
 
+  // An unindexed plan retrieves nothing and reads as a refusal. Say it is a bad
+  // request instead. Contract defaults only while the corpus covers one.
+  const planRef =
+    planId === null ? null : findPlanRef(contractId ?? defaultContractId(), planId);
+  if (planId !== null && planRef === null) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "unknown plan" }));
+    return;
+  }
+
   res.writeHead(200, {
     "content-type": "text/event-stream",
     "cache-control": "no-cache",
@@ -350,7 +374,7 @@ async function handleAsk(
 
   // FR-10, D-022: ask for plan only when the answer depends on it, and only
   // once per session. The member may ask anything before choosing.
-  if (planId === null && needsPlanContext(question)) {
+  if (planRef === null && needsPlanContext(question)) {
     send(res, { type: "needs_plan", plans: PLANS, question });
     res.end();
     return;
@@ -380,7 +404,7 @@ async function handleAsk(
     const turn = await answerTurn(
       client,
       question,
-      { contractId: CONTRACT_ID, planId: planId ?? PLANS[0].id, planYear: PLAN_YEAR },
+      planRef ?? defaultPlanRef(),
       { onToken: () => send(res, { type: "progress" }) },
     );
 
@@ -412,7 +436,7 @@ async function handleAsk(
 
     const turnId = await writeTurn(client, {
       question: turn.question,
-      planContext: `${CONTRACT_ID}-${planId ?? PLANS[0].id}`,
+      planContext: formatPlanRef(planRef ?? defaultPlanRef()),
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,
@@ -434,7 +458,7 @@ async function handleAsk(
       send(res, {
         type: "offer_callback",
         question: turn.question,
-        planContext: `${CONTRACT_ID}-${planId ?? PLANS[0].id}`,
+        planContext: formatPlanRef(planRef ?? defaultPlanRef()),
         documentsSearched: [...new Set(turn.retrieved.map((chunk) => chunk.documentId))],
         refusalTrigger: turn.refusalTrigger,
       });

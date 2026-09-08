@@ -3,7 +3,7 @@ import { parseCatalog, parseCounties, selectPlanDocuments } from "./discover.ts"
 import { fetchDocuments, isPathAllowed } from "./fetch.ts";
 import { extractHtmlText, meetsByteFloor, pdfPageCount, pdfToPlanColumn, pdfToText } from "./convert.ts";
 import { buildSyntheticProviderDirectory } from "./synthetic.ts";
-import { CORPUS_SCOPE, soleContractId } from "./scope.ts";
+import { CORPUS_SCOPE } from "./scope.ts";
 import { renderReport } from "./report.ts";
 import {
   catalogPath,
@@ -71,7 +71,7 @@ async function discover(): Promise<void> {
       id: `corporate${path.replace(/\//g, "-")}`,
       kind: "corporate" as const,
       url: `${ORIGIN}${path}`,
-      contractId: soleContractId(),
+      contractId: "",
       planId: "",
       planYear: PLAN_YEAR,
       language: "english" as const,
@@ -105,10 +105,10 @@ async function discoverFilerDocuments(): Promise<SourceDocument[]> {
     for (const { kind, pattern } of FILER_DOCUMENTS) {
       if (!pattern.test(target) || found.some((d) => d.kind === kind)) continue;
       found.push({
-        id: `${soleContractId()}-${PLAN_YEAR}-${kind}`,
+        id: `${PLAN_YEAR}-${kind}`,
         kind,
         url: target,
-        contractId: soleContractId(),
+        contractId: "",
         planId: "",
         planYear: PLAN_YEAR,
         language: "english",

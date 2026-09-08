@@ -50,9 +50,15 @@ export function citationLabel(chunk: CitableChunk): string {
   if (chunk.contractId.length === 0) {
     throw new Error(`citation for ${chunk.id} has no contract id`);
   }
-  const plan = chunk.planId === "*" ? chunk.contractId : `${chunk.contractId}-${chunk.planId}`;
   const section = shortSection(chunk.section);
-  return `${KIND_LABEL[chunk.kind]} ${chunk.planYear} · Plan ${plan}${section.length > 0 ? ` · ${section}` : ""}`;
+  const tail = section.length > 0 ? ` · ${section}` : "";
+  // A document covering every contract has no plan to name, and "Plan *" is not
+  // a source a member can look up.
+  if (chunk.contractId === "*") {
+    return `${KIND_LABEL[chunk.kind]} ${chunk.planYear}${tail}`;
+  }
+  const plan = chunk.planId === "*" ? chunk.contractId : `${chunk.contractId}-${chunk.planId}`;
+  return `${KIND_LABEL[chunk.kind]} ${chunk.planYear} · Plan ${plan}${tail}`;
 }
 
 /**

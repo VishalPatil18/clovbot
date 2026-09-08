@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { CORPUS_SCOPE, formatPlanRef, isSamePlan } from "../../src/corpus/scope.ts";
+import {
+  CORPUS_SCOPE,
+  defaultContractId,
+  defaultPlanRef,
+  findPlanRef,
+  formatPlanRef,
+  isSamePlan,
+  planDisplayName,
+} from "../../src/corpus/scope.ts";
 
 describe("corpus scope", () => {
   it("declares at least one plan", () => {
@@ -34,5 +42,38 @@ describe("corpus scope", () => {
     const b = { contractId: "H8010", planId: "002", planYear: 2026 };
     expect(isSamePlan(a, b)).toBe(false);
     expect(isSamePlan(a, { ...a })).toBe(true);
+  });
+});
+
+describe("plan resolution [D-049, D-055]", () => {
+  it("refuses a plan id that belongs to another contract", () => {
+    expect(findPlanRef("H8010", "004")).toBeNull();
+    expect(findPlanRef("H5141", "002")).toBeNull();
+    expect(findPlanRef("H9999", "001")).toBeNull();
+  });
+
+  it("resolves a plan the corpus actually covers", () => {
+    expect(findPlanRef("H5141", "004")).toEqual({
+      contractId: "H5141",
+      planId: "004",
+      planYear: 2026,
+    });
+  });
+
+  it("names every declared plan, so no member reads a contract number", () => {
+    for (const ref of CORPUS_SCOPE.plans) {
+      expect(planDisplayName(ref)).not.toMatch(/^[A-Z]\d{4}/);
+    }
+  });
+
+  it("raises rather than rendering an id when a plan has no name", () => {
+    expect(() => planDisplayName({ contractId: "H0000", planId: "999", planYear: 2026 })).toThrow(
+      /no display name/,
+    );
+  });
+
+  it("defaults to the first declared plan", () => {
+    expect(defaultPlanRef()).toEqual(CORPUS_SCOPE.plans[0]);
+    expect(defaultContractId()).toBe(CORPUS_SCOPE.plans[0]?.contractId);
   });
 });

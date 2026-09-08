@@ -167,3 +167,29 @@ describe("the interactive marker", () => {
     expect(css).toMatch(/prefers-reduced-motion[\s\S]*\.citation--found \{ transition: none/);
   });
 });
+
+describe("contract-wide citations [D-056]", () => {
+  const wide = {
+    id: "f",
+    documentId: "H5141-2026-formulary",
+    kind: "formulary" as const,
+    contractId: "*",
+    planId: "*",
+    planYear: 2026,
+    section: "Tier 1 Drugs",
+    content: "",
+  };
+
+  // A formulary answers under every plan, so its citation must not print a
+  // wildcard at a member. "Plan *" is not a source anyone can look up.
+  it("names the document rather than a wildcard plan", () => {
+    const label = citationLabel(wide);
+    expect(label).not.toContain("*");
+    expect(label).toContain("2026");
+    expect(label).toContain("Tier 1 Drugs");
+  });
+
+  it("still refuses a citation with no plan year", () => {
+    expect(() => citationLabel({ ...wide, planYear: Number.NaN })).toThrow(/plan year/);
+  });
+});
