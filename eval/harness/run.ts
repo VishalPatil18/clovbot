@@ -1,11 +1,9 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { latestSnapshotId } from "../../src/corpus/snapshot.ts";
-import { redactIdentifiers } from "../../src/logging.ts";
-import { buildPrompt, findUncitedIds, parseCitations } from "../../src/rag/prompt.ts";
-import { embed, generate } from "../../src/rag/providers.ts";
-import { connect, searchHybrid } from "../../src/rag/store.ts";
+import { answerTurn } from "../../src/rag/answer-turn.ts";
+import { connect } from "../../src/rag/store.ts";
 import { judgeFaithfulness } from "../judges/faithfulness.ts";
-import { buildReport, checkStructuralCitations, type Bucket, type CaseOutcome } from "./score.ts";
+import { buildReport, type Bucket, type CaseOutcome } from "./score.ts";
 
 const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
 const PLAN_YEAR = Number(process.env["CORPUS_PLAN_YEAR"] ?? "2026");
@@ -61,38 +59,40 @@ persist(report, outcomes);
 if (report.failures.length > 0) process.exit(1);
 
 async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
-  const question = redactIdentifiers(testCase.question);
-  const scope = { contractId: CONTRACT_ID, planId: testCase.plan, planYear: PLAN_YEAR };
+  const turn = await answerTurn(client, testCase.question, {
+    contractId: CONTRACT_ID,
+    planId: testCase.plan,
+    planYear: PLAN_YEAR,
+  });
 
-  const [vector] = await embed([question]);
-  if (vector === undefined) throw new Error(`no embedding for ${testCase.id}`);
-  const retrieved = await searchHybrid(client, vector, question, scope, TOP_K);
+  const refused = turn.outcome !== "answered";
 
-  const answer =
-    retrieved.length === 0
-      ? "I could not find that in the plan documents I searched. Please call Member Services."
-      : (await generate(buildPrompt(question, retrieved))).text;
-
-  const citations = parseCitations(answer);
-  const refused = citations.length === 0;
-  const structural = checkStructuralCitations(answer);
-
-  // Citation containment: an id the answer cites must have been retrieved this turn.
-  const uncontained = findUncitedIds(answer, retrieved.map((chunk) => chunk.id));
+  // FR-32 makes an uncited claim unrenderable, so structural compliance is a
+  // property of the payload rather than something scraped back out of prose.
+  const uncitedClaims = (turn.payload?.claims ?? []).filter(
+    (claim) => claim.citationIds.length === 0,
+  );
+  const structural = {
+    compliant: uncitedClaims.length === 0,
+    uncitedSentences: uncitedClaims.map((claim) => claim.text),
+  };
 
   let faithfulness: number | null = null;
-  if (!refused) {
-    const cited = retrieved.filter((chunk) => citations.includes(chunk.id));
-    const judged = await judgeFaithfulness(answer, cited.length > 0 ? cited : retrieved);
+  if (!refused && turn.payload !== null) {
+    const cited = turn.retrieved.filter((chunk) => turn.citedIds.includes(chunk.id));
+    const judged = await judgeFaithfulness(
+      turn.payload.claims.map((claim) => claim.text).join("\n"),
+      cited.length > 0 ? cited : turn.retrieved,
+    );
     faithfulness = judged.score;
   }
 
-  const passed = evaluate(testCase, { answer, refused, uncontained, structural });
+  const passed = evaluate(testCase, { answer: turn.answer, refused, structural });
   process.stdout.write(`${passed ? "pass" : "FAIL"}${testCase.enforced ? "" : " (not enforced)"}\n`);
 
   return {
     id: testCase.id,
-    answer,
+    answer: turn.answer,
     bucket: testCase.bucket,
     driver: testCase.driver,
     enforced: testCase.enforced,
@@ -100,21 +100,14 @@ async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
     refused,
     faithfulness,
     structural,
-    note: uncontained.length > 0 ? `cited unretrieved chunks: ${uncontained.join(", ")}` : "",
+    note: turn.refusalTrigger === null ? "" : `trigger ${turn.refusalTrigger}, score ${turn.rerankTopScore.toFixed(4)}`,
   };
 }
 
 function evaluate(
   testCase: GoldenCase,
-  actual: {
-    answer: string;
-    refused: boolean;
-    uncontained: string[];
-    structural: { compliant: boolean };
-  },
+  actual: { answer: string; refused: boolean; structural: { compliant: boolean } },
 ): boolean {
-  if (actual.uncontained.length > 0) return false;
-
   if (testCase.expect.outcome === "refused") return actual.refused;
   if (actual.refused) return false;
   if (testCase.expect.mustCite === true && !actual.structural.compliant) return false;

@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
 import pg from "pg";
 import type { CorpusChunk } from "./chunk.ts";
+import type { DocumentKind } from "../corpus/types.ts";
 import type { PromptChunk } from "./prompt.ts";
 
 export interface RetrievedChunk extends PromptChunk {
+  /** Needed for citation rendering and EOC precedence. FR-06, FR-07. */
+  kind: DocumentKind;
   distance: number;
 }
 
@@ -113,6 +116,7 @@ export async function searchHybrid(
   return rows.map((row: Record<string, unknown>) => ({
     id: String(row["id"]),
     documentId: String(row["document_id"]),
+    kind: String(row["kind"]) as DocumentKind,
     contractId: String(row["contract_id"]),
     planId: String(row["plan_id"]),
     planYear: Number(row["plan_year"]),

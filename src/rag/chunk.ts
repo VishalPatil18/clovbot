@@ -39,6 +39,8 @@ const NO_SECTION = "Unlabelled";
 /** Table-of-contents lines carry dot leaders and a page number. Never headings. */
 const TOC_LINE = /\.{4,}\s*\d+\s*$/;
 
+/** In the body a chapter line is bare and its title sits on the next line. */
+const EOC_CHAPTER_BARE = /^\s*CHAPTER\s+\d+\s*:\s*$/;
 const EOC_CHAPTER = /^\s*CHAPTER\s+\d+\s*[:.]?\s*(.+?)\s*$/;
 const EOC_SECTION = /^\s*SECTION\s+\d+(?:\.\d+)?\s+(.+?)\s*$/;
 const EOC_SUBSECTION = /^\s*Section\s+\d+\.\d+\s+(.+?)\s*$/;
@@ -110,18 +112,32 @@ function splitIntoSections(text: string, kind: DocumentKind): Section[] {
     if (current.lines.some((line) => line.trim().length > 0)) sections.push(current);
   };
 
-  for (const raw of text.split("\n")) {
+  const lines = text.split("\n");
+  // The Evidence of Coverage opens with a table of contents whose entries look
+  // exactly like headings. The body starts at the first bare "CHAPTER n:" line,
+  // so nothing before that is treated as a heading.
+  const chaptered = kind === "evidence_of_coverage" || kind === "annual_notice_of_change";
+  const bodyStart = chaptered ? lines.findIndex((line) => EOC_CHAPTER_BARE.test(line)) : 0;
+
+  for (const [index, raw] of lines.entries()) {
     if (raw.trim().length === 0) continue;
 
-    const heading = detectHeading(raw, kind);
+    const heading = index < bodyStart ? null : detectHeading(raw, kind);
     if (heading === null) {
       current.lines.push(raw.trimEnd());
       continue;
     }
 
+    // A bare chapter line carries its title on the following line.
+    let title = heading.title;
+    if (chaptered && EOC_CHAPTER_BARE.test(raw)) {
+      const next = lines.slice(index + 1).find((line) => line.trim().length > 0);
+      title = next === undefined ? title : `Chapter: ${next.trim()}`;
+    }
+
     flush();
     path.length = Math.min(path.length, heading.level - 1);
-    path[heading.level - 1] = heading.title;
+    path[heading.level - 1] = title;
     current = { path: path.filter((part) => part !== undefined), lines: [raw.trimEnd()] };
   }
   flush();

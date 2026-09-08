@@ -71,6 +71,54 @@ export async function embed(texts: string[]): Promise<number[][]> {
     });
 }
 
+/** FR-08. Streams tokens as they arrive; the caller sees first token immediately. */
+export async function generateStream(
+  prompt: Prompt,
+  onToken: (token: string) => void,
+): Promise<GeneratedAnswer> {
+  const response = await fetchWithRetry(azureUrl(required("AZURE_OPENAI_DEPLOYMENT"), "chat/completions"), {
+    method: "POST",
+    headers: { "api-key": required("AZURE_OPENAI_API_KEY"), "content-type": "application/json" },
+    body: JSON.stringify({
+      messages: [
+        { role: "system", content: prompt.system },
+        { role: "user", content: prompt.user },
+      ],
+      temperature: 0,
+      stream: true,
+    }),
+  });
+  if (!response.ok || response.body === null) {
+    throw new Error(`HTTP ${response.status} ${await response.text()}`);
+  }
+
+  let text = "";
+  let buffer = "";
+  const decoder = new TextDecoder();
+  for await (const bytes of response.body as unknown as AsyncIterable<Uint8Array>) {
+    buffer += decoder.decode(bytes, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        const token = (JSON.parse(payload) as { choices?: { delta?: { content?: string } }[] })
+          .choices?.[0]?.delta?.content;
+        if (token !== undefined && token.length > 0) {
+          text += token;
+          onToken(token);
+        }
+      } catch {
+        // A malformed chunk is skipped; the stream carries keep-alive frames too.
+      }
+    }
+  }
+  if (text.length === 0) throw new Error("Azure returned an empty answer");
+  return { text, provider: "azure" };
+}
+
 export async function generate(prompt: Prompt): Promise<GeneratedAnswer> {
   try {
     return { text: await azureChat(prompt), provider: "azure" };

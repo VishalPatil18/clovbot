@@ -7,8 +7,8 @@
 | Field                | Value                          |
 | -------------------- | ------------------------------ |
 | Snapshot date        | 2026-09-08                     |
-| Current stage        | P1 Stage 5 complete. Stage 2 skipped. Next is Stage 6. |
-| Last feature shipped | Golden set and eval harness, red by design. |
+| Current stage        | P1 Stage 6 complete. Stage 2 skipped. Next is Stage 7. |
+| Last feature shipped | The answer contract. Eval gates green. |
 
 ---
 
@@ -38,10 +38,15 @@
 - **Ingest is idempotent.** Two consecutive runs report 0 new or changed, keep the same snapshot id, and leave 1476 rows with 1476 distinct ids and zero missing provenance.
 - **Hybrid retrieval.** Dense HNSW and lexical GIN fused by Reciprocal Rank Fusion in one Postgres function, both halves scoped to the plan before ranking. Measured: rare drug ORSERDU is dense rank 9 and hybrid rank 1; the paraphrase "what does it cost to see a skin doctor" is absent from lexical and hybrid rank 2.
 - **Smoke set.** 10 of 10 questions retrieve the expected source document.
-- **Eval harness, measured 2026-09-08 against snapshot `2026-09-08T0313Z`.** Faithfulness **0.803** against a 0.90 floor. Structural citation compliance **76%**, twelve answers carrying an uncited factual claim. Refusal rate **0.0%**. Bucket A accuracy **17/30**. The adversarial prompt-injection case passes. The build correctly fails on faithfulness and structural compliance, which is what Stage 5 was for; Stage 6 makes it green.
+- **Eval gates green, measured 2026-09-08.** Faithfulness **0.988** against a 0.90 floor. Structural compliance **100%**, zero uncited claims. Refusal rate **13.3%**, inside the ok band. Bucket A accuracy **25/28**. The build passes all three thresholds; Stage 5's baseline was 0.803, 76% and 17/30.
+- **The answer contract holds.** The model returns typed claims each carrying their own citation ids; a claim without one fails validation and is never rendered, so an uncited claim is structurally impossible rather than merely detectable. Refusal is a typed branch. Unanswered parts are named explicitly.
+- **Every named Stage 6 edge verified** by `scripts/stage6-checks.ts`: datastore unreachable produces no factual claim, a below-floor question refuses, a partially covered question answers the supported part and names the gap, conflicting sources return the Evidence of Coverage value and state the disagreement, a citation with no plan year refuses rather than rendering, and tokens stream.
 - **Judge calibrated.** 14 sentence-level judgements across six fixtures, zero disagreements. The deliberately unfaithful fixture scores 0.00, the partial one 0.67.
 - **Synthetic provider data is not cited as fact.** Asked whether a named doctor is in network, the assistant states the directory is demo data and routes to a human. The Stage 1 banner mitigation holds.
-- **Tests.** 172 passing. 26 failing, all `not implemented` stubs belonging to Stages 6 through 9.
+- **Reranker.** Local ONNX cross-encoder, `Xenova/ms-marco-MiniLM-L-6-v2`, ~280ms at a pool of 10.
+- **Tests.** 201 passing. 10 failing, all `not implemented` stubs belonging to Stage 8 (FR-23 loop breaker, FR-24 language detection).
+
+**Known NFR breach.** Time to first token measured at **1632ms** against NFR-PERF-02's 800ms budget, unthrottled. Retrieval plus rerank is roughly 300ms of that; the rest is generation. This needs addressing before Stage 10's throttled measurement, and the structured payload makes it worse than prose would, because the model must emit JSON before the first useful token.
 
 ## 3. Locked decisions
 
@@ -60,8 +65,10 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 
 ## 4. What's next
 
-1. **Stage 6** - reranking, confidence floor, per-claim cite-or-refuse, implemented until the Stage 5 harness goes green. The dominant failure is per-claim citation: the model cites its first sentence and leaves later factual sentences uncited. FR-32's structured payload is the fix.
-2. **Refusal is not currently representable.** It is inferred from the absence of citations, which cannot distinguish a cited "not found" from a factual answer. FR-32's typed refusal branch fixes this, and until then bucket B, bucket C and cases A-31 and A-32 are marked not-yet-enforced.
+1. **Stage 7** - the chat surface and WCAG 2.2 AA accessibility. The largest remaining stage, and the one `docs/build-journal.md` argues carries the most deflection leverage.
+2. **Time to first token is over budget**, 1632ms against 800ms. Streaming the rendered prose rather than the raw JSON payload is the obvious lever.
+3. **Two register variants still refuse.** A-03 and A-18 score 0.0006 and 0.0002, below the 0.001 floor. The floor cannot separate them from nonsense, which is the cost D-038 records rather than hides.
+4. **Stage 8 stubs remain**: FR-23 loop breaker and FR-24 language detection.
 3. **Stage 2, deferred** - the voice latency spike was skipped. NFR-PERF-03 and 04 stay unmeasured until Stage 9.
 4. **Gemini key** - rejected as invalid, so the D-034 fallback has never executed.
 
@@ -183,3 +190,20 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 - **The synthetic provider directory mitigation works.** The assistant states the directory is demo data rather than citing invented doctors, which was the rule 6 risk raised when synthetic data was approved.
 
 **Open:** Stage 6 reranker model selection. Gemini key invalid. Voice budgets unmeasured.
+
+## 2026-09-08 - Stage 6: reranking, confidence floor, and the answer contract
+
+**Did:** Added a local ONNX cross-encoder, calibrated a confidence floor against measured data, and replaced prose generation with FR-32's structured payload. All three eval gates went green.
+
+**Files:** created `src/rag/{rerank,payload,answer-turn}.ts`, `scripts/{rerank-spike,floor-calibrate,stage6-checks}.ts`; implemented `src/answer.ts` and `applyConfidenceGate`; added streaming to `src/rag/providers.ts`; rewired `src/rag/cli.ts` and the eval harness onto one shared pipeline. Dependency `@huggingface/transformers@4.2.0`.
+
+**Measured:** faithfulness 0.803 to 0.988, structural compliance 76% to 100%, bucket A 17/30 to 25/28, refusal rate 13.3%.
+
+**Decisions:** D-037 gained its measured numbers. D-038 amends D-016. D-039 removes automated conflict detection.
+
+**What the measurements taught:**
+- **The reranker score cannot be the confidence signal.** The same question scores 0.998 phrased tersely and 0.0005 phrased the way a member actually speaks. Out-of-corpus questions top out at 0.0002, so a grandmother asking about cover on a trip abroad is indistinguishable from "what is the capital of France". Ordering is fine, at 96-100% accuracy@5; only the scalar is unusable.
+- **A spurious conflict detector is worse than none.** Comparing amounts across chunks fired on unrelated benefits, and telling the model a conflict existed made it declare a correct Clover document incorrect and invent a $25 figure.
+- **The Evidence of Coverage table of contents was being read as headings.** Body chapters carry their title on the following line while contents entries carry it inline, so every chunk inherited a heading from a page-number line. Fixing it cut EOC chunks from 656 to 318 and made sections meaningful.
+
+**Open:** time to first token 1632ms against an 800ms budget. Two register variants below the floor. Stage 8 stubs.

@@ -25,7 +25,15 @@ export function fuseRrf(
     .sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-/** The single signal deciding answer versus refuse. FR-03, D-016. */
-export function applyConfidenceGate(_topScore: number, _floor: number): GateOutcome {
-  throw new Error("not implemented");
+/**
+ * Coarse relevance gate. FR-03, amended by D-038: the reranker score orders well
+ * but its absolute value collapses on conversational phrasing, so this catches
+ * only questions with nothing relevant at all. The answer contract is enforced by
+ * the structured payload in src/answer.ts, not by this threshold.
+ */
+export function applyConfidenceGate(topScore: number, floor: number): GateOutcome {
+  if (!Number.isFinite(topScore) || topScore < floor) {
+    return { kind: "refuse", reason: "below_floor" };
+  }
+  return { kind: "answer" };
 }

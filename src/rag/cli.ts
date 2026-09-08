@@ -2,14 +2,14 @@ import { redactIdentifiers } from "../logging.ts";
 import { latestSnapshotId, readSnapshot } from "../corpus/snapshot.ts";
 import { planIngest, readSnapshotMarkdown } from "./ingest.ts";
 import { describeChunk, readGeneratedContext, writeGeneratedContext } from "./context.ts";
-import { buildPrompt, findUncitedIds, parseCitations } from "./prompt.ts";
+import { answerTurn } from "./answer-turn.ts";
+import { citationLabel } from "./payload.ts";
 import { embed, generate } from "./providers.ts";
-import { connect, existingChunkContent, pruneChunks, searchHybrid, upsertChunks, writeTurn, type RetrievalMode } from "./store.ts";
+import { connect, existingChunkContent, pruneChunks, upsertChunks, writeTurn } from "./store.ts";
 
 const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
 const PLAN_IDS = (process.env["CORPUS_PLAN_IDS"] ?? "004,007").split(",");
 const PLAN_YEAR = Number(process.env["CORPUS_PLAN_YEAR"] ?? "2026");
-const TOP_K = 5;
 /** Azure embeddings are capped per minute by tokens, not requests. */
 const TOKENS_PER_MINUTE = Number(process.env["AZURE_EMBEDDING_TPM"] ?? "29000");
 const BATCH_TOKEN_BUDGET = 5_000;
@@ -87,82 +87,42 @@ async function ask(): Promise<void> {
     throw new Error(`plan ${planId} is not indexed; indexed plans are ${PLAN_IDS.join(", ")}`);
   }
 
-  // FR-31, and D-034: redact before the model call, not only before the log write.
-  const redacted = redactIdentifiers(question);
-  const startedAt = Date.now();
-
   const client = connect();
   await client.connect();
   try {
-    const [queryVector] = await embed([redacted]);
-    if (queryVector === undefined) throw new Error("no embedding returned for the question");
-    const embeddedAt = Date.now();
+    const turn = await answerTurn(client, question, {
+      contractId: CONTRACT_ID,
+      planId,
+      planYear: PLAN_YEAR,
+    });
 
-    const scope = { contractId: CONTRACT_ID, planId, planYear: PLAN_YEAR };
-    const mode = (flags["mode"] ?? "hybrid") as RetrievalMode;
-    const retrieved = await searchHybrid(client, queryVector, redacted, scope, TOP_K, mode);
-    const retrievedAt = Date.now();
-
-    if (retrieved.length === 0) {
-      // FR-09: nothing retrieved means refuse. There is no degraded answering mode.
-      console.log(
-        "I could not find anything in the plan documents I searched for that question.\n" +
-          "Please call Member Services at 1-888-778-1478 (TTY 711), 8am-8pm local time.",
-      );
-      await writeTurn(client, {
-        question: redacted,
-        planContext: `${CONTRACT_ID}-${planId}`,
-        chunkIds: [],
-        corpusSnapshotId: latestSnapshotId(),
-        outcome: "refused",
-        provider: "none",
-        latencyMs: { retrieval: retrievedAt - startedAt },
-      });
-      return;
-    }
-
-    const answer = await generate(buildPrompt(redacted, retrieved));
-    const completedAt = Date.now();
-
-    const uncited = findUncitedIds(answer.text, retrieved.map((chunk) => chunk.id));
-    if (uncited.length > 0) {
-      throw new Error(
-        `answer cited chunks that were never retrieved: ${uncited.join(", ")}. Refusing to show it.`,
-      );
-    }
-
-    // No citation means the model found nothing it could support, which is a
-    // refusal however politely it is worded. Stage 6 replaces this with the
-    // reranker confidence floor; until then the metric must not read as answered.
-    const citations = parseCitations(answer.text);
-    const outcome = citations.length > 0 ? "answered" : "refused";
-
-    console.log(`\n${answer.text}\n`);
-    console.log("Sources:");
-    for (const id of citations) {
-      const chunk = retrieved.find((candidate) => candidate.id === id);
-      if (chunk === undefined) continue;
-      console.log(
-        `  [${chunk.id}] ${chunk.documentId}, ${chunk.contractId}-${chunk.planId}, ` +
-          `plan year ${chunk.planYear}, section "${chunk.section}"`,
-      );
+    console.log(`\n${turn.answer}\n`);
+    if (turn.citedIds.length > 0) {
+      console.log("Sources:");
+      for (const id of turn.citedIds) {
+        const chunk = turn.retrieved.find((candidate) => candidate.id === id);
+        if (chunk !== undefined) console.log(`  ${citationLabel(chunk)}`);
+      }
     }
 
     const turnId = await writeTurn(client, {
-      question: redacted,
+      question: turn.question,
       planContext: `${CONTRACT_ID}-${planId}`,
-      chunkIds: retrieved.map((chunk) => chunk.id),
+      chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
-      outcome,
-      provider: answer.provider,
+      outcome: turn.outcome,
+      provider: turn.provider,
       latencyMs: {
-        embedding: embeddedAt - startedAt,
-        retrieval: retrievedAt - embeddedAt,
-        generation: completedAt - retrievedAt,
-        total: completedAt - startedAt,
+        ...turn.latencyMs,
+        rerankTopScore: Math.round(turn.rerankTopScore * 10_000) / 10_000,
+        confidenceFloor: turn.confidenceFloor,
       },
     });
-    console.log(`\nturn ${turnId} | provider ${answer.provider} | ${completedAt - startedAt}ms`);
+    console.log(
+      `\nturn ${turnId} | ${turn.outcome}${turn.refusalTrigger === null ? "" : ` (${turn.refusalTrigger})`}` +
+        ` | score ${turn.rerankTopScore.toFixed(4)} vs floor ${turn.confidenceFloor}` +
+        ` | ${turn.provider} | ${turn.latencyMs["total"] ?? 0}ms`,
+    );
   } finally {
     await client.end();
   }

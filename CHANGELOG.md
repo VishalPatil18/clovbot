@@ -8,6 +8,10 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- **Every fact in an answer carries its own source.** Answers are built claim by claim, and a statement the plan documents do not support is not shown at all.
+- **The assistant says what it could not answer.** If part of a question is outside the plan documents, it names that part and gives the phone number instead of quietly leaving it out.
+- **Answers appear as they are written**, rather than after a pause.
+- **When the plan documents disagree, the Evidence of Coverage wins** and the disagreement is stated rather than hidden.
 - **Answers now come from the whole plan library, not one document.** Questions can be answered from the Evidence of Coverage, the Summary of Benefits, the Annual Notice of Change, the drug formulary and Clover's public pages, for both indexed plans.
 - **Drug questions work.** Asking about a specific medication finds it by name, including uncommon brand names, and returns its tier and any restrictions.
 - **Ask a question, get a cited answer.** `npm run ask -- "what is the specialist copay" --plan 004` returns the amount from the plan's own Summary of Benefits, with the document, contract, plan, plan year and section it came from. Asking the same question against plan 007 returns that plan's different amount, because the two plans are indexed separately.

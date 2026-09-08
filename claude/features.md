@@ -411,3 +411,75 @@ Stage 2, the voice latency spike, was skipped at the user's instruction. It is a
 3. **Refusal is not representable today.** It is inferred from the absence of citations, which cannot distinguish a cited "not found" from a factual answer. Cases A-31 and A-32 were reclassified as not-yet-enforced rather than being scored against a heuristic that cannot express the behaviour.
 4. **The synthetic provider directory is not cited as fact.** Asked about a named doctor, the assistant states the directory is demo data and routes to a human, closing the rule 6 risk raised when synthetic data was approved.
 
+
+---
+
+## Feature: Reranking, confidence floor, cite-or-refuse (Stage 6)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | 2026-09-08           |
+| Cycle            | 5                    |
+| Stage of plan.md | `plan-p1.md` Stage 6 |
+| Owner            | user + claude        |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | The reranker score collapses on conversational phrasing, breaking D-016's premise | Make FR-32's structured payload the gate; keep the reranker for ordering |
+| 2 | Which model, given accuracy@1 is tied and latency differs 2x | `ms-marco-MiniLM-L-6-v2` |
+
+### Phase 2 - Architecting
+
+**Options considered:**
+
+1. **Keep D-016**, floor at the measured optimum. The gate is nearly inert.
+2. **Normalise the question** into a terse search query before reranking. Restores the score, costs a pre-generation model call inside an 800ms budget.
+3. **Structured payload as the contract**, reranker demoted to a coarse relevance gate.
+
+**Chosen:** 3, logged as D-038. Stage 5 measured the real failure mode and it was uncited claims, not retrieval. A scalar cannot fix that; a schema that makes an uncited claim unrepresentable can.
+
+### Phase 3 - Product Specs
+
+- **UI:** None yet. `npm run ask -- "<question>" --plan <004|007>`.
+- **Entities:** `RerankedChunk`, `TurnResult`, `AnswerPayload` (claims, unanswered, refusal), `CitableChunk`.
+- **Answer flow:** retrieve hybrid, rerank, gate, prompt for JSON, validate, check citation containment, render prose in the application.
+
+### Phase 4 - Tech Specs
+
+- **Reranker:** `@huggingface/transformers@4.2.0`, `Xenova/ms-marco-MiniLM-L-6-v2` quantised. *Rejected:* `onnxruntime-node` plus a hand-written tokenizer, two dependencies for the same result; L-12-v2, twice the latency for tied accuracy@1.
+- **Validation:** hand-rolled at the model boundary, per the Zod deferral.
+- **Streaming:** server-sent events parsed from the Azure response body. FR-08.
+
+### Phase 5 - Planning
+
+| Sub-stage | Goal | Acceptance |
+| --- | --- | --- |
+| 6a | Reranker and spike | Two candidates measured, choice justified by numbers |
+| 6b | Floor calibration | Floor derived from separation, not chosen |
+| 6c | Payload validation | Uncited claim unrepresentable |
+| 6d | Answer pipeline | One path shared by CLI and eval |
+| 6e | Named edges | Datastore down, below floor, partial, conflict, provenance, streaming |
+
+### Phase 6 - Writing Code
+
+**Measured, 2026-09-08:**
+
+| Metric | Stage 5 | Stage 6 | Threshold |
+| --- | --- | --- | --- |
+| Faithfulness | 0.803 | **0.988** | 0.90, passes |
+| Structural compliance | 76% | **100%** | 100%, passes |
+| Refusal rate | 0.0% | 13.3% | under 20%, ok |
+| Bucket A accuracy | 17/30 | **25/28** | - |
+
+All six named edges pass, including the datastore-unreachable case the plan calls the most important in the stage.
+
+**Defects the run surfaced:**
+
+1. **The reranker score is not a usable confidence signal.** Identical questions score 0.998 terse and 0.0005 conversational, while out-of-corpus questions reach 0.0002. Amended in D-038.
+2. **Automated conflict detection fabricated a conflict.** It compared amounts from unrelated benefits, then the model declared a correct Clover document incorrect and invented a $25 copay. Removed in D-039.
+3. **The Evidence of Coverage table of contents was parsed as headings**, because body chapters carry their title on the next line. EOC chunks fell 656 to 318.
+
+**Known NFR breach:** time to first token 1632ms against NFR-PERF-02's 800ms, unthrottled. The structured payload worsens it, because JSON must be emitted before any useful token.
+

@@ -1,0 +1,196 @@
+import { findContainmentViolations, validateAnswerPayload } from "../answer.ts";
+import { applyConfidenceGate } from "../retrieval.ts";
+import { redactIdentifiers } from "../logging.ts";
+import type { AnswerPayload } from "../types.ts";
+import { MEMBER_SERVICES, buildStructuredPrompt, renderAnswer } from "./payload.ts";
+import { generate, generateStream } from "./providers.ts";
+import { embed } from "./providers.ts";
+import { rerank, type RerankedChunk } from "./rerank.ts";
+import { searchHybrid } from "./store.ts";
+import type pg from "pg";
+
+/** Calibrated, not chosen. eval/results/floor-calibration.json. D-038. */
+export const CONFIDENCE_FLOOR = Number(process.env["CONFIDENCE_FLOOR"] ?? "0.001");
+export const CANDIDATE_POOL = 10;
+export const TOP_K = 5;
+
+export interface TurnResult {
+  question: string;
+  answer: string;
+  payload: AnswerPayload | null;
+  retrieved: RerankedChunk[];
+  citedIds: string[];
+  rerankTopScore: number;
+  confidenceFloor: number;
+  outcome: "answered" | "refused" | "upstream_failure";
+  refusalTrigger: string | null;
+  provider: string;
+  latencyMs: Record<string, number>;
+}
+
+const refusalText = (explanation: string): string =>
+  `${explanation}\n\nTo speak with a person, call Member Services at ${MEMBER_SERVICES}.`;
+
+const NOT_FOUND =
+  "I could not find an answer to that in the plan documents I searched.";
+
+/**
+ * One turn, end to end. Shared by the CLI and the eval harness so the thing
+ * measured is the thing shipped.
+ */
+export async function answerTurn(
+  client: pg.Client,
+  rawQuestion: string,
+  scope: { contractId: string; planId: string; planYear: number },
+  options: { onToken?: (token: string) => void } = {},
+): Promise<TurnResult> {
+  // FR-31, and D-034: redact before the model call, not only before the log write.
+  const question = redactIdentifiers(rawQuestion);
+  const started = Date.now();
+
+  const base = {
+    question,
+    payload: null,
+    retrieved: [] as RerankedChunk[],
+    citedIds: [] as string[],
+    confidenceFloor: CONFIDENCE_FLOOR,
+    provider: "none",
+  };
+
+  let retrieved: RerankedChunk[] = [];
+  let retrievedAt = started;
+  try {
+    const [vector] = await embed([question]);
+    if (vector === undefined) throw new Error("no embedding returned");
+    const pool = await searchHybrid(client, vector, question, scope, CANDIDATE_POOL);
+    retrieved = (await rerank(question, pool)).slice(0, TOP_K);
+    retrievedAt = Date.now();
+  } catch (error) {
+    // FR-09 and FR-25: an upstream failure never produces a factual claim.
+    return {
+      ...base,
+      answer: refusalText(
+        "I am having trouble reaching the plan documents right now, so I cannot answer safely.",
+      ),
+      rerankTopScore: Number.NEGATIVE_INFINITY,
+      outcome: "upstream_failure",
+      refusalTrigger: "upstream_failure",
+      latencyMs: { total: Date.now() - started },
+      note: error instanceof Error ? error.message : String(error),
+    } as TurnResult;
+  }
+
+  const topScore = retrieved[0]?.rerankScore ?? Number.NEGATIVE_INFINITY;
+  const gate = applyConfidenceGate(topScore, CONFIDENCE_FLOOR);
+
+  if (retrieved.length === 0 || gate.kind === "refuse") {
+    return {
+      ...base,
+      retrieved,
+      answer: refusalText(NOT_FOUND),
+      rerankTopScore: topScore,
+      outcome: "refused",
+      refusalTrigger: "below_floor",
+      latencyMs: { retrieval: retrievedAt - started, total: Date.now() - started },
+    };
+  }
+
+  // FR-07 is carried by the standing prompt rule that the Evidence of Coverage
+  // controls. An automated amount-diff detector was removed: it compared amounts
+  // from unrelated benefits, and telling the model a conflict existed made it
+  // invent one and call a correct document wrong.
+  const prompt = buildStructuredPrompt(question, retrieved);
+
+  let raw: string;
+  let provider: string;
+  let firstTokenAt = retrievedAt;
+  try {
+    if (options.onToken === undefined) {
+      const generated = await generate(prompt);
+      raw = generated.text;
+      provider = generated.provider;
+    } else {
+      let seen = false;
+      const generated = await generateStream(prompt, (token) => {
+        if (!seen) {
+          seen = true;
+          firstTokenAt = Date.now();
+        }
+        options.onToken?.(token);
+      });
+      raw = generated.text;
+      provider = generated.provider;
+    }
+  } catch (error) {
+    return {
+      ...base,
+      retrieved,
+      answer: refusalText("I could not produce an answer right now."),
+      rerankTopScore: topScore,
+      outcome: "upstream_failure",
+      refusalTrigger: "upstream_failure",
+      provider: "none",
+      latencyMs: { retrieval: retrievedAt - started, total: Date.now() - started },
+      note: error instanceof Error ? error.message : String(error),
+    } as TurnResult;
+  }
+
+  const completedAt = Date.now();
+  const latencyMs = {
+    retrieval: retrievedAt - started,
+    firstToken: firstTokenAt - started,
+    generation: completedAt - retrievedAt,
+    total: completedAt - started,
+  };
+
+  const json = /\{[\s\S]*\}/.exec(raw)?.[0];
+  const validated = validateAnswerPayload(json === undefined ? raw : JSON.parse(json));
+
+  if (!validated.ok) {
+    // An uncited claim cannot be rendered, so a payload that fails validation
+    // refuses rather than degrading to prose. FR-32.
+    return {
+      ...base,
+      retrieved,
+      answer: refusalText(NOT_FOUND),
+      rerankTopScore: topScore,
+      outcome: "refused",
+      refusalTrigger: "invalid_payload",
+      provider,
+      latencyMs,
+      note: validated.errors.join("; "),
+    } as TurnResult;
+  }
+
+  const violations = findContainmentViolations(validated.value, retrieved.map((c) => c.id));
+  if (violations.length > 0) {
+    return {
+      ...base,
+      retrieved,
+      answer: refusalText(NOT_FOUND),
+      rerankTopScore: topScore,
+      outcome: "refused",
+      refusalTrigger: "citation_not_retrieved",
+      provider,
+      latencyMs,
+      note: `cited unretrieved chunks: ${violations.join(", ")}`,
+    } as TurnResult;
+  }
+
+  const payload = validated.value;
+  const answered = payload.claims.length > 0;
+
+  return {
+    question,
+    answer: answered || payload.refusal !== null ? renderAnswer(payload, retrieved) : refusalText(NOT_FOUND),
+    payload,
+    retrieved,
+    citedIds: [...new Set(payload.claims.flatMap((claim) => claim.citationIds))],
+    rerankTopScore: topScore,
+    confidenceFloor: CONFIDENCE_FLOOR,
+    outcome: answered ? "answered" : "refused",
+    refusalTrigger: answered ? null : (payload.refusal?.trigger ?? "no_supported_claim"),
+    provider,
+    latencyMs,
+  };
+}

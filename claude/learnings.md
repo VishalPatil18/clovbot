@@ -75,3 +75,15 @@ _<How this concept will apply to future work in this project.>_
 **Verify the mitigation, not the intention.** Synthetic provider data was approved with a banner marking it demo data. The eval asked whether a named doctor was in network, and the assistant said the directory is demo data and routed to a human. That is the difference between believing a mitigation works and having a test that shows it.
 
 **Let the first run be red and read it.** The harness was built to fail, and its failures were diagnostic: twelve of seventeen came from one behaviour, per-claim citation, which is a single named requirement rather than a diffuse quality problem. A harness that had been tuned until it went green would have hidden that.
+
+## Stage 6 - what measuring the confidence signal taught
+
+**Test the signal on the population you serve, not the one the benchmark used.** The reranker scores a terse query at 0.998 and the same question in a member's own words at 0.0005. ms-marco is trained on search-box queries; the product's users ramble, hedge, and bury the question mid-sentence. A floor calibrated on clean queries would have refused the audience the product exists for, and the deflection thesis already identifies engagement as its most elastic term. The decision that looked settled in requirements only failed once it met a realistic question.
+
+**Separate what a component is good at from what you asked it to do.** The cross-encoder ranks well, 96 to 100% accuracy@5, and its absolute score is unusable. Those are different properties, and conflating them nearly caused the whole component to be discarded. Keeping it for ordering while replacing the gate was better than either keeping the broken premise or throwing the model away.
+
+**A detector that fires wrongly is worse than no detector.** Comparing dollar amounts to find EOC and Summary of Benefits conflicts fired on unrelated benefits, and being told a conflict existed led the model to state that a real Clover document was incorrect and to invent a figure. A false negative loses a feature; a false positive of this shape manufactures a confident falsehood about a regulated document.
+
+**Structure beats inspection for guarantees.** Stage 5 checked for uncited claims by scanning prose and found twelve. Stage 6 made claims carry their own citation ids and validated at the boundary, and structural compliance went to 100% because an uncited claim can no longer be represented. Detecting a class of defect is weaker than making it unrepresentable.
+
+**Budgets are only real once something prints a number.** Time to first token measured 1632ms against a stated 800ms, unthrottled, and the structured payload makes it worse because JSON precedes the first useful token. The requirement was written months of decisions ago and had never been checked. It is recorded as a breach rather than quietly renegotiated.

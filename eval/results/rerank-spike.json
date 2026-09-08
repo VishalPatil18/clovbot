@@ -1,0 +1,28 @@
+{
+  "ranAt": "2026-09-08T09:55:01.251Z",
+  "candidatePool": 20,
+  "rows": [
+    {
+      "model": "Xenova/ms-marco-MiniLM-L-6-v2",
+      "accuracyAt1": 0.6666666666666666,
+      "accuracyAt5": 0.9629629629629629,
+      "checked": 27,
+      "meanTopScoreAnswerable": 0.692354704750784,
+      "meanTopScoreUnanswerable": 0.37650062861151173,
+      "p10Answerable": 0.005758649121195053,
+      "p90Unanswerable": 0.9670175506308992,
+      "msPerQuery": 529.6739130434783
+    },
+    {
+      "model": "Xenova/ms-marco-MiniLM-L-12-v2",
+      "accuracyAt1": 0.6666666666666666,
+      "accuracyAt5": 1,
+      "checked": 27,
+      "meanTopScoreAnswerable": 0.7279506483768045,
+      "meanTopScoreUnanswerable": 0.4477851251292601,
+      "p10Answerable": 0.00274846494539217,
+      "p90Unanswerable": 0.9605264669427354,
+      "msPerQuery": 1043.1521739130435
+    }
+  ]
+}

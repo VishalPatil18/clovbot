@@ -1272,12 +1272,111 @@ A local ONNX cross-encoder. The specific model is chosen in Stage 6 by measuring
 
 The reranker sits on the hot path of every turn and inside NFR-PERF-02's 800ms time-to-first-token budget. A hosted call adds network latency plus a rate limit to the one component that decides whether an answer is safe to give, and a free tier that disappears takes the refusal gate with it. Local inference has a fixed cost that cannot be revoked.
 
+### Measured, 2026-09-08
+
+Two candidates against the golden set, pool of 20. Full output in `eval/results/rerank-spike.json`.
+
+| Model | accuracy@1 | accuracy@5 | latency | size |
+| --- | --- | --- | --- | --- |
+| `Xenova/ms-marco-MiniLM-L-6-v2` | 66.7% | 96.3% | 530ms | 23MB |
+| `Xenova/ms-marco-MiniLM-L-12-v2` | 66.7% | 100% | 1043ms | 34MB |
+
+Chosen: **L-6-v2**. accuracy@1 is tied, and L-12's better top-5 recall costs twice the latency inside an 800ms time-to-first-token budget that also has to cover retrieval and generation. At a pool of 10 rather than 20, L-6 runs at roughly 280ms.
+
 ### Consequences
 
-- Adds an ONNX runtime dependency and a model file, the largest addition to the toolchain so far. It needs explicit approval before installation, and its size affects the deploy target chosen in Stage 10.
+- Adds an ONNX runtime dependency and a model file, the largest addition to the toolchain so far. Installed as `@huggingface/transformers@4.2.0`, which bundles the runtime and the tokenizer, rather than `onnxruntime-node` plus a hand-written tokenizer.
+- **The absolute score turned out not to be usable as the confidence signal**, which is what D-038 amends. Ordering is sound; the scalar collapses on conversational phrasing.
 - Reranking latency becomes a local CPU cost inside the NFR-PERF-02 budget, so it must be measured rather than assumed.
 - Resolves the last load-bearing open question in `srs.md` section 10.
 - The confidence floor is calibrated against the golden set once a model is chosen, which is only possible because Stage 5 built the golden set first.
+
+---
+
+## Decision D-038 - The structured payload is the answer contract; the reranker score is a coarse relevance gate
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Answer contract (P1 Stage 6) |
+| Status | accepted |
+| Supersedes | amends D-016 |
+
+### Context
+
+D-016 made the top reranked score the sole signal deciding whether the assistant answers or refuses. Stage 6 measured that assumption against the golden set with a local ONNX cross-encoder, and it does not hold.
+
+The same question, asked two ways:
+
+| Question | Terse phrasing | As a member would say it |
+| --- | --- | --- |
+| Emergency room copay | 0.9956 | 0.0329 |
+| Primary care copay | 0.9980 | 0.0005 |
+| Worldwide emergency | 0.9982 | 0.0002 |
+| Specialist visit cost | 0.9979 | 0.0090 |
+
+Genuinely out-of-corpus questions score at most 0.0002. A member asking about emergency cover before visiting their daughter abroad therefore scores in the same range as "what is the capital of France". The cross-encoder is trained on short keyword search queries, so it reads conversational speech as irrelevant, and conversational speech is how the target audience talks. `docs/build-journal.md` identifies engagement as the highest-elasticity term in the deflection estimate, so a floor that refuses rambling questions attacks the product's main lever.
+
+The failure is confined to the absolute score. Ranking is sound: accuracy@5 was 96.3% for L-6 and 100% for L-12.
+
+### Options considered
+
+1. Keep D-016 and set the floor at the measured optimum, 0.001. Honest, but the gate is nearly inert.
+2. Normalise the question into a terse search query before reranking. Restores the scores, but adds a pre-generation model call, which NFR-PERF-02 requires to fit inside the 800ms time-to-first-token budget or leave the hot path.
+3. Make FR-32's structured payload the contract, and demote the score to a coarse relevance gate.
+
+### Decision
+
+Option 3. The reranker orders candidates, which it does well. The floor is 0.001, calibrated to catch questions with nothing relevant at all: measured 0 false answers on 10 out-of-corpus questions and 2 false refusals on 28 answerable ones. The answer-or-refuse contract is enforced by the structured payload: each claim carries its own citation ids, a claim without one fails validation and is never rendered, unanswered parts are a separate list, and refusal is a typed branch.
+
+### Rationale
+
+Stage 5 measured the actual failure mode, and it was not retrieval. Twelve of seventeen bucket A failures were uncited factual sentences, which is one named requirement rather than a diffuse quality problem. A scalar threshold cannot fix that; a schema that makes an uncited claim unrepresentable can. Option 2 buys back a number that was only ever a proxy, at the cost of latency on the hot path.
+
+### Consequences
+
+- D-016's "single signal" property is gone. The gate is now schema validation plus citation containment, both deterministic, plus a threshold that catches only nonsense.
+- The reranker still earns its place, for ordering and for the coarse gate, so D-037 stands.
+- The score and floor are still recorded on every turn per FR-03, so the decision remains auditable.
+- Refusal becomes explicit rather than inferred from citation count, which is what Stage 5 found the old heuristic could not do.
+- Bucket C guardrails remain Stage 8's problem. Measured here, bucket B and C questions score near zero, so they are intent refusals rather than confidence refusals, and a threshold was never going to catch them.
+
+---
+
+## Decision D-039 - Automated source-conflict detection removed
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Answer contract (P1 Stage 6) |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+FR-07 and D-020 require the Evidence of Coverage to win where sources conflict, with the conflict stated rather than hidden. The first implementation detected conflicts by comparing dollar amounts in retrieved EOC chunks against amounts in Summary of Benefits chunks, and told the model a conflict existed.
+
+Run against the real corpus it fired on `$60 vs $0` and `$40 vs $0`, comparing an EOC chunk about outpatient hospital services with a Summary of Benefits chunk about doctor's office visits. Different benefits entirely. Told a conflict existed, the model asserted that the Summary of Benefits "incorrectly states" an out-of-network specialist copay of $25, a figure that appears nowhere and contradicts the hand-verified $20.
+
+### Options considered
+
+1. Keep the detector and require the chunks to share a benefit term.
+2. Remove the detector and carry FR-07 as a standing instruction that the Evidence of Coverage controls.
+3. Keep the detector but use it only to annotate the turn log, never to steer generation.
+
+### Decision
+
+Option 2. The detector is removed. The system prompt states that where the Evidence of Coverage and the Summary of Benefits disagree, the Evidence of Coverage controls and the disagreement must be stated. FR-07 is demonstrated by a controlled test using genuinely conflicting chunks rather than by a heuristic running in production.
+
+### Rationale
+
+Matching amounts across chunks cannot establish that two sources are talking about the same benefit, and option 1 needs exactly that to be safe. A detector that fires spuriously is worse than none, because it converts a false positive into a confident false statement that a real Clover document is wrong. That is a cite-or-refuse integrity failure, not a quality nit.
+
+### Consequences
+
+- Conflicts are surfaced only when the model sees both amounts in the same retrieved context and recognises them as the same benefit. Some real conflicts will go unstated.
+- FR-07 coverage becomes a tested property of the prompt rather than a code path, so the test carries the whole guarantee.
+- A precise detector remains possible once benefits are structured data, which is the P2 work D-007 already describes.
 
 ---
 
