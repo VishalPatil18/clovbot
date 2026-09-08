@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ask,
   fetchPlans,
@@ -11,26 +12,78 @@ import {
   type PlanOption,
 } from "../api.ts";
 import {
-  IoCall, IoChatbubbleEllipses, IoClose, IoCopy, IoExpand, IoHelpCircleOutline, IoMic, IoMicOff,
-  IoPrint, IoRefresh, IoTrash,
-  IoPlay, IoSend, IoStop, IoThumbsDown, IoThumbsUp, IoVolumeHigh, IoWarning,
+  IoCall,
+  IoCashOutline,
+  IoChatbubbleEllipses,
+  IoCheckmark,
+  IoDocumentTextOutline,
+  IoMedkitOutline,
+  IoShieldCheckmarkOutline,
+  IoClose,
+  IoCopy,
+  IoExpand,
+  IoHelpCircleOutline,
+  IoMic,
+  IoMicOff,
+  IoPrint,
+  IoRefresh,
+  IoTrash,
+  IoPlay,
+  IoSend,
+  IoStop,
+  IoThumbsDown,
+  IoThumbsUp,
+  IoVolumeHigh,
+  IoWarning,
 } from "react-icons/io5";
 import { AnswerBody } from "./AnswerBody.tsx";
 import { DictateButton } from "./DictateButton.tsx";
 import { CallbackPanel } from "./CallbackPanel.tsx";
 import { VoiceComposer } from "./VoiceComposer.tsx";
-import { readMode, speak, writeMode, type Spoken, type VoiceMode } from "../voice.ts";
+import {
+  readMode,
+  speak,
+  writeMode,
+  type Spoken,
+  type VoiceMode,
+} from "../voice.ts";
 import { clearHistory, readHistory, writeHistory } from "../history.ts";
 import { answerAsText } from "../copy.ts";
+import { STEP_MS, progressMessage, type Stage } from "../progress.ts";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
-/** FR-14. Drawn from the highest-volume bucket A drivers in docs/call-drivers.md. */
+/**
+ * FR-14. Four, not six: the highest-volume bucket A drivers in
+ * docs/call-drivers.md, one per kind of question this assistant answers, so the
+ * set teaches what it is for rather than listing everything it can do.
+ */
 const STARTERS = [
-  { title: "What is my specialist copay?", driver: "A-02" },
-  { title: "Is a hearing aid covered?", driver: "A-01" },
-  { title: "What tier is my drug on?", driver: "A-04" },
-  { title: "How does the appeals process work?", driver: "A-11" },
-  { title: "What is my out-of-pocket maximum?", driver: "A-03" },
-  { title: "Do I need a referral to see a specialist?", driver: "A-13" },
+  {
+    // The title is the question that gets asked. A card that sends something
+    // other than what it shows is a small lie on a cite-or-refuse product.
+    question: "What is my specialist copay?",
+    caption: "Costs for visits, urgent care and the emergency room.",
+    icon: IoCashOutline,
+    driver: "A-02",
+  },
+  {
+    question: "What tier is my drug on?",
+    caption: "Drug coverage, tiers, and any limits on a prescription.",
+    icon: IoMedkitOutline,
+    driver: "A-04",
+  },
+  {
+    question: "Is a hearing aid covered?",
+    caption: "Dental, vision, hearing and your other extra benefits.",
+    icon: IoShieldCheckmarkOutline,
+    driver: "A-01",
+  },
+  {
+    question: "How does the appeals process work?",
+    caption: "Appeals, referrals and prior authorisation, step by step.",
+    icon: IoDocumentTextOutline,
+    driver: "A-11",
+  },
 ];
 
 export const MEMBER_SERVICES_DISPLAY = "1-555-0100";
@@ -52,18 +105,38 @@ interface Turn {
 }
 
 interface Props {
+  /** Element id the full-page layout wants the tools rendered into. */
+  railId?: string;
+  /** Held by the shell so a closed panel does not discard a typed question. */
+  draft?: string;
+  onDraftChange?: (value: string) => void;
   /** The panel and the full-page route share this component. */
   variant: "panel" | "page";
   onExpand?: () => void;
   onClose?: () => void;
 }
 
-export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Element {
+export function Assistant({
+  variant,
+  railId,
+  draft: draftProp,
+  onDraftChange,
+  onExpand,
+  onClose,
+}: Props): React.JSX.Element {
   const [turns, setTurns] = useState<Turn[]>(() => readHistory());
-  const [draft, setDraft] = useState("");
+  const [ownDraft, setOwnDraft] = useState("");
+  const draft = draftProp ?? ownDraft;
+  const setDraft = (value: string): void => {
+    if (onDraftChange !== undefined) onDraftChange(value);
+    else setOwnDraft(value);
+  };
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<PlanOption | null>(null);
-  const [planPrompt, setPlanPrompt] = useState<{ plans: PlanOption[]; question: string } | null>(null);
+  const [planPrompt, setPlanPrompt] = useState<{
+    plans: PlanOption[];
+    question: string;
+  } | null>(null);
   const [status, setStatus] = useState("");
   const [callback, setCallback] = useState<CallbackDraft | null>(null);
   const [limited, setLimited] = useState<string | null>(null);
@@ -74,6 +147,9 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
   const [helpOpen, setHelpOpen] = useState(false);
   const [copied, setCopied] = useState<number | null>(null);
   const [corpusDate, setCorpusDate] = useState<string | null>(null);
+  const [stage, setStage] = useState<Stage | null>(null);
+  const [stageElapsed, setStageElapsed] = useState(0);
+  const reduceMotion = useReducedMotion();
   const [speakingTurn, setSpeakingTurn] = useState<number | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
@@ -81,6 +157,19 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
   useEffect(() => {
     threadEnd.current?.scrollIntoView({ block: "end" });
   }, [turns, planPrompt]);
+
+  useEffect(() => {
+    if (stage === null) return;
+    setStageElapsed(0);
+    const started = Date.now();
+    const tick = setInterval(
+      () => setStageElapsed(Date.now() - started),
+      STEP_MS,
+    );
+    return () => clearInterval(tick);
+  }, [stage]);
+
+  const progress = stage === null ? "" : progressMessage(stage, stageElapsed);
 
   const submit = useCallback(
     async (question: string, chosen: PlanOption | null) => {
@@ -93,10 +182,23 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
       setPlanPrompt(null);
       setCallback(null);
       setLimited(null);
-      setStatus("Searching your plan documents");
+      setStage("retrieving");
       setTurns((previous) => [
         ...previous,
-        { id, question: trimmed, answer: "", claims: [], citations: [], citationNumbers: {}, unanswered: [], headline: null, staleness: null, outcome: "pending", feedback: null, turnId: null },
+        {
+          id,
+          question: trimmed,
+          answer: "",
+          claims: [],
+          citations: [],
+          citationNumbers: {},
+          unanswered: [],
+          headline: null,
+          staleness: null,
+          outcome: "pending",
+          feedback: null,
+          turnId: null,
+        },
       ]);
 
       const apply = (event: AskEvent): void => {
@@ -104,16 +206,19 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
           setPlanOptions(event.plans);
           setTurns((previous) => previous.filter((turn) => turn.id !== id));
           setPlanPrompt({ plans: event.plans, question: event.question });
+          setStage(null);
           setStatus("Which plan are you on?");
           return;
         }
         if (event.type === "progress") {
-          setStatus("Writing your answer");
+          setStage("writing");
           return;
         }
         if (event.type === "turn") {
           setTurns((previous) =>
-            previous.map((turn) => (turn.id === id ? { ...turn, turnId: event.turnId } : turn)),
+            previous.map((turn) =>
+              turn.id === id ? { ...turn, turnId: event.turnId } : turn,
+            ),
           );
           return;
         }
@@ -157,11 +262,17 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
               setVoiceNotice(audio.notice);
               // The border on the answer follows the audio, so it is always the
               // paragraph being read that is marked, never a stale one.
-              audio.onStateChange((speaking) => setSpeakingTurn(speaking ? id : null));
+              audio.onStateChange((speaking) =>
+                setSpeakingTurn(speaking ? id : null),
+              );
               audio.play();
             })
             .catch((caught: unknown) => {
-              setVoiceNotice(caught instanceof Error ? caught.message : "The answer could not be read aloud.");
+              setVoiceNotice(
+                caught instanceof Error
+                  ? caught.message
+                  : "The answer could not be read aloud.",
+              );
             });
         }
         setTurns((previous) =>
@@ -186,9 +297,13 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
       try {
         await ask(trimmed, chosen, apply);
       } catch {
-        apply({ type: "error", message: "The assistant could not be reached." });
+        apply({
+          type: "error",
+          message: "The assistant could not be reached.",
+        });
       } finally {
         setBusy(false);
+        setStage(null);
         setStatus("");
       }
     },
@@ -201,6 +316,16 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
   // they were answered under, so switching never rewrites history.
   const changePlan = (): void => {
     setPlanPrompt({ plans: planOptions, question: "" });
+  };
+
+  /*
+   * Dismissing hands the pending question back to the composer rather than
+   * discarding it: the member typed it, and a close should not cost them that.
+   */
+  const dismissPlanPrompt = (): void => {
+    const pending = planPrompt?.question ?? "";
+    setPlanPrompt(null);
+    if (pending.length > 0 && draft.trim().length === 0) setDraft(pending);
   };
 
   const choosePlan = (option: PlanOption): void => {
@@ -250,345 +375,534 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
         setCopied(turn.id);
         setTimeout(() => setCopied(null), 3_000);
       },
-      () => setStatus("Could not copy. Select the answer and copy it yourself."),
+      () =>
+        setStatus("Could not copy. Select the answer and copy it yourself."),
     );
   };
 
-  const heading = variant === "page" ? "Member Assistant" : "Member Assistant";
+  const heading = "Clovbot - Member Assistant";
+
+  /*
+   * FR-16. The panel keeps these in its header; the full page puts them in the
+   * rail with the other tools, so the header carries only the title and close.
+   */
+  const modeControl = (
+            <button
+              type="button"
+              className="assistant__mode"
+              aria-pressed={mode === "voice"}
+              onClick={() => {
+                const next: VoiceMode = mode === "voice" ? "text" : "voice";
+                spoken?.stop();
+                setSpeakingTurn(null);
+                setMode(next);
+                writeMode(next);
+              }}
+            >
+              {mode === "voice" ? (
+                <IoMicOff aria-hidden="true" />
+              ) : (
+                <IoMic aria-hidden="true" />
+              )}
+              {mode === "voice" ? "Switch to text" : "Switch to voice"}
+            </button>
+  );
+
+  const helpControl = (
+    <button
+      type="button"
+      className={railId === undefined ? "assistant__icon-button" : "assistant__mode"}
+      aria-expanded={helpOpen}
+      aria-controls="assistant-help"
+      onClick={() => setHelpOpen((open) => !open)}
+    >
+      <IoHelpCircleOutline aria-hidden="true" />
+      {/* Icon-only beside the close control; labelled in the rail, where it sits
+          with the other named tools. */}
+      {railId === undefined ? (
+        <span className="visually-hidden">{helpOpen ? "Hide help" : "Show help"}</span>
+      ) : (
+        <>{helpOpen ? "Hide help" : "Show help"}</>
+      )}
+    </button>
+  );
+
+  const chips = (
+    <div className="chips" aria-label="Quick actions">
+      {/* FR-13. The human path is here in every state; the header carries only
+            icon controls now. Help lives in the header and is not repeated. */}
+      <a className="chip chip--human" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
+        <IoCall aria-hidden="true" /> Talk to a person
+      </a>
+      <button type="button" className="chip" onClick={startOver}>
+        <IoRefresh aria-hidden="true" /> Start over
+      </button>
+      {railId !== undefined && modeControl}
+      {railId !== undefined && helpControl}
+      {turns.length > 0 && (
+        <>
+          <button type="button" className="chip" onClick={() => window.print()}>
+            <IoPrint aria-hidden="true" /> Print
+          </button>
+          <button type="button" className="chip" onClick={forgetHistory}>
+            <IoTrash aria-hidden="true" /> Clear saved
+          </button>
+        </>
+      )}
+    </div>
+  );
+
+  /*
+   * The full page gives these a column of their own; the panel keeps them
+   * pinned above the composer. One piece of markup, two homes.
+   */
+  const railTarget =
+    railId === undefined ? null : document.getElementById(railId);
+  const tools = railTarget === null ? chips : createPortal(chips, railTarget);
 
   return (
-    <section className={`assistant assistant--${variant}`} aria-labelledby="assistant-heading">
+    <section
+      className={`assistant assistant--${variant}${
+        turns.length === 0 && planPrompt === null ? " assistant--empty" : ""
+      }`}
+      aria-labelledby="assistant-heading"
+    >
       <header className="assistant__header">
-        <div className="assistant__titles">
+        {/* Two rows, not four: title and controls share the top line, and the
+            plan context sits on one quiet line beneath it. */}
+        <div className="assistant__bar">
           <h2 id="assistant-heading" className="assistant__title">
             {heading}
           </h2>
-          <p className="assistant__context">
-            Plan year 2026 · New Jersey · {plan === null ? "No plan selected" : plan.name}
+          {/* FR-16. The choice persists across sessions. Labelled rather than
+              icon-only: switching how you talk to the assistant is the one
+              header control worth naming. */}
+          <div className="assistant__corner">
+            {railId === undefined && modeControl}
+            {railId === undefined && helpControl}
+            {variant === "panel" && onExpand !== undefined && (
+              <button
+                type="button"
+                className="assistant__icon-button"
+                onClick={onExpand}
+              >
+                <IoExpand aria-hidden="true" />
+                <span className="visually-hidden">Open full page</span>
+              </button>
+            )}
+            {variant === "panel" && onClose !== undefined && (
+              <button
+                type="button"
+                className="assistant__icon-button"
+                onClick={onClose}
+              >
+                <IoClose aria-hidden="true" />
+                <span className="visually-hidden">Close the assistant</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="assistant__meta">
+          <span className="meta-chip">2026</span>
+          <span className="meta-chip">New Jersey</span>
+          <span className="meta-chip">
+            {plan === null ? "No plan selected" : plan.name}
             {plan !== null && planOptions.length > 1 && (
               <>
                 {" "}
-                <button type="button" className="assistant__plan-change" onClick={changePlan}>
-                  Change plan
+                <button
+                  type="button"
+                  className="assistant__plan-change"
+                  onClick={changePlan}
+                >
+                  Change
                 </button>
               </>
             )}
-          </p>
-          <p className="assistant__context">Not signed in. This assistant holds no member data.</p>
+          </span>
+          <span className="meta-chip meta-chip--quiet">Not signed in</span>
         </div>
-        <div className="assistant__header-actions">
-          {/* FR-16. The choice persists across sessions. */}
-          <button
-            type="button"
-            className="button button--quiet"
-            aria-pressed={mode === "voice"}
-            onClick={() => {
-              const next: VoiceMode = mode === "voice" ? "text" : "voice";
-              spoken?.stop();
-              setSpeakingTurn(null);
-              setMode(next);
-              writeMode(next);
-            }}
-          >
-            {mode === "voice" ? <IoMicOff aria-hidden="true" /> : <IoMic aria-hidden="true" />}
-            {mode === "voice" ? "Switch to typing" : "Switch to talking"}
-          </button>
-          {variant === "panel" && onExpand !== undefined && (
-            <button type="button" className="button button--quiet" onClick={onExpand}>
-              <IoExpand aria-hidden="true" /> Open full page
-            </button>
-          )}
-        </div>
-        {/* Icon controls sit hard against the top right, clear of the wrapping
-            action row so they never move as the header reflows. D-073. */}
-        <div className="assistant__corner">
-          <button
-            type="button"
-            className="assistant__icon-button"
-            aria-expanded={helpOpen}
-            aria-controls="assistant-help"
-            onClick={() => setHelpOpen((open) => !open)}
-          >
-            <IoHelpCircleOutline aria-hidden="true" />
-            <span className="visually-hidden">{helpOpen ? "Hide help" : "Show help"}</span>
-          </button>
-          {variant === "panel" && onClose !== undefined && (
-            <button type="button" className="assistant__icon-button" onClick={onClose}>
-              <IoClose aria-hidden="true" />
-              <span className="visually-hidden">Close the assistant</span>
-            </button>
-          )}
-        </div>
-        {/* FR-13: present in every state, including while an answer is generating. */}
-        <a className="button button--human" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-          <IoCall aria-hidden="true" /> Talk to a person
-        </a>
       </header>
 
       <div className="assistant__scroll">
-      {/* FR-P2-23. An expandable region, not a dialog: tab passes through and out,
+        {/* FR-P2-23. An expandable region, not a dialog: tab passes through and out,
           so nothing is trapped and Escape is unnecessary. D-071. */}
-      {helpOpen && (
-        <section id="assistant-help" className="help" aria-label="What you can ask">
-          <h3 className="help__title">What you can ask</h3>
-          <ul className="help__list">
-            <li>What a service costs under your plan: copays, coinsurance, the out-of-pocket maximum.</li>
-            <li>Whether a service or a drug is covered, and what tier a drug is on.</li>
-            <li>How a process works: prior authorization, referrals, appeals and grievances.</li>
-            <li>What your supplemental benefits include: dental, vision, hearing, over-the-counter.</li>
-          </ul>
-          <h3 className="help__title">What it cannot do</h3>
-          <ul className="help__list">
-            <li>Anything about you personally. It holds no member data and never signs you in.</li>
-            <li>Medical advice, or deciding whether something will be covered for you.</li>
-            <li>Tell you whether a named doctor is in network. That directory is demonstration data.</li>
-          </ul>
-          <h3 className="help__title">The buttons</h3>
-          <ul className="help__list">
-            <li><strong>Talk to a person</strong> calls Member Services at {MEMBER_SERVICES_DISPLAY}.</li>
-            <li><strong>Start over</strong> empties this conversation and forgets the plan you chose.</li>
-            <li><strong>Print</strong> produces a copy with every source, which your browser can save as a PDF.</li>
-            <li><strong>Copy</strong> puts one answer and its sources on the clipboard.</li>
-          </ul>
-        </section>
-      )}
-
-      <div className="assistant__thread" role="log" aria-live="polite" aria-label="Conversation">
-        {turns.length === 0 && planPrompt === null && (
-          <div className="empty">
-            <h3 className="empty__title">
-              <IoChatbubbleEllipses className="empty__icon" aria-hidden="true" /> Ask anything about your plan
-            </h3>
-            <p className="empty__body">
-              You do not need to pick a plan first. I will ask only if the answer depends on it.
-            </p>
-            <ul className="starters" aria-label="Suggested questions">
-              {STARTERS.map((starter) => (
-                <li key={starter.title}>
-                  <button
-                    type="button"
-                    className="starter"
-                    onClick={() => void submit(starter.title, plan)}
-                  >
-                    {starter.title}
-                  </button>
-                </li>
-              ))}
+        {helpOpen && (
+          <section
+            id="assistant-help"
+            className="help"
+            aria-label="What you can ask"
+          >
+            <h3 className="help__title">What you can ask</h3>
+            <ul className="help__list">
+              <li>
+                What a service costs under your plan: copays, coinsurance, the
+                out-of-pocket maximum.
+              </li>
+              <li>
+                Whether a service or a drug is covered, and what tier a drug is
+                on.
+              </li>
+              <li>
+                How a process works: prior authorization, referrals, appeals and
+                grievances.
+              </li>
+              <li>
+                What your supplemental benefits include: dental, vision,
+                hearing, over-the-counter.
+              </li>
             </ul>
-          </div>
+            <h3 className="help__title">What it cannot do</h3>
+            <ul className="help__list">
+              <li>
+                Anything about you personally. It holds no member data and never
+                signs you in.
+              </li>
+              <li>
+                Medical advice, or deciding whether something will be covered
+                for you.
+              </li>
+              <li>
+                Tell you whether a named doctor is in network. That directory is
+                demonstration data.
+              </li>
+            </ul>
+            <h3 className="help__title">The buttons</h3>
+            <ul className="help__list">
+              <li>
+                <strong>Talk to a person</strong> calls Member Services at{" "}
+                {MEMBER_SERVICES_DISPLAY}.
+              </li>
+              <li>
+                <strong>Start over</strong> empties this conversation and
+                forgets the plan you chose.
+              </li>
+              <li>
+                <strong>Print</strong> produces a copy with every source, which
+                your browser can save as a PDF.
+              </li>
+              <li>
+                <strong>Copy</strong> puts one answer and its sources on the
+                clipboard.
+              </li>
+            </ul>
+          </section>
         )}
 
-        {turns.map((turn) => (
-          <article key={turn.id} className="turn" aria-label={`Question and answer ${turn.id}`}>
-            <p className="turn__question">{turn.question}</p>
+        <div
+          className="assistant__thread"
+          role="log"
+          aria-live="polite"
+          aria-label="Conversation"
+        >
+          {turns.length === 0 && planPrompt === null && (
+            <div className="empty">
+              <h3 className="empty__title">
+                Your plan, explained.
+                <span className="empty__ask">What would you like to know?</span>
+              </h3>
+              <ul className="starters" aria-label="Suggested questions">
+                {STARTERS.map((starter) => {
+                  const Icon = starter.icon;
+                  return (
+                    <li key={starter.question}>
+                      <button
+                        type="button"
+                        className="starter"
+                        onClick={() => void submit(starter.question, plan)}
+                      >
+                        <span className="starter__icon" aria-hidden="true">
+                          <Icon />
+                        </span>
+                        <span className="starter__title">
+                          {starter.question}
+                        </span>
+                        <span className="starter__caption">
+                          {starter.caption}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="empty__body">
+                You do not need to pick a plan first. I will ask only if the
+                answer depends on it.
+              </p>
+            </div>
+          )}
 
-            {turn.outcome === "pending" ? (
-              <p className="turn__pending">{status || "Working on it"}</p>
-            ) : (
-              <div
-                className={`turn__answer turn__answer--${turn.outcome}${speakingTurn === turn.id ? " turn__answer--speaking" : ""}`}
-              >
-                {speakingTurn === turn.id && (
-                  <p className="turn__reading" role="status">
-                    <IoVolumeHigh aria-hidden="true" /> Reading this answer aloud
-                  </p>
-                )}
-                <AnswerBody
-                  turnId={turn.id}
-                  claims={turn.claims}
-                  citations={turn.citations}
-                  citationNumbers={turn.citationNumbers}
-                  unanswered={turn.unanswered}
-                  headline={turn.headline}
-                  staleness={turn.staleness}
-                  fallback={turn.answer}
-                />
+          {turns.map((turn) => (
+            <article
+              key={turn.id}
+              className="turn"
+              aria-label={`Question and answer ${turn.id}`}
+            >
+              <p className="turn__question">{turn.question}</p>
 
-                {/* FR-27, on answered turns only. */}
-                {turn.outcome === "answered" && (
-                  <>
-                  {/* FR-P2-21. Answer plus every source, as plain text, because a
-                      caregiver pastes into email or a text message. */}
-                  <button type="button" className="button button--quiet" onClick={() => copyAnswer(turn)}>
-                    <IoCopy aria-hidden="true" /> {copied === turn.id ? "Copied" : "Copy this answer"}
-                  </button>
-                  <div className="feedback">
-                    <span id={`fb-${turn.id}`}>Did this answer your question?</span>
-                    <div role="group" aria-labelledby={`fb-${turn.id}`}>
-                      {(["yes", "no"] as const).map((value) => (
+              {turn.outcome === "pending" ? (
+                /* Where the answer will appear, not below the composer: this
+                   is the spot the member is already looking at. */
+                <p className="turn__pending" role="status" aria-live="polite">
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span
+                      key={progress}
+                      className="turn__pending-text"
+                      initial={reduceMotion === true ? { opacity: 1 } : { opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={reduceMotion === true ? { opacity: 1 } : { opacity: 0, y: -8 }}
+                      transition={{ duration: reduceMotion === true ? 0 : 0.26, ease: "easeOut" }}
+                    >
+                      {progress || "Working on it"}
+                    </motion.span>
+                  </AnimatePresence>
+                </p>
+              ) : (
+                <div
+                  className={`turn__answer turn__answer--${turn.outcome}${speakingTurn === turn.id ? " turn__answer--speaking" : ""}`}
+                >
+                  {speakingTurn === turn.id && (
+                    <p className="turn__reading" role="status">
+                      <IoVolumeHigh aria-hidden="true" /> Reading this answer
+                      aloud
+                    </p>
+                  )}
+                  <AnswerBody
+                    turnId={turn.id}
+                    claims={turn.claims}
+                    citations={turn.citations}
+                    citationNumbers={turn.citationNumbers}
+                    unanswered={turn.unanswered}
+                    headline={turn.headline}
+                    staleness={turn.staleness}
+                    fallback={turn.answer}
+                  />
+
+                  {/* FR-27, on answered turns only. */}
+                  {turn.outcome === "answered" && (
+                    <>
+                      <div className="feedback">
+                        <span id={`fb-${turn.id}`}>
+                          Did this answer your question?
+                        </span>
+                        <div role="group" aria-labelledby={`fb-${turn.id}`}>
+                          {(["yes", "no"] as const).map((value) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className="button button--quiet"
+                              aria-pressed={turn.feedback === value}
+                              onClick={() => {
+                                setTurns((previous) =>
+                                  previous.map((item) =>
+                                    item.id === turn.id
+                                      ? { ...item, feedback: value }
+                                      : item,
+                                  ),
+                                );
+                                // Recorded, not just shown. FR-27.
+                                if (turn.turnId !== null)
+                                  void sendFeedback(
+                                    turn.turnId,
+                                    value === "yes",
+                                  );
+                              }}
+                            >
+                              {value === "yes" ? (
+                                <IoThumbsUp aria-hidden="true" />
+                              ) : (
+                                <IoThumbsDown aria-hidden="true" />
+                              )}
+                              {value === "yes" ? "Yes" : "No"}
+                            </button>
+                          ))}
+                        </div>
                         <button
-                          key={value}
                           type="button"
-                          className="button button--quiet"
-                          aria-pressed={turn.feedback === value}
-                          onClick={() => {
-                            setTurns((previous) =>
-                              previous.map((item) =>
-                                item.id === turn.id ? { ...item, feedback: value } : item,
-                              ),
-                            );
-                            // Recorded, not just shown. FR-27.
-                            if (turn.turnId !== null) void sendFeedback(turn.turnId, value === "yes");
-                          }}
+                          className="assistant__icon-button feedback__copy"
+                          onClick={() => copyAnswer(turn)}
                         >
-                          {value === "yes" ? <IoThumbsUp aria-hidden="true" /> : <IoThumbsDown aria-hidden="true" />}
-                          {value === "yes" ? "Yes" : "No"}
+                          {copied === turn.id ? (
+                            <IoCheckmark aria-hidden="true" />
+                          ) : (
+                            <IoCopy aria-hidden="true" />
+                          )}
+                          <span className="visually-hidden">
+                            {copied === turn.id
+                              ? "Answer copied"
+                              : "Copy this answer and its sources"}
+                          </span>
                         </button>
-                      ))}
-                    </div>
-                  </div>
-                  </>
-                )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </article>
+          ))}
+
+          {limited !== null && (
+            <div className="notice notice--limit" role="alert">
+              <p>
+                <IoWarning aria-hidden="true" /> {limited}
+              </p>
+              <a
+                className="button button--quiet"
+                href={`tel:${MEMBER_SERVICES_DISPLAY}`}
+              >
+                <IoCall aria-hidden="true" /> Call {MEMBER_SERVICES_DISPLAY}
+              </a>
+            </div>
+          )}
+
+          {callback !== null && <CallbackPanel draft={callback} />}
+
+          {planPrompt !== null && (
+            <div className="plan-prompt">
+              <div className="plan-prompt__head">
+                <h3 className="plan-prompt__title">Which plan are you on?</h3>
+                <button
+                  type="button"
+                  className="assistant__icon-button"
+                  onClick={dismissPlanPrompt}
+                >
+                  <IoClose aria-hidden="true" />
+                  <span className="visually-hidden">Close, and answer without a plan</span>
+                </button>
               </div>
-            )}
-          </article>
-        ))}
-
-        {limited !== null && (
-          <div className="notice notice--limit" role="alert">
-            <p><IoWarning aria-hidden="true" /> {limited}</p>
-            <a className="button button--quiet" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-              <IoCall aria-hidden="true" /> Call {MEMBER_SERVICES_DISPLAY}
-            </a>
-          </div>
-        )}
-
-        {callback !== null && <CallbackPanel draft={callback} />}
-
-        {planPrompt !== null && (
-          <div className="plan-prompt">
-            <h3 className="plan-prompt__title">Which plan are you on?</h3>
-            <p>Costs differ between plans, so I need this one before I answer.</p>
-            <ul className="plan-prompt__options">
-              {planPrompt.plans.map((option) => (
-                <li key={`${option.contractId}-${option.id}`}>
-                  <button
-                    type="button"
-                    className="starter"
-                    aria-current={
-                      plan?.contractId === option.contractId && plan.id === option.id ? "true" : undefined
-                    }
-                    onClick={() => choosePlan(option)}
-                  >
-                    {option.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <div ref={threadEnd} />
-      </div>
+              <p>
+                Costs differ between plans, so I need this one before I answer.
+              </p>
+              <ul className="plan-prompt__options">
+                {planPrompt.plans.map((option) => (
+                  <li key={`${option.contractId}-${option.id}`}>
+                    <button
+                      type="button"
+                      className="starter"
+                      aria-current={
+                        plan?.contractId === option.contractId &&
+                        plan.id === option.id
+                          ? "true"
+                          : undefined
+                      }
+                      onClick={() => choosePlan(option)}
+                    >
+                      {option.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div ref={threadEnd} />
+        </div>
       </div>
 
       <div className="assistant__foot">
-      {/* FR-P2-22, D-070: the three commands ideas.md P2-06 names. Contextual
+        {/* FR-P2-22, D-070: the three commands ideas.md P2-06 names. Contextual
           follow-ups are not built; D-069 measured what touching the prompt costs. */}
-      <div className="chips" aria-label="Quick actions">
-        <button
-          type="button"
-          className="chip"
-          aria-expanded={helpOpen}
-          aria-controls="assistant-help"
-          onClick={() => setHelpOpen((open) => !open)}
-        >
-          Help
-        </button>
-        <a className="chip" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-          Talk to a person
-        </a>
-        <button type="button" className="chip" onClick={startOver}>
-          <IoRefresh aria-hidden="true" /> Start over
-        </button>
-        {turns.length > 0 && (
+        {tools}
+        {mode === "voice" ? (
           <>
-            <button type="button" className="chip" onClick={() => window.print()}>
-              <IoPrint aria-hidden="true" /> Print
-            </button>
-            <button type="button" className="chip" onClick={forgetHistory}>
-              <IoTrash aria-hidden="true" /> Clear saved conversations
-            </button>
+            <VoiceComposer
+              busy={busy}
+              responding={speakingTurn !== null}
+              onSend={(question) => void submit(question, plan)}
+            />
+            {spoken !== null && (
+              <div className="voice__playback">
+                <button
+                  type="button"
+                  className="button button--quiet"
+                  onClick={() => spoken.play()}
+                >
+                  <IoPlay aria-hidden="true" /> Play the answer again
+                </button>
+                <button
+                  type="button"
+                  className="button button--quiet"
+                  onClick={() => spoken.stop()}
+                >
+                  <IoStop aria-hidden="true" /> Stop
+                </button>
+              </div>
+            )}
+            {voiceNotice !== null && (
+              <p className="voice__notice" role="status">
+                {voiceNotice}
+              </p>
+            )}
           </>
-        )}
-      </div>
-
-      {mode === "voice" ? (
-        <>
-          <VoiceComposer
-            busy={busy}
-            responding={speakingTurn !== null}
-            onSend={(question) => void submit(question, plan)}
-          />
-          {spoken !== null && (
-            <div className="voice__playback">
-              <button type="button" className="button button--quiet" onClick={() => spoken.play()}>
-                <IoPlay aria-hidden="true" /> Play the answer again
-              </button>
-              <button type="button" className="button button--quiet" onClick={() => spoken.stop()}>
-                <IoStop aria-hidden="true" /> Stop
-              </button>
-            </div>
-          )}
-          {voiceNotice !== null && (
-            <p className="voice__notice" role="status">
-              {voiceNotice}
-            </p>
-          )}
-        </>
-      ) : (
-        <form
-          className="composer"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const question = draft;
-            setDraft("");
-            void submit(question, plan);
-          }}
-        >
-          <label className="visually-hidden" htmlFor="composer-input">
-            Ask a question about your plan
-          </label>
-          <input
-            id="composer-input"
-            className="composer__input"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ask about costs, drugs, providers or appeals"
-            autoComplete="off"
-            maxLength={500}
-          />
-          <DictateButton
-            disabled={busy}
-            onError={setDictateError}
-            onTranscript={(text) => {
-              setDictateError(null);
-              // Placed, never sent. The member reads it back and presses Ask.
-              setDraft((current) => (current.trim().length === 0 ? text : `${current.trim()} ${text}`));
-              document.getElementById("composer-input")?.focus();
+        ) : (
+          <form
+            className="composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const question = draft;
+              setDraft("");
+              void submit(question, plan);
             }}
-          />
-          <button type="submit" className="button button--primary" disabled={busy || draft.trim().length === 0}>
-            <IoSend aria-hidden="true" /> {busy ? "Working" : "Ask"}
-          </button>
-        </form>
-      )}
+          >
+            <label className="visually-hidden" htmlFor="composer-input">
+              Ask a question about your plan
+            </label>
+            {/* Grows to four lines, then scrolls. Enter sends; Shift+Enter
+                starts a new line, which is what a textarea otherwise steals. */}
+            <textarea
+              id="composer-input"
+              className="composer__input"
+              value={draft}
+              rows={1}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey) return;
+                event.preventDefault();
+                const question = draft;
+                setDraft("");
+                void submit(question, plan);
+              }}
+              placeholder="Ask about costs, drugs, providers or appeals"
+              autoComplete="off"
+              maxLength={3_000}
+            />
+            <DictateButton
+              disabled={busy}
+              onError={setDictateError}
+              onTranscript={(text) => {
+                setDictateError(null);
+                // Placed, never sent. The member reads it back and presses Ask.
+                setDraft(
+                  draft.trim().length === 0 ? text : `${draft.trim()} ${text}`,
+                );
+                document.getElementById("composer-input")?.focus();
+              }}
+            />
+            <button
+              type="submit"
+              className="button button--primary"
+              disabled={busy || draft.trim().length === 0}
+            >
+              <IoSend aria-hidden="true" /> {busy ? "Working" : "Ask"}
+            </button>
+          </form>
+        )}
 
-      {dictateError !== null && (
-        <p className="voice__error" role="alert">
-          <IoWarning aria-hidden="true" /> {dictateError}
+        {dictateError !== null && (
+          <p className="voice__error" role="alert">
+            <IoWarning aria-hidden="true" /> {dictateError}
+          </p>
+        )}
+
+        <p className="assistant__status" role="status">
+          {status}
         </p>
-      )}
 
-      <p className="assistant__status" role="status">
-        {status}
-      </p>
-
-      {/* FR-15: scope disclosure, visible rather than buried. */}
-      <p className="assistant__scope">
-        An assistant, not a clinician. It answers only from 2026 plan documents and never decides
-        coverage. Phone number and hours shown here are placeholders for this case study.
-        {corpusDate !== null && ` Plan documents collected ${corpusDate}.`}
-      </p>
+        {/* FR-15: scope disclosure, visible rather than buried. */}
+        <p className="assistant__scope">
+          Not a clinician. For medical concerns see a professional. It never
+          decides coverage.
+        </p>
       </div>
     </section>
   );

@@ -427,3 +427,24 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** contextual follow-up chips are not built. History surviving a real browser reload, and the printed page's appearance, are asserted at the storage and stylesheet layers but not rendered in a browser - still the deferred component-harness decision.
 
 **Next:** Stage 5, synthetic member records. `claude/srs-p2.md` FR-P2-24 to FR-P2-29.
+
+## 2026-09-08 - Interface pass on the assistant panel
+
+**Did:** Thirteen interface changes requested by the user. Seven direct, six taken to decision, three of which conflicted with an existing guarantee.
+
+**Files:** created `web/src/progress.ts`. Changed `web/src/App.tsx`, `web/src/components/Assistant.tsx`, `web/src/app.css`, `tests/unit/a11y-static.test.ts`. Added `framer-motion@13.2.0`.
+
+**Verified:** 520 tests pass, both typecheck projects clean, build succeeds. Bundle 78KB to 119KB gzipped, all of it Framer Motion.
+
+**What the pass surfaced:**
+
+- **A focus ring cannot be keyboard-only on a text field.** `:focus-visible` matches on mouse click too, by design, because a text field must show where typing lands. The request was met by drawing the indicator inside the radius rather than outside it, which is what made it ugly.
+- **A backdrop obliges a focus loop.** Once the page is dimmed and locked, a keyboard user tabbing out lands on controls they cannot see. Adding the backdrop without the loop would have made the panel a dialog for mouse users only.
+- **Voice mode's scroll problem was a layout bug, not a scroll lock.** The voice stage sat in the pinned foot at full height and left the thread a sliver, so an answer could be heard but not read. Capping the stage fixed it.
+- **Two `prefers-reduced-motion` blocks are worse than one.** Appending a second made the first unreachable to a test reading the last occurrence, and would equally confuse the next person editing it.
+- **Reformatting breaks whitespace-exact assertions.** Four tests failed on wrapped strings rather than changed behaviour. They normalise whitespace now; a test that fails when a formatter runs is testing the formatter.
+- **Three requests conflicted with a requirement and were resolved in the open** rather than quietly reinterpreted: the focus ring, the modal's focus behaviour, and chip sizing against the 44px target minimum.
+
+**Open:** Framer Motion's 41KB is a real cost for this audience and is not measured on a throttled connection. `eval/results/real-device-latency.md` is still the empty template it has been since P1.
+
+**Next:** Stage 5, synthetic member records.

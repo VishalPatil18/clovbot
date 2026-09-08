@@ -1166,3 +1166,66 @@ Storage, copy format, layout, help and chips, print, verification. Planned inlin
 **Not delivered:** contextual follow-up chips (D-070). `docs/ideas.md` P2-01 returns to unbuilt.
 
 **Not covered by an automated test:** history surviving an actual browser reload, and the print output's rendered appearance. The storage layer and the stylesheet are asserted; the browser behaviour needs the component harness that remains a deferred dependency decision from Stage 1.
+
+---
+
+## Feature: Interface pass on the assistant panel (P2 Stage 4b)
+
+| Field            | Value              |
+| ---------------- | ------------------ |
+| Shipped          | 2026-09-08         |
+| Cycle            | 14                 |
+| Stage of plan.md | not a plan stage; a user-requested interface pass |
+
+### Phase 1 - Requirements
+
+Thirteen items from the user. Seven were unambiguous and were implemented directly. Six needed a decision, and three of those turned out to conflict with something the product already guarantees.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Animation library | Framer Motion 13.2.0 (D-074) |
+| 2 | Overlay behaviour | Full overlay, focus held inside (D-075) |
+| 3 | A closed panel with text in the box | Keep the draft, restore on reopen (D-076) |
+| 4 | Progress messages | Follow real stages, timed fallback within a stage (D-077) |
+| 5 | Focus ring on the input | Drawn inside the field (D-078) |
+| 6 | Footer wording | Keep the medical line, add the coverage clause back |
+| 7 | Chip size | Look smaller, stay 44px tall |
+| 8 | Header | Two rows: title with icons, then one context line |
+
+**Three requests could not be done as written, and were resolved rather than silently reinterpreted:**
+
+- **"Make the focus ring go away when typing."** `:focus-visible` matches on **every** focus of a text field, mouse click included - browsers do this deliberately, because a text field must show where typing lands. So it cannot be keyboard-only, and removing it fails `NFR-A11Y-04` and a passing test. What made it ugly was a 3px hard rectangle sitting 2px *outside* a rounded pill. Drawn inside with `outline-offset: -2px` plus a soft halo, it becomes part of the control.
+- **"Backdrop, locked page, click outside to close."** That is a modal. Built as one, focus included: a dialog that visually covers the page must cover it for the keyboard too, or a Tab lands on controls hidden behind the dark layer. `FR-P2-23`'s no-trap rule governs the help region, not the panel.
+- **"Make the chips smaller."** `NFR-A11Y-02` requires 44px targets and a test enforces it. Side padding halved and type reduced, so they read as smaller; the height a finger has to hit is unchanged.
+
+### Phase 2 - Architecting
+
+D-074 through D-078.
+
+### Phase 3 to 5 - Specs and plan
+
+New modules: `web/src/progress.ts` for the staged messages. `App.tsx` gains the backdrop, the focus loop, the scroll lock and ownership of the draft. Planned inline; the forks were closed before sequencing.
+
+### Phase 6 - Writing Code
+
+| # | Request | Done |
+| --- | --- | --- |
+| 1 | Header decluttered, Open full page icon-only, tighter padding | Two rows; four icon controls at 44px with zero padding |
+| 2 | Talk to a person out of the header, icon on the bottom one | Moved to the pinned foot with a phone icon |
+| 3 | Help out of the bottom | Header only |
+| 4 | Shorter, smaller, centred footer line | 13 words, caption size, centred, 75% opacity |
+| 5 | Input, mic and Ask the same height | All three at 52px |
+| 6 | Staged progress messages | Five lines across two real stages, cross-faded |
+| 7 | Motion on panel and controls | Panel spring, backdrop fade, message cross-fade; the mic was already CSS-animated and reduced-motion aware, so it was left alone |
+| 8 | Copy as an icon beside the feedback buttons | Icon-only, right of the row, turns to a tick when copied |
+| 9 | Multiline to four lines, 3000 characters, no outer ring | Textarea, Enter sends and Shift+Enter breaks the line |
+| 10 | Thin, quiet scrollbars | 8px, transparent until hover or focus, styled for both engines |
+| 11 | Scroll the transcript while the answer is spoken | Root cause: the voice stage sat in the pinned foot at full height and squeezed the thread to a sliver. Capped at 42vh |
+| 12 | Backdrop, locked page, click outside to close | With the focus loop D-075 requires |
+| 13 | Consistent, lighter spacing, better borders and shadows | Panel shadow, tightened gaps throughout |
+
+**Cost, stated rather than buried:** the bundle went from **78KB gzipped to 119KB**, a 41KB increase, all Framer Motion. On a slow phone connection that is real, for an audience that mostly reads.
+
+**Verified:** 520 tests pass, both typecheck projects clean, web build succeeds. Twelve new assertions cover the focus loop, the scroll lock and its release, the three-way close, the preserved draft, reduced motion, the matched heights, the inside-drawn focus, the four-line cap, the hover-only scrollbars, the capped voice stage, one-control-per-job, and that the footer still says both things FR-15 needs.
+
+**Four tests were brittle rather than wrong.** Your reformatting had wrapped strings like `Reading this answer aloud` across lines, and the assertions matched exact whitespace. They now normalise whitespace instead. One real source bug was found this way: a second `prefers-reduced-motion` block made the first unreachable to anything reading the last occurrence, so the two were merged.

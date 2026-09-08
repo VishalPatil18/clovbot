@@ -2737,6 +2737,178 @@ Option 3 leaves FR-13 broken in the state where it matters most: a member who ha
 
 ---
 
+## Decision D-074 - Framer Motion 13.2.0 is added for interface motion
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The interface pass asks for motion on the panel, the mic and the progress messages. The project has no animation dependency; every prior effect is CSS.
+
+### Options considered
+
+1. Plain CSS animations, no new package.
+2. Framer Motion, roughly 50KB gzipped.
+3. Motion One, roughly 5KB, same author.
+
+### Decision
+
+Option 2, `framer-motion@13.2.0`, pinned exactly. Version checked against the registry rather than recalled.
+
+### Rationale
+
+The user's call. It brings enter and exit animation, which plain CSS cannot do for an element being removed from the React tree - the panel, the help region and each rotating progress message all mount and unmount, and CSS can only animate the entrance.
+
+### Consequences
+
+- Roughly 50KB gzipped added to a bundle currently 78KB gzipped. Material on a slow connection for an audience that mostly reads.
+- Every animation must respect `prefers-reduced-motion`, which Framer Motion does through `useReducedMotion` rather than automatically.
+- First runtime dependency in the browser bundle beyond React and icons.
+
+---
+
+## Decision D-075 - The assistant panel becomes a true modal overlay
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | amends the Stage 7 panel, which set `aria-modal="false"` |
+
+### Context
+
+The panel sat beside the page: no backdrop, page still scrollable, `aria-modal="false"`, focus free to leave. The pass asks for a dimmed backdrop, a locked page and click-outside to close.
+
+### Options considered
+
+1. Full overlay with focus held inside, `aria-modal="true"`.
+2. Full overlay with focus free to leave.
+3. Keep it beside the page.
+
+### Decision
+
+Option 1. Backdrop at 20% black, body scroll locked, click outside or Escape or the X closes it, and focus is held within the panel while it is open.
+
+### Rationale
+
+Option 2 is the trap it looks like it avoids. Once a backdrop covers the page, a keyboard user tabbing out lands on controls they cannot see, behind a dark layer, with no way to know where they are. A dialog that visually blocks the page must block focus too, or it is only a dialog for people using a mouse.
+
+`FR-P2-23`'s no-focus-trap rule governs the **help region**, which remains a disclosure inside the panel. It says nothing about the panel itself.
+
+### Consequences
+
+- Focus returns to the launcher on close, which it already did.
+- `aria-modal` flips to `true` and the panel gains a focus loop.
+- Body scroll lock must be released on unmount or the page stays frozen after a close.
+
+---
+
+## Decision D-076 - A closed panel keeps what was typed
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Click-outside-to-close means a stray click discards a half-typed question.
+
+### Options considered
+
+1. Keep the draft and restore it on reopen.
+2. Confirm before closing when the box is not empty.
+3. Discard.
+
+### Decision
+
+Option 1. The draft survives a close and is put back on reopen.
+
+### Rationale
+
+This audience types slowly, and retyping a question is the real cost of a mis-click. Option 2 puts a decision in front of someone whose intent was to dismiss something.
+
+### Consequences
+
+- The draft outlives the panel, so it is held above the panel rather than inside it.
+
+---
+
+## Decision D-077 - Progress messages follow real stages, with a timed fallback
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+A single static "Searching your plan documents" sits on screen for the whole wait, which measured 2.8 seconds to answer and longer with voice.
+
+### Options considered
+
+1. Messages driven by the events the server already sends, with a timed fallback if a stage runs long.
+2. Purely timed rotation.
+3. One message plus a moving indicator.
+
+### Decision
+
+Option 1. The stream already reports when retrieval begins, when a plan is needed and when the first token arrives; messages follow those. Within a stage that runs long, a softer line appears so nothing looks frozen.
+
+### Rationale
+
+Option 2 would display "checking your plan documents" after that had finished. It is a small untruth, and this is a product whose entire claim is that it does not state things it cannot support. Cheap honesty is still honesty.
+
+### Consequences
+
+- Message changes are uneven, because real stages are uneven. That is the point.
+- The fallback timer must not advance past the last message for its stage, or it becomes option 2 by accident.
+
+---
+
+## Decision D-078 - Focus on the composer is drawn inside the field
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The pass asked for the focus ring on the input to disappear while typing. `:focus-visible` matches on **every** focus of a text field, including a mouse click - browsers do this deliberately, because a text field must show where typing will land. So the ring cannot be conditional on the keyboard, and removing it fails `NFR-A11Y-04` and the test that forbids removing an outline.
+
+### Options considered
+
+1. Draw the same outline inside the field with a negative offset, plus a soft halo, so nothing sits outside the rounded shape.
+2. Keep the outer ring, tucked in.
+3. Remove it from the input.
+
+### Decision
+
+Option 1. `outline-offset: -2px` with a border weight change and a shadow halo on the field itself.
+
+### Rationale
+
+What made it ugly was a hard 3px rectangle sitting 2px outside a rounded pill, reading as a second box. Drawn inside, hugging the same radius, it becomes part of the control. Focus stays visible, the outline is never removed, and the test keeps passing without being weakened.
+
+### Consequences
+
+- The composer's focus treatment differs from the rest of the interface, deliberately, because it is the only control someone dwells inside.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

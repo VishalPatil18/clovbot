@@ -24,6 +24,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - **Copy this answer** puts one answer, its sources, your plan and the document date on the clipboard as plain text, ready to paste into an email or a message.
 - A **Help** panel lists what you can ask, what the assistant cannot do, and what each button does. It opens in place rather than covering the conversation.
 - The assistant panel now keeps its header and its message box in view while the conversation scrolls between them, so **Talk to a person** is always reachable. Close is an **X** at the top right.
+- Opening the assistant dims the page behind it so the conversation is the only thing competing for attention. Click outside it, press Escape, or use the X to close. Anything you had started typing is still there when you come back.
+- While an answer is being prepared, the assistant says what it is doing at each step rather than showing one unchanging line.
+- The question box now grows to four lines as you type and holds a much longer question.
+- You can play an answer aloud and scroll back through the written version at the same time.
+- Tidier panel throughout: a single row of controls at the top, matching heights on the question box, microphone and Ask button, and slimmer scrollbars that stay out of the way until you need them.
 
 ### Fixed
 

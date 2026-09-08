@@ -1,4 +1,11 @@
 import { useRef, useState } from "react";
+import {
+  IoCallOutline,
+  IoChatbubbleEllipsesOutline,
+  IoDocumentTextOutline,
+  IoGlobeOutline,
+  IoPersonCircleOutline,
+} from "react-icons/io5";
 import { MEMBER_SERVICES_DISPLAY } from "./Assistant.tsx";
 
 /**
@@ -131,10 +138,14 @@ export function Landing({ onAsk }: { onAsk: () => void }): React.JSX.Element {
         <span className="cl-logo">Clover Health</span>
         <div className="cl-head__actions">
           <a className="cl-btn cl-btn--outline-light" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-            Call Us
+            <IoCallOutline aria-hidden="true" /> Call Us
           </a>
-          <a className="cl-btn cl-btn--lilac" href="#members">My Clover</a>
-          <a className="cl-btn cl-btn--ghost" href="#language">English</a>
+          <a className="cl-btn cl-btn--lilac" href="#members">
+            <IoPersonCircleOutline aria-hidden="true" /> My Clover
+          </a>
+          <a className="cl-btn cl-btn--ghost" href="#language">
+            <IoGlobeOutline aria-hidden="true" /> English
+          </a>
         </div>
       </header>
 
@@ -235,7 +246,7 @@ export function Landing({ onAsk }: { onAsk: () => void }): React.JSX.Element {
               <p>See the benefits of each plan.</p>
             </div>
             <button type="button" className="cl-btn cl-btn--purple" onClick={onAsk}>
-              View Plans
+              <IoDocumentTextOutline aria-hidden="true" /> View Plans
             </button>
           </div>
         </section>
@@ -275,7 +286,7 @@ export function Landing({ onAsk }: { onAsk: () => void }): React.JSX.Element {
               {MEMBER_SERVICES_DISPLAY} (TTY 711)
             </a>
             <button type="button" className="cl-btn cl-btn--purple" onClick={onAsk}>
-              Request a Call
+              <IoChatbubbleEllipsesOutline aria-hidden="true" /> Request a Call
             </button>
           </div>
         </section>

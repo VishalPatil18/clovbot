@@ -77,16 +77,17 @@
 
 .cl-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-height: 44px; padding: 10px 22px; border-radius: 8px;
+  /* Clover's own buttons are a soft rectangle, not a pill. DESIGN.md: 14px. */
+  min-height: 44px; padding: 10px 22px; border-radius: 14px; gap: 8px;
   border: 2px solid transparent; cursor: pointer;
   font-size: 16px; font-weight: 600; text-decoration: none;
 }
 .cl-btn--purple { background: var(--cl-purple); color: #fff; }
 .cl-btn--purple:hover { background: var(--cl-purple-dark); }
 .cl-btn--block { width: 100%; }
-.cl-btn--lilac { background: var(--cl-lilac); color: var(--cl-green); border-radius: 999px; }
-.cl-btn--outline-light { border-color: #fff; color: #fff; border-radius: 999px; }
-.cl-btn--outline-dark { border-color: var(--cl-green); color: var(--cl-green); background: #fff; border-radius: 999px; }
+.cl-btn--lilac { background: var(--cl-lilac); color: var(--cl-green); border-radius: 14px; }
+.cl-btn--outline-light { border-color: #fff; color: #fff; border-radius: 14px; }
+.cl-btn--outline-dark { border-color: var(--cl-green); color: var(--cl-green); background: #fff; border-radius: 14px; }
 .cl-btn--ghost { color: #fff; }
 
 .cl-hero { position: relative; display: grid; }
@@ -116,7 +117,7 @@
 .cl-benefits h3 { margin: 20px 0 14px; color: var(--cl-green); font-size: 25px; font-weight: 800; white-space: pre-line; line-height: 1.2; }
 .cl-ico {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 54px; height: 54px; border-radius: 999px;
+  width: 54px; height: 54px; border-radius: 14px;
   background: var(--cl-icon); color: #fff;
 }
 .cl-inline-link { color: var(--cl-green); font-weight: 700; text-underline-offset: 4px; }
@@ -165,7 +166,7 @@
 .cl-quotes li { background: #fff; border-radius: 10px; padding: 28px; }
 .cl-quotes blockquote { margin: 0 0 28px; font-size: 19px; font-weight: 700; color: var(--cl-green); line-height: 1.4; }
 .cl-quotes__who { display: flex; gap: 14px; align-items: center; }
-.cl-quotes__who img { width: 52px; height: 52px; border-radius: 999px; object-fit: cover; }
+.cl-quotes__who img { width: 52px; height: 52px; border-radius: 14px; object-fit: cover; }
 .cl-quotes__name { margin: 0; font-size: 17px; }
 .cl-quotes__since { margin: 2px 0 0; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: #4a5450; }
 
