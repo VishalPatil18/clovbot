@@ -8,6 +8,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- **You can talk to it instead of typing.** Hold the microphone button and speak, or tap once to start and tap again to stop. Both work, always.
+- **It shows you what it heard before it answers**, so you can fix a word it got wrong rather than getting an answer to the wrong question.
+- **Answers are read aloud and written down at the same time.** The text never disappears, so you can re-read it or check where it came from. You can replay or stop the audio.
+- **If the usual voice is unavailable, it says so** and carries on in another voice rather than going silent.
+- **Whether you prefer talking or typing is remembered** for next time.
 - **Questions that need a person now go to a person.** Coverage decisions, medical questions, plan choices, complaints, fraud reports and record changes are declined with the reason, not answered badly.
 - **If you describe an emergency, the assistant stops and tells you to call 911** instead of looking anything up.
 - **After two answers it could not give, it offers to hand you over** rather than inviting you to try again.

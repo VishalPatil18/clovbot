@@ -212,3 +212,93 @@
 .callback__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
 .callback__error { color: #7a1f1f; font-weight: var(--font-weight-semibold); }
 .callback__note { font-size: var(--text-body); }
+
+/* Stage 9: voice mode. The mic follows the mock: a 112px circle on a keylime panel. */
+.voice { display: grid; gap: var(--spacing-12); }
+.voice__stage {
+  display: grid; justify-items: center; gap: var(--spacing-16);
+  background: var(--color-keylime-wash); border-radius: var(--radius-md);
+  padding: var(--spacing-32) var(--spacing-24);
+}
+
+/* The well reserves room for the rings so they never shift the layout. */
+.mic-well { position: relative; display: grid; place-items: center; width: 200px; height: 200px; }
+
+.mic {
+  position: relative; z-index: 1;
+  display: grid; place-items: center;
+  width: 112px; height: 112px; min-width: 112px; min-height: 112px;
+  padding: 0; border: none; border-radius: 999px;
+  background: var(--color-forest-ink); color: var(--color-cream-paper);
+  cursor: pointer; touch-action: none;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.mic:hover { background: var(--color-forest-shadow); }
+.mic:active { transform: scale(0.96); }
+.mic:disabled { opacity: 0.75; cursor: progress; }
+.mic__icon { width: 44px; height: 44px; }
+.mic--listening { background: var(--color-forest-shadow); }
+
+/* Rings leave the microphone while it hears something. Three, staggered, each
+   scaled by the measured level so they answer the voice rather than loop blindly. */
+.mic-rings { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.mic-ring {
+  position: absolute;
+  width: 112px; height: 112px; border-radius: 999px;
+  border: 2px solid var(--color-forest-ink);
+  opacity: 0;
+  animation: mic-ripple 2.1s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  transform-origin: center;
+}
+.mic-ring:nth-child(2) { animation-delay: 0.7s; }
+.mic-ring:nth-child(3) { animation-delay: 1.4s; }
+
+@keyframes mic-ripple {
+  0%   { transform: scale(1); opacity: calc(0.15 + var(--level, 0.2) * 0.55); }
+  100% { transform: scale(calc(1.35 + var(--level, 0.2) * 0.45)); opacity: 0; }
+}
+
+/* Motion is decoration here; the state is carried by colour, icon and text. */
+@media (prefers-reduced-motion: reduce) {
+  .mic-ring { animation: none; opacity: 0.35; transform: scale(1.25); }
+  .mic { transition: none; }
+}
+
+.voice__state { margin: 0; text-align: center; font-size: var(--text-message); font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+.voice__hint { margin: 0; text-align: center; max-width: 32rem; }
+.voice__status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.voice__notice { margin: 0; text-align: center; color: var(--color-forest-ink); font-weight: var(--font-weight-semibold); }
+.voice__error { margin: 0; display: flex; align-items: center; gap: var(--spacing-8); color: #7a1f1f; font-weight: var(--font-weight-semibold); }
+
+.voice__review { display: grid; gap: var(--spacing-8); width: 100%; }
+.voice__label { font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+.voice__transcript {
+  width: 100%; padding: var(--spacing-12);
+  border: 2px solid var(--color-forest-ink); border-radius: var(--radius-sm);
+  font-size: var(--text-message); line-height: var(--leading-message);
+  background: var(--color-cream-paper);
+}
+.voice__actions, .voice__playback { display: flex; flex-wrap: wrap; gap: var(--spacing-8); justify-content: center; }
+
+/* Dictation from the text composer. Round, to echo the voice-mode control. */
+.dictate {
+  display: grid; place-items: center;
+  width: var(--target-min); height: var(--target-min);
+  min-width: var(--target-min); padding: 0;
+  border: 2px solid var(--color-forest-ink); border-radius: 999px;
+  background: var(--color-cream-paper); color: var(--color-forest-ink);
+  font-size: 20px; cursor: pointer; touch-action: none;
+}
+.dictate:hover { background: var(--color-keylime-wash); }
+.dictate:disabled { opacity: 0.6; cursor: progress; }
+.dictate--listening {
+  background: var(--color-forest-ink); color: var(--color-cream-paper);
+  box-shadow: 0 0 0 calc(3px + var(--level, 0) * 9px) var(--color-mint-veil);
+  transition: box-shadow 90ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dictate--listening { box-shadow: 0 0 0 5px var(--color-mint-veil); transition: none; }
+}
+
+.empty__icon { vertical-align: -3px; margin-right: var(--spacing-4); }
+.notice p { display: flex; align-items: center; gap: var(--spacing-8); }

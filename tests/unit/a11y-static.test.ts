@@ -201,6 +201,47 @@ describe("required surfaces", () => {
     expect(block).toMatch(/height:\s*44px/);
   });
 
+  // Icons are decoration beside a text label, never the label itself.
+  it("hides decorative icons from screen readers", () => {
+    const withIcons = ["Assistant", "VoiceComposer", "DictateButton", "CallbackPanel"]
+      .map((name) => readFileSync(`web/src/components/${name}.tsx`, "utf8"))
+      .join("\n");
+    const icons = withIcons.match(/<Io[A-Za-z]+[^>]*>/g) ?? [];
+    expect(icons.length).toBeGreaterThan(8);
+    for (const icon of icons) expect(icon).toMatch(/aria-hidden="true"/);
+  });
+
+  // The two icon-only controls carry their name another way.
+  it("names the icon-only controls", () => {
+    const dictate = readFileSync("web/src/components/DictateButton.tsx", "utf8");
+    expect(dictate).toMatch(/aria-label=\{label\}/);
+    const voice = readFileSync("web/src/components/VoiceComposer.tsx", "utf8");
+    expect(voice).toMatch(/<span className="visually-hidden">\{spoken\}<\/span>/);
+  });
+
+  it("keeps the microphone at the mock's 112px and the dictate control at the target minimum", () => {
+    const css = readFileSync("web/src/app.css", "utf8");
+    const mic = /\.mic \{([^}]*)\}/s.exec(css)?.[1] ?? "";
+    expect(mic).toMatch(/width: 112px/);
+    const dictate = /\.dictate \{([^}]*)\}/s.exec(css)?.[1] ?? "";
+    expect(dictate).toMatch(/width: var\(--target-min\)/);
+  });
+
+  // The rings are decoration; the state is carried by colour, icon and text.
+  it("stops the ring animation under reduced motion", () => {
+    const css = readFileSync("web/src/app.css", "utf8");
+    expect(css).toMatch(/prefers-reduced-motion[\s\S]*\.mic-ring \{ animation: none/);
+  });
+
+  // FR-18: a mis-heard word must be fixable before the question is asked.
+  it("places a dictated transcript in the composer rather than sending it", () => {
+    const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
+    expect(assistant).toMatch(/onTranscript=\{\(text\) =>/);
+    expect(assistant).toMatch(/setDraft\(\(current\) =>/);
+    const dictate = readFileSync("web/src/components/DictateButton.tsx", "utf8");
+    expect(dictate).not.toMatch(/onSend|submit\(/);
+  });
+
   it("labels the composer for screen readers", () => {
     expect(tsx).toMatch(/htmlFor="composer-input"/);
   });

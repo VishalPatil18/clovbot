@@ -632,3 +632,81 @@ Every Stage 8 acceptance criterion passes against the live database, verified by
 
 **All 66 stubs written in session one are now implemented. The suite is 307 green, zero failing.**
 
+
+---
+
+## Feature: Voice integration (Stage 9)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | 2026-09-08           |
+| Cycle            | 8                    |
+| Stage of plan.md | `plan-p1.md` Stage 9 |
+| Owner            | user + claude        |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Run the skipped Stage 2 spike first | No, build it |
+| 2 | ElevenLabs account | Exists |
+| 3 | Fish Audio, whose free tier closed | Account has credits; keep D-009's chain |
+| 4 | Speech to text provider | ElevenLabs and Fish Audio, same chain |
+| 5 | Where synthesis runs | Server-side |
+| 6 | Audio cache | Disk under `data/` |
+| 7 | The two unmeasured budgets | Measure on the real system, then record the values |
+
+Raised during the build and answered: **live partial transcription**. Both providers transcribe in batch, and the streaming alternative would have sent a member's spoken health question to Google. Resolved as D-045.
+
+### Phase 2 - Architecting
+
+**Options considered:** Scribe v2 Realtime over WebSocket · browser `SpeechRecognition` for partials · no partials, with listening and processing states.
+
+**Chosen:** no partials. The protective half of FR-18 is the editable transcript; the live partial is reassurance, and buying reassurance by routing health questions to a third party is the wrong trade.
+
+### Phase 3 - Product Specs
+
+- **UI:** persisted mode toggle; a 112px microphone with idle, listening and processing states; a level meter standing in for the partial transcript; an editable transcript before sending; play and stop controls on the answer.
+- **Entities:** `Attempt`, `ChainResult`, `Recording`, `Transcription`, `Spoken`.
+- **Storage:** MP3 on disk under `data/audio/`, keyed on a hash of provider, voice and text.
+
+### Phase 4 - Tech Specs
+
+- **Providers:** ElevenLabs `/v1/text-to-speech/{voice_id}` and `/v1/speech-to-text`; Fish Audio `/v1/tts` and `/v1/asr`. **Both shapes read from the live OpenAPI documents on 2026-09-08 rather than recalled.**
+- **Chain:** one generic fall-through shared by speech-to-text and text-to-speech, so both have one rule and one set of tests.
+- **Capture:** `MediaRecorder` plus an `AnalyserNode` for the level meter. *Rejected:* the browser's `SpeechRecognition`, per D-045.
+
+### Phase 5 - Planning
+
+| Sub-stage | Goal | Acceptance |
+| --- | --- | --- |
+| 9a | Chain and cache | Fall-through, degrade notice, stable key |
+| 9b | Providers | Verified against live specs |
+| 9c | Endpoints | Synthesis server-side, keys off the page |
+| 9d | Voice surface | Hold and tap, editable transcript, playback |
+| 9e | Measure | The two budgets, from the real system |
+
+### Phase 6 - Writing Code
+
+**Verified live:**
+
+- A full question and answer by voice, spoken and written together, with citations.
+- Breaking the ElevenLabs key falls through to Fish Audio and tells the member: *"The usual voice was unavailable, so this is being read by a different voice."*
+- Breaking both remote providers reaches the browser synthesiser, the tier that cannot be exhausted. This is the case that proves the chain terminates somewhere safe.
+- Cache: 6433ms to synthesise, **0.9ms** on repeat.
+
+**Measured latency, the first voice numbers this project has had:**
+
+| | Median | Target | |
+| --- | --- | --- | --- |
+| Answer ready | 2839ms | - | |
+| First audio | 4007ms | 1500ms | missed |
+| Complete spoken answer | 17-31s | 4000ms | **impossible** |
+
+Both budgets amended by D-046. The second was not missed but unachievable: speech runs at roughly 18 characters per second, so a typical answer takes 17 to 31 seconds to say. The requirement had conflated beginning to speak with finishing.
+
+**Defects found:**
+
+1. **The cache looked up only the primary provider.** After a fall-through it wrote under `fishaudio` and read `elevenlabs`, a permanent miss that also mislabelled the provider. Now checks the chain in order.
+2. **A TypeScript parameter property crashed the server on boot** while 343 tests passed, because Vitest transpiles and Node's strip-only loader does not. Nothing in the suite covers "does the process start".
+

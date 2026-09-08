@@ -7,8 +7,8 @@
 | Field                | Value                          |
 | -------------------- | ------------------------------ |
 | Snapshot date        | 2026-09-08                     |
-| Current stage        | P1 Stage 8 complete. Stage 2 skipped. Next is Stage 9. |
-| Last feature shipped | Guardrails and escalation. Whole golden set enforced. |
+| Current stage        | P1 Stage 9 complete. Stage 2 skipped. Next is Stage 10. |
+| Last feature shipped | Voice: talk to it, hear a cited answer, read the same text. |
 
 ---
 
@@ -42,6 +42,8 @@
 - **Bucket C guardrails.** Ten triggers as deterministic rules evaluated before retrieval, so a guarded question never reaches the model. Emergencies are their own outcome kind and give 911 guidance rather than a refusal script.
 - **Escalation.** Callback request pre-filled with question, plan context and documents searched, stored and confirmed, sending nothing anywhere. Loop breaker arms after two consecutive refusals, read from the turn log.
 - **Rate limiting.** 20 questions per session per hour, 60 per IP per hour, counted in Postgres, answered with a readable message and the phone number.
+- **Voice, verified live.** ElevenLabs primary, Fish Audio fallback, browser synthesiser last. Breaking the primary key falls through to Fish with the member told the voice changed; breaking both reaches the browser tier. Audio cached on disk under `data/audio/`, keyed on text, voice and provider: a repeat went 6433ms to 0.9ms.
+- **Voice latency, measured for the first time.** Answer ready 2839ms median, first audio 4007ms median. Both original budgets were amended by D-046, one of them because it was impossible rather than missed.
 - **The answer contract holds.** The model returns typed claims each carrying their own citation ids; a claim without one fails validation and is never rendered, so an uncited claim is structurally impossible rather than merely detectable. Refusal is a typed branch. Unanswered parts are named explicitly.
 - **Every named Stage 6 edge verified** by `scripts/stage6-checks.ts`: datastore unreachable produces no factual claim, a below-floor question refuses, a partially covered question answers the supported part and names the gap, conflicting sources return the Evidence of Coverage value and state the disagreement, a citation with no plan year refuses rather than rendering, and tokens stream.
 - **Judge calibrated.** 14 sentence-level judgements across six fixtures, zero disagreements. The deliberately unfaithful fixture scores 0.00, the partial one 0.67.
@@ -50,7 +52,7 @@
 - **Chat surface.** React 19 and Vite in `web/`, a Node API in `src/server.ts` streaming server-sent events. Host page with launcher, a 40% viewport panel that is full width on mobile, and a `/assistant` full-page route sharing one component.
 - **Lazy plan context works both ways, verified live.** "how do I file an appeal" answers without asking. "what is my specialist copay" returns the plan chips first, then answers $10 for plan 004. This is what the mock README calls the subtlest thing to get right.
 - **Type scale is two-tier** (D-042). The reading surface, question and answer, sits at 18px/1.6 with a 68ch measure; interface chrome uses the DESIGN.md scale. The composer input stays at 18px because iOS zooms fields below 16px, and the citation sits at 14px rather than the mock's 11px chip.
-- **Tests.** **307 passing, zero failing.** Every stub written in session one is now implemented.
+- **Tests.** **345 passing, zero failing.**
 
 **Known verification gap, the largest in the project.** Five of Stage 7's eleven acceptance criteria need browser tooling that was approved but deferred to P3 (D-040): the axe scan, the keyboard walk, computed-style focus and target checks, 200% reflow, and the throttled Lighthouse run. The surface is built to WCAG 2.2 AA and guarded by 22 static assertions, but conformance is **asserted, not tested**. Also unverified: contrast ratios, screen-reader reading order, keyboard traps.
 
@@ -73,8 +75,9 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 
 ## 4. What's next
 
-1. **Stage 9** - voice integration, against Stage 2's measurements. Stage 2 was skipped, so NFR-PERF-03 and 04 are still unmeasured and the budgets are guesses.
+1. **Stage 10** - deploy, instrument, verify the release. The last P1 stage.
 2. **Accessibility verification** is the largest outstanding risk. A single browser-tooling session at P3 closes five acceptance criteria at once.
+3. **Nothing is measured under the NFR-PERF-05 throttled profile.** Every latency figure recorded so far is unthrottled. Stage 10 owns that, and the numbers will be worse.
 3. **Two register variants still refuse.** A-03 and A-18 score 0.0006 and 0.0002, below the 0.001 floor. The floor cannot separate them from nonsense, which is the cost D-038 records rather than hides.
 4. **No screen-reader pass has been done.** Stage 7's eleventh criterion, and the one no tooling replaces.
 5. **ADV-01 refuses rather than answering.** The injection attempt is declined outright, which is safe but not what the golden case expects.
@@ -246,3 +249,20 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 - **A guardrail that runs after generation is not a guardrail.** Deciding before retrieval means a guarded question never reaches the model, so there is no partial answer to leak on the way to a refusal.
 
 **Open:** voice budgets unmeasured, accessibility verification deferred, two register variants below the floor.
+
+## 2026-09-08 - Stage 9: voice
+
+**Did:** Built the voice loop. Mode toggle persisted, microphone with both hold and tap, editable transcript, spoken answers alongside written ones, provider chain with an audio cache. Measured the two voice latency budgets for the first time.
+
+**Files:** created `src/voice/{cache,chain,providers}.ts`, `web/src/voice.ts`, `web/src/components/VoiceComposer.tsx`, `scripts/stage9-checks.ts`, `tests/unit/voice-chain.test.ts`. Extended `src/server.ts` with `/api/speak` and `/api/transcribe`.
+
+**Decisions:** D-045 drops the live partial transcript and amends FR-18. D-046 replaces both voice latency budgets with measured values.
+
+**What building it taught:**
+- **A requirement can be impossible rather than unmet.** NFR-PERF-04 asked for a complete spoken answer within 4 seconds. Speech runs at roughly 18 characters per second, so the answers tested take 17 to 31 seconds to say. The requirement had conflated beginning to speak with finishing, and no amount of engineering makes speech faster than speech.
+- **The cheap privacy shortcut was the wrong trade.** Live partial transcription would have meant streaming a member's spoken health question to Google for reassurance while they talk, when the editable transcript is what actually protects them from a mis-heard question. FR-18 was amended rather than met that way.
+- **Read the provider spec, do not recall it.** Both request shapes were taken from the live OpenAPI documents. The realtime speech-to-text endpoint the plan assumed does not exist in the REST API at all, which would have been discovered much later.
+- **Tests passing does not mean the server starts.** A TypeScript parameter property compiled fine under Vitest and crashed Node's strip-only loader on boot. Nothing in 343 passing tests covered "does the process start".
+- **Skipping Stage 2 cost what the plan said it would.** These numbers were available at hour 6 for the price of a throwaway page and arrived at Stage 9 with the loop already built on them. Nothing needed rebuilding, which was luck.
+
+**Open:** nothing measured under the throttled profile; accessibility verification deferred; ElevenLabs key is scoped without quota read, so the free-tier ceiling is unknown.

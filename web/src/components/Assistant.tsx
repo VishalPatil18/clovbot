@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, type AskEvent, type CallbackDraft, type Citation, type Claim, type PlanOption } from "../api.ts";
+import {
+  IoCall, IoChatbubbleEllipses, IoClose, IoExpand, IoMic, IoMicOff,
+  IoPlay, IoSend, IoStop, IoThumbsDown, IoThumbsUp, IoWarning,
+} from "react-icons/io5";
 import { AnswerBody } from "./AnswerBody.tsx";
+import { DictateButton } from "./DictateButton.tsx";
 import { CallbackPanel } from "./CallbackPanel.tsx";
+import { VoiceComposer } from "./VoiceComposer.tsx";
+import { readMode, speak, writeMode, type Spoken, type VoiceMode } from "../voice.ts";
 
 /** FR-14. Drawn from the highest-volume bucket A drivers in docs/call-drivers.md. */
 const STARTERS = [
@@ -43,6 +50,10 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
   const [status, setStatus] = useState("");
   const [callback, setCallback] = useState<CallbackDraft | null>(null);
   const [limited, setLimited] = useState<string | null>(null);
+  const [mode, setMode] = useState<VoiceMode>(() => readMode());
+  const [spoken, setSpoken] = useState<Spoken | null>(null);
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  const [dictateError, setDictateError] = useState<string | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
 
@@ -107,6 +118,18 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
           );
           return;
         }
+        // FR-19: spoken and written together. Audio is never the only copy.
+        if (mode === "voice" && event.answer.trim().length > 0) {
+          void speak(event.answer)
+            .then((audio) => {
+              setSpoken(audio);
+              setVoiceNotice(audio.notice);
+              audio.play();
+            })
+            .catch((caught: unknown) => {
+              setVoiceNotice(caught instanceof Error ? caught.message : "The answer could not be read aloud.");
+            });
+        }
         setTurns((previous) =>
           previous.map((turn) =>
             turn.id === id
@@ -133,7 +156,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
         setStatus("");
       }
     },
-    [busy],
+    [busy, mode],
   );
 
   const choosePlan = (option: PlanOption): void => {
@@ -158,14 +181,29 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
           <p className="assistant__context">Not signed in. This assistant holds no member data.</p>
         </div>
         <div className="assistant__header-actions">
+          {/* FR-16. The choice persists across sessions. */}
+          <button
+            type="button"
+            className="button button--quiet"
+            aria-pressed={mode === "voice"}
+            onClick={() => {
+              const next: VoiceMode = mode === "voice" ? "text" : "voice";
+              spoken?.stop();
+              setMode(next);
+              writeMode(next);
+            }}
+          >
+            {mode === "voice" ? <IoMicOff aria-hidden="true" /> : <IoMic aria-hidden="true" />}
+            {mode === "voice" ? "Switch to typing" : "Switch to talking"}
+          </button>
           {variant === "panel" && onExpand !== undefined && (
             <button type="button" className="button button--quiet" onClick={onExpand}>
-              Open full page
+              <IoExpand aria-hidden="true" /> Open full page
             </button>
           )}
           {variant === "panel" && onClose !== undefined && (
             <button type="button" className="button button--quiet" onClick={onClose}>
-              Close
+              <IoClose aria-hidden="true" /> Close
             </button>
           )}
         </div>
@@ -173,13 +211,15 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
 
       {/* FR-13: present in every state, including while an answer is generating. */}
       <a className="button button--human" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-        Talk to a person
+        <IoCall aria-hidden="true" /> Talk to a person
       </a>
 
       <div className="assistant__thread" role="log" aria-live="polite" aria-label="Conversation">
         {turns.length === 0 && planPrompt === null && (
           <div className="empty">
-            <h3 className="empty__title">Ask anything about your plan</h3>
+            <h3 className="empty__title">
+              <IoChatbubbleEllipses className="empty__icon" aria-hidden="true" /> Ask anything about your plan
+            </h3>
             <p className="empty__body">
               You do not need to pick a plan first. I will ask only if the answer depends on it.
             </p>
@@ -235,6 +275,7 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
                             )
                           }
                         >
+                          {value === "yes" ? <IoThumbsUp aria-hidden="true" /> : <IoThumbsDown aria-hidden="true" />}
                           {value === "yes" ? "Yes" : "No"}
                         </button>
                       ))}
@@ -248,9 +289,9 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
 
         {limited !== null && (
           <div className="notice notice--limit" role="alert">
-            <p>{limited}</p>
+            <p><IoWarning aria-hidden="true" /> {limited}</p>
             <a className="button button--quiet" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-              Call {MEMBER_SERVICES_DISPLAY}
+              <IoCall aria-hidden="true" /> Call {MEMBER_SERVICES_DISPLAY}
             </a>
           </div>
         )}
@@ -275,31 +316,68 @@ export function Assistant({ variant, onExpand, onClose }: Props): React.JSX.Elem
         <div ref={threadEnd} />
       </div>
 
-      <form
-        className="composer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const question = draft;
-          setDraft("");
-          void submit(question, plan?.id ?? null);
-        }}
-      >
-        <label className="visually-hidden" htmlFor="composer-input">
-          Ask a question about your plan
-        </label>
-        <input
-          id="composer-input"
-          className="composer__input"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask about costs, drugs, providers or appeals"
-          autoComplete="off"
-          maxLength={500}
-        />
-        <button type="submit" className="button button--primary" disabled={busy || draft.trim().length === 0}>
-          {busy ? "Working" : "Ask"}
-        </button>
-      </form>
+      {mode === "voice" ? (
+        <>
+          <VoiceComposer busy={busy} onSend={(question) => void submit(question, plan?.id ?? null)} />
+          {spoken !== null && (
+            <div className="voice__playback">
+              <button type="button" className="button button--quiet" onClick={() => spoken.play()}>
+                <IoPlay aria-hidden="true" /> Play the answer again
+              </button>
+              <button type="button" className="button button--quiet" onClick={() => spoken.stop()}>
+                <IoStop aria-hidden="true" /> Stop
+              </button>
+            </div>
+          )}
+          {voiceNotice !== null && (
+            <p className="voice__notice" role="status">
+              {voiceNotice}
+            </p>
+          )}
+        </>
+      ) : (
+        <form
+          className="composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const question = draft;
+            setDraft("");
+            void submit(question, plan?.id ?? null);
+          }}
+        >
+          <label className="visually-hidden" htmlFor="composer-input">
+            Ask a question about your plan
+          </label>
+          <input
+            id="composer-input"
+            className="composer__input"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Ask about costs, drugs, providers or appeals"
+            autoComplete="off"
+            maxLength={500}
+          />
+          <DictateButton
+            disabled={busy}
+            onError={setDictateError}
+            onTranscript={(text) => {
+              setDictateError(null);
+              // Placed, never sent. The member reads it back and presses Ask.
+              setDraft((current) => (current.trim().length === 0 ? text : `${current.trim()} ${text}`));
+              document.getElementById("composer-input")?.focus();
+            }}
+          />
+          <button type="submit" className="button button--primary" disabled={busy || draft.trim().length === 0}>
+            <IoSend aria-hidden="true" /> {busy ? "Working" : "Ask"}
+          </button>
+        </form>
+      )}
+
+      {dictateError !== null && (
+        <p className="voice__error" role="alert">
+          <IoWarning aria-hidden="true" /> {dictateError}
+        </p>
+      )}
 
       <p className="assistant__status" role="status">
         {status}

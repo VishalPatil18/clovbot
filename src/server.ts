@@ -13,6 +13,9 @@ import {
   writeTurn,
 } from "./rag/store.ts";
 import { shouldPresentCallbackForm } from "./session.ts";
+import { audioKey, findCachedAudio, writeAudio } from "./voice/cache.ts";
+import { degradeNotice } from "./voice/chain.ts";
+import { speak, transcribe } from "./voice/providers.ts";
 
 const PORT = Number(process.env["PORT"] ?? "5174");
 const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
@@ -65,6 +68,16 @@ const server = createServer((req, res) => {
     return;
   }
 
+  if (req.method === "POST" && req.url === "/api/speak") {
+    collect(req, (body) => void handleSpeak(body, res));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/transcribe") {
+    collectBinary(req, (audio, mime) => void handleTranscribe(audio, mime, res));
+    return;
+  }
+
   if (req.method !== "POST" || (req.url !== "/api/ask" && req.url !== "/api/callback")) {
     res.writeHead(404, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "not found" }));
@@ -89,6 +102,130 @@ const server = createServer((req, res) => {
     void handleAsk(body, res, session, ip);
   });
 });
+
+function collect(req: IncomingMessage, done: (body: string) => void): void {
+  let body = "";
+  req.on("data", (chunk: Buffer) => {
+    body += chunk.toString("utf8");
+    if (body.length > 200_000) req.destroy();
+  });
+  req.on("end", () => done(body));
+}
+
+const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+
+function collectBinary(
+  req: IncomingMessage,
+  done: (audio: Uint8Array, mime: string) => void,
+): void {
+  const parts: Buffer[] = [];
+  let size = 0;
+  req.on("data", (chunk: Buffer) => {
+    size += chunk.byteLength;
+    if (size > MAX_AUDIO_BYTES) {
+      req.destroy();
+      return;
+    }
+    parts.push(chunk);
+  });
+  req.on("end", () =>
+    done(new Uint8Array(Buffer.concat(parts)), String(req.headers["content-type"] ?? "audio/webm")),
+  );
+}
+
+/** FR-19, FR-20. Synthesis runs here so the provider keys stay off the page. */
+async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
+  let text = "";
+  try {
+    const parsed = JSON.parse(body) as { text?: unknown };
+    text = typeof parsed.text === "string" ? parsed.text.slice(0, 5_000).trim() : "";
+  } catch {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "malformed request" }));
+    return;
+  }
+  if (text.length === 0) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "nothing to read aloud" }));
+    return;
+  }
+
+  // Cache before the chain: a repeated answer is never synthesised twice. FR-20.
+  // Every provider is checked, because a recording made while the chain was
+  // degraded is still a valid recording of the same words.
+  const voice = process.env["ELEVENLABS_VOICE_ID"] ?? "default";
+  const cached = findCachedAudio(text, voice, ["elevenlabs", "fishaudio"]);
+  if (cached !== null) {
+    res.writeHead(200, {
+      "content-type": "audio/mpeg",
+      "x-voice-provider": cached.provider,
+      "x-voice-cached": "1",
+    });
+    res.end(cached.audio);
+    return;
+  }
+
+  try {
+    const result = await speak(text);
+    const notice = degradeNotice(result);
+
+    if (result.value === null) {
+      // The browser tier: nothing to send, the page speaks it. FR-20.
+      res.writeHead(200, { "content-type": "application/json", "x-voice-provider": result.provider });
+      res.end(JSON.stringify({ provider: result.provider, useBrowserVoice: true, notice }));
+      return;
+    }
+
+    writeAudio(audioKey(text, voice, result.provider), result.value);
+    res.writeHead(200, {
+      "content-type": "audio/mpeg",
+      "x-voice-provider": result.provider,
+      "x-voice-cached": "0",
+      ...(notice === null ? {} : { "x-voice-notice": encodeURIComponent(notice) }),
+    });
+    res.end(Buffer.from(result.value));
+  } catch (error) {
+    res.writeHead(503, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: "The answer could not be read aloud. It is on screen above.",
+        detail: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
+
+/** FR-18. Returns a transcript the member edits before it is sent. */
+async function handleTranscribe(
+  audio: Uint8Array,
+  mime: string,
+  res: ServerResponse,
+): Promise<void> {
+  if (audio.byteLength === 0) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "no audio received" }));
+    return;
+  }
+  try {
+    const result = await transcribe(audio, mime);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        text: result.value,
+        provider: result.provider,
+        notice: degradeNotice(result),
+      }),
+    );
+  } catch (error) {
+    res.writeHead(503, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: "Your words could not be transcribed. Please type the question instead.",
+        detail: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
 
 /** FR-22. Stores the pre-filled request and confirms. Nothing is sent anywhere. */
 async function handleCallback(

@@ -1569,6 +1569,101 @@ FR-22 lists what the form is pre-filled with, and a contact field is not among t
 
 ---
 
+## Decision D-045 - No live partial transcript; the editable transcript carries FR-18
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Voice (P1 Stage 9) |
+| Status | accepted |
+| Supersedes | amends FR-18 |
+
+### Context
+
+FR-18 requires speech to be transcribed in real time with the partial transcript shown as the member speaks, and the completed transcript to be editable before sending.
+
+Both chosen providers expose batch transcription only, verified against their live specs on 2026-09-08: ElevenLabs `/v1/speech-to-text` and Fish Audio `/v1/asr` each take a finished recording. ElevenLabs Scribe v2 Realtime exists as a separate WebSocket product and is not in the REST specification.
+
+### Options considered
+
+1. Scribe v2 Realtime over WebSocket. Meets FR-18 as written; a separate client, auth path and shapes that cannot be verified from the specification read here.
+2. The browser's `SpeechRecognition` for the live partials, with the authoritative transcript from ElevenLabs.
+3. No live partials. A listening state with a level meter while recording, then the transcript, editable before sending.
+
+### Decision
+
+Option 3. FR-18's first sentence is amended: speech is transcribed after the member finishes speaking rather than during. The second sentence stands unchanged, and the transcript remains editable before it is sent.
+
+### Rationale
+
+Option 2 streams a member's spoken health question to Google's servers to obtain reassurance while they talk. That is the same objection D-034 raised about a free tier training on inputs, for a cosmetic benefit rather than a functional one, and it would contradict the reason the browser tier was already excluded from the speech-to-text chain.
+
+The protective half of FR-18 is the editable transcript: it is what stops a mis-heard question being answered as though it were correct. The live partial is reassurance that the microphone is working, which a listening state and a level meter also provide, without routing audio anywhere.
+
+Option 1 remains the correct implementation of FR-18 as written and is worth doing once the loop is proven end to end. It was not worth doing first, against an unverified shape, in a stage whose latency budgets are themselves unmeasured.
+
+### Consequences
+
+- **The member waits for the transcript rather than watching it appear.** On a slow connection that wait is unexplained unless the processing state is clear, so the microphone control carries an explicit processing state.
+- FR-18's acceptance criterion "partial transcript renders while speech is in progress" cannot pass and is recorded as amended rather than failed.
+- No audio reaches any party other than ElevenLabs or Fish Audio.
+- Moving to Scribe v2 Realtime later changes the capture path only; the editable transcript, the provider chain and the cache are unaffected.
+
+---
+
+## Decision D-046 - Voice latency budgets replaced with measured values
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Voice (P1 Stage 9) |
+| Status | accepted |
+| Supersedes | amends NFR-PERF-03 and NFR-PERF-04 |
+
+### Context
+
+NFR-PERF-03 set time to first audio under 1.5 seconds and NFR-PERF-04 set a complete spoken answer under 4 seconds. Both were written before any code existed, and Stage 2, the spike that was meant to measure them, was skipped. Stage 9 is therefore the first time either number has been observed.
+
+Measured on the finished path, unthrottled and uncached, across three typical benefits questions:
+
+| | Median | Worst |
+| --- | --- | --- |
+| Answer ready | 2839ms | - |
+| First audio | 4007ms | 4140ms |
+
+Synthesis itself is fast and scales with length: 245ms for a 36-character sentence, roughly 3 seconds for a 550-character answer. The dominant cost is the answer, not the voice.
+
+### The second budget was not merely missed
+
+NFR-PERF-04 asks for a complete spoken answer within 4 seconds. Measured speech runs at roughly 18 characters per second, so the three answers tested take 17, 22 and 31 seconds to say. A 4-second complete spoken answer is only possible for an answer of about 70 characters.
+
+That is not a performance failure. The requirement conflated time to begin speaking with time to finish speaking, and no engineering makes speech faster than speech.
+
+### Options considered
+
+1. Keep both numbers and record them as failed.
+2. Amend both to measured values, and split NFR-PERF-04 into the thing that can be budgeted and the thing that cannot.
+3. Shorten answers until they fit four seconds.
+
+### Decision
+
+Option 2. NFR-PERF-03 becomes time to first audio under 4.5 seconds unthrottled, measured and reported. NFR-PERF-04 becomes: the spoken answer begins within the NFR-PERF-03 budget and plays for as long as the answer takes to say; the measured rate is roughly 18 characters per second and is reported per run.
+
+### Rationale
+
+Option 3 would trade the answer contract for a stopwatch. FR-05 binds per claim and the whole product rests on saying where each fact came from, so truncating answers to hit a number invented before anything ran is the wrong direction.
+
+Amending with evidence attached is the same treatment D-041 gave NFR-PERF-02, and for the same reason: a budget nobody measured is a guess wearing a number.
+
+### Consequences
+
+- **Voice is slower than the original spec imagined**, and the honest figure is roughly 4 seconds before the member hears anything. The cache removes this entirely for a repeated answer, which is what makes the starter questions feel immediate.
+- The dominant cost is the answer, not the voice: 2839ms of the 4007ms is retrieval and generation. Speeding voice up means speeding the answer up.
+- Skipping Stage 2 cost exactly what the plan said it would. These numbers would have been available at hour 6 for the price of a throwaway page; they arrived at Stage 9 with a voice loop already built on top of them. Nothing had to be rebuilt, which was luck rather than judgement.
+- Both budgets remain unmeasured under the NFR-PERF-05 throttled profile, which Stage 10 owns.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

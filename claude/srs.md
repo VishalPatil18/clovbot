@@ -94,7 +94,7 @@ Derived from `docs/call-drivers.md` bucket A. Each maps to a call the member wou
 | --- | --- |
 | FR-16 | The member can switch between text mode and voice mode. The choice persists across sessions. In voice mode the composer is replaced by a large microphone control centred in the panel, with distinct idle, listening and processing states. |
 | FR-17 | The microphone supports both press-and-hold and tap-to-start / tap-to-stop. Both paths are always available; neither is a setting. |
-| FR-18 | Speech is transcribed in real time and the partial transcript is displayed as the member speaks. The completed transcript is editable before it is sent. |
+| FR-18 | Speech is transcribed once the member finishes speaking, with an explicit listening and processing state while they wait. The completed transcript is editable before it is sent. Amended 2026-09-08 by D-045 from live partial transcription: both chosen providers transcribe in batch, and the streaming alternative would have sent a member's spoken health question to a third party for a cosmetic benefit. |
 | FR-19 | Answers in voice mode are spoken and rendered as text simultaneously. Audio is never the only copy of an answer. Stop and replay controls are provided. |
 | FR-20 | Speech-to-text and text-to-speech each fall through a provider chain, terminating in a provider that cannot be exhausted. Synthesised audio is cached and keyed on the answer text, so a repeated answer is never re-synthesised. When the chain degrades, the member is told the voice changed rather than left to wonder. |
 
@@ -243,10 +243,11 @@ Scenario: [FR-24] non-English input is refused in English
   And it presents the human path
   And it does not answer the question
 
-Scenario: [FR-18] voice input shows a live transcript and allows correction
+Scenario: [FR-18] voice input is shown back for correction before it is sent
   Given the member is in voice mode and holds the microphone
   When the member speaks
-  Then a partial transcript is displayed while they speak
+  Then a listening state is shown while they speak
+  And a processing state is shown while the words are transcribed
   And the completed transcript is editable before it is sent
 
 Scenario: [FR-19] a spoken answer is always also written
@@ -325,8 +326,8 @@ Scenario: [FR-31] redaction does not destroy a question containing an ordinary n
 | --- | --- |
 | NFR-PERF-01 | Retrieval completes within 300ms at p95. |
 | NFR-PERF-02 | Time to first token is under 2000ms unthrottled, measured and reported on every run. Amended 2026-09-08 by D-041 from an original 800ms, which was set before any code existed and measured 1632ms on the finished path; 800ms is retained as an aspiration for a streaming design that renders each claim as it validates. Any pre-generation model call must fit inside this budget or be removed from the hot path. |
-| NFR-PERF-03 | Time to first audio is under 1.5s in voice mode. |
-| NFR-PERF-04 | A complete spoken answer to a typical benefits question finishes within 4s. |
+| NFR-PERF-03 | Time to first audio is under 4.5s unthrottled, measured and reported on every run. Amended 2026-09-08 by D-046 from an original 1.5s, which was set before any code existed and measured 4007ms median on the finished path. A cached answer is immediate. |
+| NFR-PERF-04 | The spoken answer begins within the NFR-PERF-03 budget and plays for as long as the answer takes to say, measured at roughly 18 characters per second and reported per run. Amended 2026-09-08 by D-046: the original 4s conflated beginning to speak with finishing, and a typical 300 to 550 character answer takes 17 to 31 seconds to say. |
 | NFR-PERF-05 | NFR-PERF-01 through 04 are measured under Chrome DevTools mobile throttling (4x CPU slowdown, Slow 4G) run headless in CI, and are regression-gated there. A manual pass on a real mid-range Android device is performed before any demonstration. |
 | NFR-QUAL-01 | Faithfulness on the golden set is at or above 0.90, scored by an automated judge against the cited chunks. A hand-checked sample calibrates the judge. |
 | NFR-QUAL-02 | Zero uncited factual claims. Enforced by a deterministic structural check that every factual sentence carries a citation marker. This is a hard build gate, separate from and additional to NFR-QUAL-01. |

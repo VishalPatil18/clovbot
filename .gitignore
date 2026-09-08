@@ -18,3 +18,4 @@ node_modules/
 .claude/settings.json
 data/
 dist-web/
+data/audio/

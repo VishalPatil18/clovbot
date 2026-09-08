@@ -111,3 +111,17 @@ _<How this concept will apply to future work in this project.>_
 **Run the boundary before the expensive step, not after.** Deciding bucket C before retrieval means a guarded question never reaches the model, so there is no half-formed answer to leak while the refusal is being assembled. It is also free, which is a pleasant coincidence rather than the reason.
 
 **The schema knew before I did.** FR-26's turn record specified `session_id` from the beginning. Stage 3 omitted it, and Stage 8 needed it for the loop breaker. Following the specified shape at the point of writing would have cost nothing; adding it later cost a migration.
+
+## Stage 9 - what voice taught
+
+**A requirement can be impossible rather than merely unmet.** NFR-PERF-04 asked for a complete spoken answer within four seconds. Speech runs at roughly eighteen characters a second, so the answers tested take seventeen to thirty-one seconds to say. No engineering makes speech faster than speech. The requirement had quietly conflated two different things, beginning to speak and finishing, and the only honest fix was to split it. Worth asking of any budget: is this slow, or is this arithmetic?
+
+**Read the provider specification, do not recall it.** Both request shapes came from the live OpenAPI documents. Doing that also revealed that the realtime speech-to-text endpoint the plan assumed does not exist in the REST API at all, which would otherwise have been discovered halfway through building against it. This project had already been bitten once by a provider tier that changed; the habit is cheap and keeps paying.
+
+**Green tests do not mean the program runs.** A TypeScript parameter property compiled fine under Vitest and crashed Node's strip-only loader the moment the server booted. Three hundred and forty-three passing tests covered every function and nothing covered "does the process start". A suite tests what it is pointed at, and it was never pointed at startup.
+
+**The cheap privacy shortcut is usually cheap for a reason.** Live partial transcription was available by streaming audio to the browser's own recogniser, which sends it to Google. It would have cost nothing to build and would have routed a member's spoken health question to a third party in exchange for reassurance while they talk. The editable transcript is the part that actually protects them, and it survives without the shortcut.
+
+**Skipping a spike defers the cost, it does not remove it.** Stage 2 existed to measure the voice budgets at hour six with a throwaway page. Skipping it meant the numbers arrived at Stage 9 with a voice loop already built on top of them. Nothing needed rebuilding, but that was luck: had first audio come in at fifteen seconds rather than four, the loop would have been the wrong shape and the discovery would have come after the work rather than before it.
+
+**A cache key must include everything that changes the artifact.** Keying audio on the text alone would have served yesterday's voice after a provider fell through. Keying on text, voice and provider was right, but the lookup then checked only the primary provider, so every recording made while degraded was invisible. The key and the lookup have to agree, and testing one does not test the other.

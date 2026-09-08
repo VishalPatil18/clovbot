@@ -96,11 +96,42 @@
 
 ---
 
+## Stage 4 - Spanish
+
+- **Goal:** Answer a Spanish-speaking member in Spanish, from Spanish source documents, with the same citation contract as English.
+- **Context:** Moved here from `srs.md` section 8, which listed Spanish as a v1.3 non-goal, on 2026-09-08. It was raised during P1 Stage 9 while adding a voice language selector, and deferred rather than half-built: a Spanish speech-to-text path that still produced an English refusal would have bought nothing.
+- **What already exists:** Clover publishes Spanish Evidence of Coverage, Summary of Benefits and Annual Notice of Change for both indexed plans. They are already in the corpus catalog under `documents.spanish` and were confirmed present on 2026-09-08. They are not ingested.
+- **Scope in:**
+  - Ingest the Spanish document set alongside the English one, with `language` on every chunk.
+  - Retrieval scoped by language, so a Spanish question never retrieves English chunks and the reverse.
+  - Language detection on the first turn, retained for the session, per the existing FR-24 detector.
+  - Speech-to-text told which language to expect, and text-to-speech using a Spanish voice.
+  - A language control in the interface, defaulting to detected rather than to English.
+  - Citations rendering the Spanish document names, since a member who reads Spanish should be pointed at the Spanish document.
+- **Scope out:** Any language beyond English and Spanish. Machine translation of English answers, which would produce an uncited claim in a language no source document supports.
+- **Amends:** FR-24, which currently requires stating in English that only English is supported. That requirement stands until this stage ships.
+- **Acceptance criteria:**
+  - [ ] A Spanish question returns a Spanish answer citing a Spanish source document.
+  - [ ] A Spanish question never retrieves an English chunk, asserted by test.
+  - [ ] An English question never retrieves a Spanish chunk, asserted by test.
+  - [ ] The two plans' Spanish Summary of Benefits documents split by column exactly as the English ones do, since they share the same two-plan layout.
+  - [ ] Cost answers agree between the English and Spanish corpora for the same question and plan, asserted on at least five amounts. A disagreement is a corpus defect, not a rounding difference.
+  - [ ] Language is detected once and held for the session, and the member can override it.
+  - [ ] The golden set gains Spanish cases, and faithfulness is reported per language rather than pooled.
+  - [ ] No answer is produced by translating an English answer.
+- **Test plan:** Ingest tests asserting language scoping on both sides. A paired-amount test comparing English and Spanish answers for the same question, which is the one that catches a mis-split Spanish Summary of Benefits. Golden set extended with Spanish cases scored separately.
+- **Effort:** M
+- **Exit signal:** The same copay question, asked in Spanish, returns the same amount as the English answer, cited to the Spanish Evidence of Coverage.
+- **Status:** [ ] not started · [ ] in progress · [ ] done
+
+---
+
 ## Completion Checklist
 
 - [ ] Stage 1 - Row-level security
 - [ ] Stage 2 - Audit log and minimum-necessary access
 - [ ] Stage 3 - Real-PHI writeup
+- [ ] Stage 4 - Spanish
 
 ---
 
@@ -113,3 +144,5 @@
 | Audit log records field contents rather than field names | Turns the audit trail into a second copy of the data it audits | Stage 2 acceptance criterion asserting values are absent | - |
 | Invented regulatory requirements in the writeup | Undermines the credibility of everything else in the project | Stage 3 source-integrity review against `docs/research-init.md` | Omission is acceptable; invention is not |
 | Controls built but never demonstrated | The work is the deliverable and nobody sees it | Stage 3 states what carries over; the tests themselves are the evidence | Worth a walkthrough moment rather than a mention |
+| Spanish answers drift from English ones | Two members on the same plan get different amounts | Stage 4 paired-amount test across both corpora | A drift here is a corpus defect and must be reported, not reconciled in the prompt |
+| Spanish produced by translating English | An uncited claim in a language no source supports | Stage 4 scope-out, and language-scoped retrieval enforced by test | The tempting shortcut, and the one that breaks cite-or-refuse |
