@@ -7,9 +7,9 @@
  */
 import { SEED_MEMBERS } from "../src/members/seed.ts";
 import { loadMemberRecord } from "../src/members/store.ts";
-import { connect } from "../src/rag/store.ts";
+import { connectAdmin } from "../src/rag/store.ts";
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 let leaks = 0;

@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { answerTurn } from "../src/rag/answer-turn.ts";
 import {
   checkRate,
-  connect,
+  connectAdmin,
   consecutiveRefusals,
   writeCallback,
   writeTurn,
@@ -29,7 +29,7 @@ const golden = JSON.parse(readFileSync("eval/golden/golden-set.json", "utf8")) a
   cases: { id: string; bucket: string; driver: string; question: string; plan: string }[];
 };
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 try {

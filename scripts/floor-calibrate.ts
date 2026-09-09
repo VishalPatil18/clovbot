@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { embed } from "../src/rag/providers.ts";
 import { DEFAULT_MODEL, rerank } from "../src/rag/rerank.ts";
-import { connect, searchHybrid } from "../src/rag/store.ts";
+import { connectAdmin, searchHybrid } from "../src/rag/store.ts";
 
 const POOL = 10;
 
@@ -40,7 +40,7 @@ const answerable = golden.cases.filter(
   (c) => c.bucket === "A" && c.expect.outcome === "answered",
 );
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 async function topScore(question: string, plan: string): Promise<number> {

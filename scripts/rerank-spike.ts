@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { embed } from "../src/rag/providers.ts";
 import { rerank } from "../src/rag/rerank.ts";
-import { connect, searchHybrid } from "../src/rag/store.ts";
+import { connectAdmin, searchHybrid } from "../src/rag/store.ts";
 
 const CANDIDATES = ["Xenova/ms-marco-MiniLM-L-6-v2", "Xenova/ms-marco-MiniLM-L-12-v2"];
 const CANDIDATE_POOL = 20;
@@ -30,7 +30,7 @@ const answerable = golden.cases.filter(
 );
 const unanswerable = golden.cases.filter((c) => c.bucket === "B" || c.bucket === "C");
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 const pools = new Map<string, Awaited<ReturnType<typeof searchHybrid>>>();

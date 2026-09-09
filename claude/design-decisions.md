@@ -3315,6 +3315,157 @@ Anchoring also removes a duplicate state. `heldQuestion` existed only to carry t
 
 ---
 
+## Decision D-090 - The application connects as a role that cannot bypass row-level security
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The application connects as `postgres`, which owns every table and carries `rolbypassrls = true`. Row-level security policies written against that connection would be inert. `FORCE ROW LEVEL SECURITY` fixes the table-owner case and does not touch `BYPASSRLS`, so the plan's Stage 1 could have been built in full and proved nothing.
+
+### Options considered
+
+1. A `clovbot_app` login role with `NOBYPASSRLS`, `DATABASE_URL` repointed to it, and the existing postgres URL kept as `DATABASE_ADMIN_URL` for migrations, ingest and seeding.
+2. Keep `DATABASE_URL` as postgres and open a second connection as the restricted role for member-scoped reads only.
+3. Do not build the control; document the gap in Stage 3 instead.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 leaves a connection in every request that can read every member, which is the thing the stage exists to remove. Two code paths also means the wrong one gets used eventually.
+
+Option 3 is honest but abandons the exit signal, and the gap is already documented in `NFR-P2-10`.
+
+### Consequences
+
+- A `DATABASE_URL` change and a redeploy. The password is set by the operator and never enters the repository.
+- Migrations, `npm run ingest` and `npm run seed:members` move to `DATABASE_ADMIN_URL`. A command pointed at the wrong URL now fails on privilege rather than succeeding quietly.
+- The identity is set transaction-locally, not with `SET`. The pooler is in session mode, so a connection returned to the pool with a session-level setting would carry one member's identity into whichever request borrows it next.
+
+---
+
+## Decision D-091 - The rule that gates a question is the rule that decides what is read
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 2 |
+| Status | accepted |
+| Supersedes | the read half of D-080 |
+
+### Context
+
+`chooseRoute` adds the `member` path whenever a member is identified, never because the question needs it, and `loadMemberRecord` then runs `select *` across five tables. A signed-in member asking their specialist copay has their claims, prior authorisations and appointments read to answer a question from the plan documents.
+
+### Options considered
+
+1. Read only when `needsMemberData(question)` returns a topic, and only that topic's columns.
+2. The same, plus an always-read identity slice of plan and assigned provider.
+3. Keep reading everything and audit only what the answer cited.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 3 fails the minimum-necessary criterion by construction: the query still reads the whole record, so the audit would understate the access it is supposed to record.
+
+Option 2's identity slice is a read on every question, including ones that need nothing, and the audit log would then show an access for each of them.
+
+The property that makes Option 1 worth more than its strictness: `needsMemberData` already decides whether a signed-out member is asked to sign in. Making it decide the read as well means the gate and the access can never disagree, because they are one call evaluated once per turn.
+
+### Consequences
+
+- A question the login rules do not recognise gets no record read. That is consistent in both directions: the same question would not have prompted a login when signed out.
+- Adding a member topic now has two effects at once, which is the point, and must be tested as such.
+
+---
+
+## Decision D-092 - An audit record names the column and the row, never the value
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The audit record has to be specific enough to replay against an answer's citations and empty enough not to become a second copy of the data it audits.
+
+### Options considered
+
+1. Column plus the row's business id: `member_claims.member_owes @ CLM-0031`.
+2. Column only: `member_claims.member_owes`.
+3. The citation label already shown to the member: `Claim CLM-0031 - What you owe`.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 cannot distinguish which of three claims was read, so the reconstruction criterion can only be partly met.
+
+Option 3 reads well and is presentation text. A wording change to a citation label would silently change the audit format, which is the wrong thing to couple an audit trail to.
+
+A claim id locates a row. A claim amount is the protected thing. Recording the first is not recording the second.
+
+### Consequences
+
+- Every member-scoped table needs a stable business id to name rows by. Each already has one.
+- The test asserting no value appears has to know what the values are, so it seeds a known amount and asserts its absence.
+
+---
+
+## Decision D-093 - A Spanish drug question is answered from the English drug list, and says so
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Clover publishes the Evidence of Coverage, Summary of Benefits and Annual Notice of Change in Spanish for all three indexed plans, confirmed in the catalog. It publishes no Spanish formulary. A Spanish drug-tier question therefore has no Spanish source.
+
+### Options considered
+
+1. Answer in Spanish, cite the English drug list, and state that the list is published in English only.
+2. Refuse, since there is no Spanish source.
+3. Tag the drug rows as valid in both languages and treat them as language-neutral.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 refuses a question the system can answer correctly, which is the failure `FR-24` already produces today and the reason Stage 4 exists.
+
+Option 3 hides the mismatch. The tier is a number and the drug name is a proper noun, but the requirements text on a row is English prose, and presenting it inside a Spanish answer without saying where it came from is the kind of quiet inconsistency that costs trust.
+
+Cite-or-refuse is satisfied either way. The difference is whether the member is told the source is in a language they may not read, and they should be.
+
+### Consequences
+
+- The one deliberate exception to language-scoped retrieval, and it must be written as an exception rather than a leak, or the scoping test will be weakened to accommodate it.
+- The disclosure sentence is Spanish interface copy, authored rather than translated at runtime.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

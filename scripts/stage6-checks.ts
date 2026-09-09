@@ -6,7 +6,7 @@ import { validateAnswerPayload } from "../src/answer.ts";
 import { answerTurn } from "../src/rag/answer-turn.ts";
 import { buildStructuredPrompt, citationLabel, renderAnswer } from "../src/rag/payload.ts";
 import { generate } from "../src/rag/providers.ts";
-import { connect } from "../src/rag/store.ts";
+import { connectAdmin } from "../src/rag/store.ts";
 
 const SCOPE = { contractId: "H5141", planId: "004", planYear: 2026 };
 const FACT = /\$[\d,]+|\btier\s*\d/i;
@@ -29,7 +29,7 @@ console.log("\n1. Datastore unreachable [FR-09, FR-25]");
   check("human path offered", /1-888-778-1478/.test(turn.answer));
 }
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 try {

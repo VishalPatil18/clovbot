@@ -601,3 +601,23 @@ Two faults, not one. The constraint is the cause; migration 010 widens it. But t
 **Why nothing caught it.** Every test of the login path reads the value through Node, which parses the unquoted form without complaint. Only the deploy script sources the file as shell, and no test parsed the template. `bash -n .env.example` now runs as a test, which is the whole check in one line.
 
 **Files:** `.env.example`, `tests/unit/deploy-config.test.ts`. 676 tests pass.
+
+## 2026-09-09 - P3 Stage 1: row-level security
+
+**Did:** moved member scoping from a `where` clause into the database. The application now connects as `clovbot_app`, a role that cannot bypass row-level security and owns nothing; five member-scoped tables have RLS enabled and forced with a policy each; and the proof issues raw selects with no application code in the path.
+
+**Files:** added `migrations/011_row_level_security.sql`, its down script, `scripts/rls-check.ts`, `tests/unit/migration-rls.test.ts`, `claude/srs-p3.md`. Changed `src/rag/store.ts`, `src/members/store.ts`, both CLIs, nine scripts, `.env.example`, `scripts/deploy-api.sh`, `.github/workflows/ci.yml`, `README.md`, two test files. 693 tests pass.
+
+**Verified against the live database:** every member-scoped table returns zero of another member's rows and all of the session member's own; an unfiltered `select *` returns only their rows; a connection with no identity reads nothing; the identity does not survive its transaction; every table in the catalog holding a `member_id` either has a policy or is a recorded exemption. `npm run ask:member -- --id=1` still answers, cited to the record. The down script was executed inside a transaction and rolled back: 5 tables and 5 policies removed, then restored, with no window where production sat unprotected.
+
+**What building it surfaced:**
+
+- **The whole stage was nearly built on sand.** The application connected as `postgres`, which owns every table and carries `rolbypassrls = true`. Policies would have been inert, and `FORCE` does not override `BYPASSRLS`. Checking the role before writing a policy is what caught it.
+- **A pooler in session mode makes a session `SET` a leak.** The identity is set transaction-locally, so a connection returned to the pool carries nothing into whoever borrows it next.
+- **The leak demonstration deadlocked itself.** Disabling a policy takes an `ACCESS EXCLUSIVE` lock, and reading that table from the other connection waits on a lock the first transaction will not release until the read returns. `SET ROLE` to collapse it onto one connection is refused on PostgreSQL 16+ without the `SET` membership option.
+- **The replacement is better than the thing it replaced.** The same query as the other member returns rows; as this member it returns none. That proves the empty result is the policy rather than an empty table, needs no DDL, and cannot leave a live table unprotected if it fails halfway.
+- **`login_codes` and `member_sessions` cannot have a policy.** They are read to establish the identity a policy would filter by. Protected by grant, exempted by name, with the reason in a table comment and asserted by the check.
+
+**Open:** `DATABASE_APP_URL` must be added to Cloud Run and to the CI secrets before the next deploy; the deploy script requires it and will refuse without it.
+
+**Next:** P3 Stage 2, the audit log and minimum-necessary access, on the user's word.

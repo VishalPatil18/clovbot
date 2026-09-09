@@ -11,9 +11,11 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
+| Status | **Complete.** All eight stages done, shipped as v1.1.0 on 2026-09-09 |
 | Source | `claude/srs.md` §8, `docs/ideas.md` P2, D-007 |
-| Last Updated | 2026-09-07 |
+| Last Updated | 2026-09-09 |
 | Total estimate | ~48h across 8 stages |
+| Carried forward | Stage 3's answer card (D-069), Stage 4's follow-up chips (D-070), Stage 6's keyboard and screen-reader pass, and FR-P2-53's deployed verification |
 
 ---
 

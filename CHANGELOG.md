@@ -24,7 +24,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Security
 
-- _<security-relevant changes>_
+- Which member's record the assistant can read is now enforced by the database, not only by the query that asks for it. One member's session reads zero rows belonging to another, proven by a check that queries the database directly with the application bypassed. Every record is still invented demonstration data.
 
 ---
 

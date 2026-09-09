@@ -45,7 +45,7 @@ function runDeploy(): string[] {
     [
       "GCP_PROJECT_ID=stub-project",
       "CORPUS_SNAPSHOT_ID=2026-01-01T0000Z",
-      "DATABASE_URL=postgresql://user:PASSWORD@host:5432/postgres?options=a,b",
+      "DATABASE_APP_URL=postgresql://user:PASSWORD@host:5432/postgres?options=a,b",
       "AZURE_OPENAI_ENDPOINT=https://stub.invalid",
       "AZURE_OPENAI_API_KEY=stub-azure-key",
       "AZURE_OPENAI_API_VERSION=2025-01-01-preview",
@@ -73,7 +73,7 @@ describe("deploy passes an environment Cloud Run can read", () => {
   });
 
   it("carries the database URL under its own name, commas intact", () => {
-    expect(env["DATABASE_URL"]).toBe(
+    expect(env["DATABASE_APP_URL"]).toBe(
       "postgresql://user:PASSWORD@host:5432/postgres?options=a,b",
     );
   });
@@ -84,8 +84,8 @@ describe("deploy passes an environment Cloud Run can read", () => {
 });
 
 describe("the server refuses to start on a broken environment", () => {
-  it("exits rather than listening when DATABASE_URL is absent", () => {
-    const { DATABASE_URL: _omitted, ...env } = process.env;
+  it("exits rather than listening when DATABASE_APP_URL is absent", () => {
+    const { DATABASE_APP_URL: _omitted, ...env } = process.env;
     const result = spawnSync("node", ["--experimental-strip-types", "src/server.ts"], {
       env: { ...env, PORT: "0" },
       encoding: "utf8",
@@ -118,7 +118,7 @@ describe("Stage 6 secrets reach the deployed service", () => {
 
   // The separator-safe loop is the one listing names, not the required-vars check.
   it("keeps them inside the separator-safe loop rather than appending by hand", () => {
-    const loop = /for name in DATABASE_URL([\s\S]*?); do/.exec(script)?.[1] ?? "";
+    const loop = /for name in DATABASE_APP_URL([\s\S]*?); do/.exec(script)?.[1] ?? "";
     expect(loop).toContain("RESEND_API_KEY");
     expect(loop).toContain("OPERATOR_MEMBER_EMAILS");
   });

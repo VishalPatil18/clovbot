@@ -5,7 +5,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { answerTurn } from "../src/rag/answer-turn.ts";
-import { connect } from "../src/rag/store.ts";
+import { connectAdmin } from "../src/rag/store.ts";
 import { audioKey, findCachedAudio } from "../src/voice/cache.ts";
 import { speak } from "../src/voice/providers.ts";
 
@@ -23,7 +23,7 @@ const check = (label: string, ok: boolean, detail = ""): void => {
   if (detail.length > 0) console.log(`        ${detail}`);
 };
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 const runs: {

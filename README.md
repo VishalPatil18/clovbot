@@ -146,7 +146,30 @@ migrations/007_corpus_snapshots.sql    # when the documents were fetched and ind
 migrations/008_member_records.sql      # five synthetic members and their records
 migrations/009_member_login.sql        # one-time codes and member sessions
 migrations/010_needs_login_outcome.sql # let a turn record the outcome "needs_login"
+migrations/011_row_level_security.sql  # member scoping enforced by the database
 ```
+
+**011 has a prerequisite and changes how the service connects.** Create the role
+first, with a password of your choosing that never enters the repository:
+
+```sql
+create role clovbot_app login password '<yours>' nobypassrls;
+```
+
+Then apply 011 as the admin role, and set `DATABASE_APP_URL` to that role's
+connection string. `DATABASE_URL` stays the admin connection and is what
+migrations, `npm run ingest` and `npm run seed:members` use. The service reads
+only `DATABASE_APP_URL` and refuses to start without it, so a missing value
+fails the deploy rather than silently reconnecting as the role that can read
+every member. Add it to the Cloud Run environment and to the CI secrets.
+
+Prove it holds:
+
+```bash
+npm run check:rls
+```
+
+To reverse: `migrations/011_row_level_security_down.sql`.
 
 Each is additive and guarded with `if not exists` or `if exists`, so re-running one is safe.
 Without 010 a gated question still answers, but the turn row is rejected and the

@@ -271,3 +271,13 @@ _<How this concept will apply to future work in this project.>_
 **A config file read by two parsers has to satisfy the stricter one.** `.env` is read by Node's `--env-file` when the app runs and by bash `source` when the deploy runs. Node accepts an unquoted `Clovbot <bot@domain>`; bash reads it as two redirections and dies. Every test exercised the tolerant reader, so the file was wrong for weeks and only the deploy noticed.
 
 **A template that ships broken breaks every copy of it.** The fault was in `.env.example`, so it was not one machine misconfigured. Anyone following the setup instructions would reproduce it exactly. `bash -n` on the template is a one-line test for the whole class.
+
+## P3 Stage 1 - what enforcing it in the database taught
+
+**Check who you are connected as before writing a policy.** Row-level security is silently inert for a role with `BYPASSRLS`, and `FORCE ROW LEVEL SECURITY` does not override it. The entire stage could have been written, reviewed and merged, and the first test would have passed for the wrong reason.
+
+**A connection pooler turns a session setting into a cross-request leak.** Session mode hands the same server connection to the next client. An identity set with `SET` rides along; one set with `set_config(..., true)` dies with its transaction.
+
+**The obvious way to prove a security check works can be the wrong way.** Disabling a policy to watch the leak appear needs an exclusive lock that the reading connection then waits on, and it puts a "turn off security on the live table" path into a script. Proving the check is not vacuous is what actually matters, and running the identical query as the member who owns the rows does that with no DDL at all.
+
+**Some tables cannot be protected by the thing they establish.** The sign-in tables are read to discover who the member is, so a policy keyed on that identity would lock out the only path that can create it. The answer is a different control, named and recorded, not a permissive policy that makes the schema check pass while protecting nothing.

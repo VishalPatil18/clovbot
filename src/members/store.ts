@@ -24,13 +24,46 @@ const money = (value: unknown): string => `$${Number(value).toFixed(2).replace(/
 const day = (value: unknown): string => new Date(String(value)).toISOString().slice(0, 10);
 
 /**
+ * Puts the member's identity on the connection for the length of one
+ * transaction, which is what the row-level security policies filter by.
+ *
+ * Transaction-local rather than a session SET: the pooler hands this server
+ * connection to whichever request comes next, and a lingering identity would
+ * travel with it. D-090, FR-P3-05.
+ */
+async function withMemberIdentity<T>(
+  client: pg.Client,
+  memberId: number,
+  read: () => Promise<T>,
+): Promise<T> {
+  await client.query("begin");
+  try {
+    await client.query("select set_config('clovbot.member_id', $1, true)", [String(memberId)]);
+    const result = await read();
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  }
+}
+
+/**
  * Every fact in one member's record, scoped by member id in every query.
  *
  * Scoping lives here rather than in the prompt: a prompt cannot be relied on to
- * keep one member's data away from another, and row-level security is P3, so
- * until then this function is the boundary. D-080.
+ * keep one member's data away from another. D-080. Since P3 the database
+ * enforces it too, and these clauses are defence in depth rather than the
+ * boundary. FR-P3-08.
  */
 export async function loadMemberRecord(
+  client: pg.Client,
+  memberId: number,
+): Promise<MemberRecord | null> {
+  return withMemberIdentity(client, memberId, () => readMemberRecord(client, memberId));
+}
+
+async function readMemberRecord(
   client: pg.Client,
   memberId: number,
 ): Promise<MemberRecord | null> {

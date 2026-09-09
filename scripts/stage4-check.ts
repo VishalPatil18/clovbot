@@ -3,7 +3,7 @@
  * value is the measured numbers, which are printed rather than asserted.
  */
 import { embed } from "../src/rag/providers.ts";
-import { connect, searchHybrid, type RetrievalMode } from "../src/rag/store.ts";
+import { connectAdmin, searchHybrid, type RetrievalMode } from "../src/rag/store.ts";
 import type { DocumentKind } from "../src/types.ts";
 
 const SCOPE = { contractId: "H5141", planId: "004", planYear: 2026 };
@@ -24,7 +24,7 @@ const SMOKE: { question: string; expect: DocumentKind }[] = [
 ];
 
 async function rank(
-  client: Awaited<ReturnType<typeof connect>>,
+  client: Awaited<ReturnType<typeof connectAdmin>>,
   question: string,
   mode: RetrievalMode,
   limit = TOP_K,
@@ -40,7 +40,7 @@ async function rank(
   }));
 }
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 try {

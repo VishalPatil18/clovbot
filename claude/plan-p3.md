@@ -13,9 +13,9 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
-| Source | `claude/srs.md` §8, `docs/ideas.md` §7 |
-| Last Updated | 2026-09-07 |
-| Total estimate | ~15h across 3 stages |
+| Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
+| Last Updated | 2026-09-09 |
+| Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
 
 ---
 
@@ -39,17 +39,17 @@
   - Removal of application-layer scoping as the sole protection - it stays as defence in depth, not as the enforcement point.
 - **Scope out:** Audit logging. Stage 2 owns it.
 - **Acceptance criteria:**
-  - [ ] A query issued in member 1's session for member 2's rows returns zero rows, asserted at the database layer with application scoping deliberately bypassed. **This is the only test that proves the control exists.**
-  - [ ] The same assertion holds for every member-scoped table, not only the primary one.
-  - [ ] An unauthenticated connection reads no member rows at all.
-  - [ ] Every existing P2 authenticated flow still works after the policies are applied.
-  - [ ] The migration is reversible and the rollback is executed once in a test environment.
-  - [ ] Application-layer scoping remains in place and is not removed.
-  - [ ] A new member-scoped table added without a policy fails a schema test rather than shipping unprotected.
+  - [x] A query issued in member 1's session for member 2's rows returns zero rows, asserted at the database layer with application scoping deliberately bypassed. **This is the only test that proves the control exists.**
+  - [x] The same assertion holds for every member-scoped table, not only the primary one.
+  - [x] An unauthenticated connection reads no member rows at all.
+  - [x] Every existing P2 authenticated flow still works after the policies are applied.
+  - [x] The migration is reversible and the rollback is executed once. Run inside a transaction that was then rolled back, so production never sat unprotected: 5 tables and 5 policies removed, then restored.
+  - [x] Application-layer scoping remains in place and is not removed.
+  - [x] A new member-scoped table added without a policy fails a schema test rather than shipping unprotected.
 - **Test plan:** The central test connects directly to the database in a member session and attempts to read another member's rows with no application code in the path. Anything less tests the application, not the policy. A schema test enumerates member-scoped tables and asserts a policy exists on each, so the protection cannot be forgotten later. Full P2 regression run.
 - **Effort:** M
-- **Exit signal:** A direct database query in one member's session returns nothing for another member, with the application bypassed entirely.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Exit signal:** A direct database query in one member's session returns nothing for another member, with the application bypassed entirely. Met: `npm run check:rls`.
+- **Status:** [x] done, 2026-09-09.
 
 ---
 
@@ -128,7 +128,7 @@
 
 ## Completion Checklist
 
-- [ ] Stage 1 - Row-level security
+- [x] Stage 1 - Row-level security
 - [ ] Stage 2 - Audit log and minimum-necessary access
 - [ ] Stage 3 - Real-PHI writeup
 - [ ] Stage 4 - Spanish

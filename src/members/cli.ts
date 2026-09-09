@@ -2,7 +2,7 @@ import { redactIdentifiers } from "../logging.ts";
 import { findPlanRef, formatPlanRef } from "../corpus/scope.ts";
 import { answerTurn } from "../rag/answer-turn.ts";
 import { citationLabel } from "../rag/payload.ts";
-import { connect, writeTurn } from "../rag/store.ts";
+import { connect, connectAdmin, writeTurn } from "../rag/store.ts";
 import { latestSnapshotId } from "../corpus/snapshot.ts";
 import { SEED_MEMBERS, memberEmail } from "./seed.ts";
 import { loadMemberRecord } from "./store.ts";
@@ -26,7 +26,7 @@ for (let i = 3; i < process.argv.length; i += 1) {
 
 /** D-047: every row is invented, and the schema refuses anything else. */
 async function seed(): Promise<void> {
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     await client.query("begin");

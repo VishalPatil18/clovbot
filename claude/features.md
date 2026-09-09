@@ -1469,3 +1469,52 @@ Bucket B at 8/8 is the live proof of Stage 7: five member questions gated, three
 **The faithfulness dips are not noise.** A-21 has scored 0 in three of six runs and PAIR-03b scored 0.667 once. Both add a clause the cited chunk does not state. The judge is doing its job; this is recorded as an answer-quality issue, and the gate was set to tolerate one such case rather than to hide them.
 
 **Not verified: FR-P2-53.** The deployed signed-out to signed-in to answered flow needs migrations 005 through 009 applied to production and a deploy, both of which are the user's to run. The runbook is in `README.md`. The same flow is verified locally over HTTP.
+
+---
+
+## Feature: Row-level security (P3 Stage 1)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-01 to FR-P3-12, NFR-P3-01, NFR-P3-11. **Decision:** D-090.
+
+### The problem this closes
+
+Member scoping was a `where member_id = $1` inside one function. It was correct, and it was the only thing there. A new code path that forgot it, or a bug inside it, discloses a record and nothing objects. `NFR-P2-10` stated this as residual risk and named P3 as where it closes.
+
+### What was found before building
+
+The application connected as `postgres`: owner of every table, and `rolbypassrls = true`. Policies written against that connection would have been inert, and `FORCE ROW LEVEL SECURITY` does not override `BYPASSRLS`. The whole stage could have been built and proved nothing.
+
+### UX flow
+
+None. Nothing a member sees changes, and that is the intent. The one visible consequence would be a bug: a member who could not read their own record.
+
+### Backend entities
+
+- `clovbot_app` - a login role with `NOBYPASSRLS`, owning nothing, holding only the privileges the running product executes. Created by hand so its password never enters the repository.
+- `current_member_id()` - reads `clovbot.member_id` from the connection, `NULL` when unset.
+- `withMemberIdentity(client, memberId, read)` in `src/members/store.ts` - wraps a read in a transaction that sets the identity transaction-locally.
+- `connect()` / `connectAdmin()` in `src/rag/store.ts` - the product's connection and the schema owner's, from `DATABASE_APP_URL` and `DATABASE_URL`.
+
+### DB schema
+
+No table changes. `migrations/011_row_level_security.sql` adds grants, enables and **forces** row-level security on `members`, `member_accumulators`, `member_claims`, `member_prior_authorizations` and `member_appointments`, and gives each a `select` policy comparing its member column to `current_member_id()`.
+
+`login_codes` and `member_sessions` carry a `member_id` and deliberately get no policy: the sign-in path reads them to discover who the member is, before an identity exists to filter by. They are protected by privilege, and the exemption is recorded as a table comment and asserted by the check.
+
+`migrations/011_row_level_security_down.sql` reverses all of it.
+
+### Tech specs
+
+- **Enforcement:** Postgres row-level security. Rejected: an application-layer repository wrapper, because that is what already existed and is the thing being backstopped.
+- **Identity transport:** `set_config('clovbot.member_id', $1, true)`, transaction-local. Rejected: a session `SET`, because the pooler runs in session mode and hands the server connection to the next request, which would inherit the identity.
+- **Role model:** one restricted role for the product, the existing owner for migrations, ingest, seeding and operator tools. Rejected: a second connection per request for member reads only, which leaves a connection in every request that can read every member.
+- **Failure mode:** `connect()` has no fallback to the admin URL. A missing `DATABASE_APP_URL` stops the process rather than quietly reconnecting as the role that can read everything.
+
+### Verification
+
+`npm run check:rls`, wired into the CI job that already holds database credentials. It connects as the application role and issues raw selects, with no application code in the path.
+
+Two design corrections came out of running it:
+
+1. The first version disabled the policy on a live table to watch a leak appear, from the admin connection while reading from the app connection. That takes an `ACCESS EXCLUSIVE` lock the reading connection then waits on, and it timed out. `SET ROLE` to collapse it onto one connection is refused: PostgreSQL 16+ requires the `SET` option on a role membership, which the owner does not hold here.
+2. The replacement proves the same thing without DDL. The identical query, on the same table, run as the member who owns those rows returns them; run as the other member it returns nothing. The difference is the policy. A check that turns off security on a live table is a hazard the first time its rollback does not run.

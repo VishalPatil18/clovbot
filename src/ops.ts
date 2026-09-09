@@ -1,4 +1,4 @@
-import { connect, readChunksByIds, readTurn } from "./rag/store.ts";
+import { connectAdmin, readChunksByIds, readTurn } from "./rag/store.ts";
 
 /**
  * Operator tools. Both read the turn log, which holds redacted member questions,
@@ -7,7 +7,7 @@ import { connect, readChunksByIds, readTurn } from "./rag/store.ts";
  */
 
 async function reproduce(turnId: string): Promise<void> {
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     const turn = await readTurn(client, turnId);
@@ -50,7 +50,7 @@ async function reproduce(turnId: string): Promise<void> {
 }
 
 async function insights(days: number): Promise<void> {
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     const since = `${days} days`;

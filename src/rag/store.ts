@@ -14,16 +14,29 @@ export interface RetrievedChunk extends PromptChunk {
 /** Supabase serves a self-signed chain, so pin their CA rather than skip verification. */
 const CA_PATH = "certs/supabase-ca.crt";
 
-export function connect(): pg.Client {
-  const connectionString = process.env["DATABASE_URL"];
+function client(variable: string): pg.Client {
+  const connectionString = process.env[variable];
   if (connectionString === undefined || connectionString.length === 0) {
-    throw new Error("missing DATABASE_URL. Copy .env.example to .env and fill it in.");
+    throw new Error(`missing ${variable}. Copy .env.example to .env and fill it in.`);
   }
   return new pg.Client({
     connectionString,
     ssl: { ca: readFileSync(CA_PATH, "utf8"), rejectUnauthorized: true },
   });
 }
+
+/**
+ * The running product's connection. Cannot bypass row-level security and holds
+ * no DDL privilege, so a code path that forgets to scope a member query is
+ * refused by the database rather than answered. D-090.
+ *
+ * No fallback to the admin URL. A missing variable must stop the process, not
+ * quietly reconnect as the role that can read every member.
+ */
+export const connect = (): pg.Client => client("DATABASE_APP_URL");
+
+/** Migrations, ingest, seeding and the operator tools. Owns the schema. */
+export const connectAdmin = (): pg.Client => client("DATABASE_URL");
 
 const toVector = (values: number[]): string => `[${values.join(",")}]`;
 

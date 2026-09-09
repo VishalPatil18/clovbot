@@ -10,6 +10,7 @@ import { citationLabel } from "./payload.ts";
 import { embed, generate } from "./providers.ts";
 import {
   connect,
+  connectAdmin,
   existingChunkContent,
   pruneChunks,
   recordCorpusSnapshot,
@@ -26,7 +27,7 @@ const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
 
 /** FR-P2-16. The manifest is on a disk the server does not have. D-066. */
 async function recordFreshness(snapshotId: string, documentsFetchedAt: string): Promise<void> {
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     await recordCorpusSnapshot(client, { snapshotId, documentsFetchedAt, planYear: PLAN_YEAR });
@@ -46,7 +47,7 @@ async function ingestDrugs(snapshotId: string, snapshot: { entries: { documentId
     return;
   }
   const rows = parseFormulary(readFileSync(path, "utf8"));
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     await upsertDrugs(
@@ -88,7 +89,7 @@ async function ingest(): Promise<void> {
     chunk.embedText = `${described}\n\n${chunk.content}`;
   }
 
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     const existing = await existingChunkContent(client, snapshotId);
