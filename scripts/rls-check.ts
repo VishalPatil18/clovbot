@@ -23,6 +23,13 @@ const MEMBER_SCOPED = [
 ] as const;
 
 /**
+ * Member-scoped tables that hold no seeded fixture, so the leak assertions
+ * above cannot run against them. They still must be enabled, forced and
+ * policied, which is what the coverage check below asserts.
+ */
+const ALSO_POLICIED = ["member_access_log"] as const;
+
+/**
  * Tables carrying a member_id that deliberately have no policy, and why. The
  * schema check reads this, so an exemption is a decision on the record rather
  * than a table someone forgot. FR-P3-07.
@@ -131,7 +138,10 @@ try {
               where a.attrelid = c.oid and a.attname = 'member_id' and a.attnum > 0
            ))
      order by 1`);
-  const declared = new Set<string>(MEMBER_SCOPED.map((entry) => entry.table));
+  const declared = new Set<string>([
+    ...MEMBER_SCOPED.map((entry) => entry.table),
+    ...ALSO_POLICIED,
+  ]);
   for (const row of candidates as { table: string }[]) {
     const name = row.table;
     if (declared.has(name)) continue;
@@ -150,7 +160,7 @@ try {
       left join pg_policy p on p.polrelid = c.oid
      where n.nspname = 'public' and c.relname = any($1)
      group by 1, 2, 3`,
-    [MEMBER_SCOPED.map((entry) => entry.table)],
+    [[...MEMBER_SCOPED.map((entry) => entry.table), ...ALSO_POLICIED]],
   );
   for (const row of policied as { table: string; enabled: boolean; forced: boolean; policies: number }[]) {
     if (!row.enabled) fail(`${row.table}: row-level security is not enabled`);

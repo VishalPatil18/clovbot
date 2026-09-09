@@ -281,3 +281,15 @@ _<How this concept will apply to future work in this project.>_
 **The obvious way to prove a security check works can be the wrong way.** Disabling a policy to watch the leak appear needs an exclusive lock that the reading connection then waits on, and it puts a "turn off security on the live table" path into a script. Proving the check is not vacuous is what actually matters, and running the identical query as the member who owns the rows does that with no DDL at all.
 
 **Some tables cannot be protected by the thing they establish.** The sign-in tables are read to discover who the member is, so a policy keyed on that identity would lock out the only path that can create it. The answer is a different control, named and recorded, not a permissive policy that makes the schema check pass while protecting nothing.
+
+## P3 Stage 2 - what the audit log taught
+
+**A security control can break the path that creates the thing it protects.** Putting `members` behind a policy locked out sign-in, because both sign-in paths read that table before any identity exists to satisfy the policy. Nothing failed loudly: a join simply returned zero rows, and every caller read that as "nobody is signed in".
+
+**Test the path that establishes identity, not only the paths that use it.** The row-level security check was thorough about member-scoped reads and said nothing about login, which is how a broken sign-in passed a green security check.
+
+**Derive the audit from the thing being audited.** Each fact carries the columns it was built from, and the log is the union of those. Compiling the log separately from the read would let the two drift, and the requirement that a record reconstruct an answer's citations would become a thing to maintain rather than a property that holds.
+
+**A guard proves itself the first time it fires on your own work.** Adding the audit table made the schema check fail, because the table carried a `member_id` and had not been declared. That is the check working, and it cost thirty seconds to satisfy honestly.
+
+**Minimum-necessary finds reads nobody defended.** Being signed in was enough to read the whole record, on every question. Nothing chose that; it accumulated. Asking what each question actually needs removed four table reads from a plan-document answer and stopped the member's name being read at all.

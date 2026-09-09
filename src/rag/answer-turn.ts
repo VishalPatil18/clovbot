@@ -1,6 +1,6 @@
 import { findContainmentViolations, validateAnswerPayload } from "../answer.ts";
 import { checkGuardrails } from "../guardrails.ts";
-import { needsMemberData } from "../auth/login-required.ts";
+import { needsMemberData, type LoginRequired } from "../auth/login-required.ts";
 import { detectLanguage } from "../language.ts";
 import { applyConfidenceGate } from "../retrieval.ts";
 import { redactIdentifiers } from "../logging.ts";
@@ -11,7 +11,12 @@ import { embed } from "./providers.ts";
 import { rerank, type RerankedChunk } from "./rerank.ts";
 import { loadDrugIndex, lookupDrugs, searchHybrid, type DrugLookup } from "./store.ts";
 import { chooseRoute, type RouteDecision } from "./router.ts";
-import { loadMemberRecord, memberFactAsChunk } from "../members/store.ts";
+import {
+  fieldsRead,
+  loadMemberRecord,
+  memberFactAsChunk,
+  writeAccessLog,
+} from "../members/store.ts";
 import { latestSnapshotId } from "../corpus/snapshot.ts";
 import type pg from "pg";
 
@@ -79,18 +84,57 @@ export function drugAsChunk(row: DrugLookup, snapshotId: string): RerankedChunk 
   };
 }
 
+export interface TurnOptions {
+  onToken?: (token: string) => void;
+  memberId?: number;
+  /** The session the member id came from, named in the access log. */
+  sessionId?: string;
+}
+
 /**
  * One turn, end to end. Shared by the CLI and the eval harness so the thing
  * measured is the thing shipped.
+ *
+ * An authenticated turn writes exactly one access-log row before returning,
+ * whatever the outcome. A failure to write one fails the turn: no answer has
+ * reached the member at this point, so nothing is disclosed without a record
+ * of it. FR-P3-17.
  */
 export async function answerTurn(
   client: pg.Client,
   rawQuestion: string,
   scope: { contractId: string; planId: string; planYear: number },
-  options: { onToken?: (token: string) => void; memberId?: number } = {},
+  options: TurnOptions = {},
 ): Promise<TurnResult> {
   // FR-31, and D-034: redact before the model call, not only before the log write.
   const question = redactIdentifiers(rawQuestion);
+  // The rule that decides whether a signed-out member must sign in is the rule
+  // that decides what gets read, so the two cannot disagree. D-091.
+  const identityNeeded = needsMemberData(question);
+  const read = { fields: [] as string[] };
+  const result = await runTurn(client, question, scope, options, identityNeeded, read);
+
+  if (options.memberId !== undefined) {
+    await writeAccessLog(client, {
+      memberId: options.memberId,
+      sessionId: options.sessionId ?? null,
+      topic: identityNeeded?.topic ?? null,
+      question,
+      fieldsRead: read.fields,
+      outcome: result.outcome,
+    });
+  }
+  return result;
+}
+
+async function runTurn(
+  client: pg.Client,
+  question: string,
+  scope: { contractId: string; planId: string; planYear: number },
+  options: TurnOptions,
+  identityNeeded: LoginRequired | null,
+  read: { fields: string[] },
+): Promise<TurnResult> {
   const started = Date.now();
 
   const base = {
@@ -139,7 +183,6 @@ export async function answerTurn(
    * needs identity never reaches the model and cannot leak a partial answer on
    * its way to asking for a login. Never a refusal, and never a guess.
    */
-  const identityNeeded = needsMemberData(question);
   if (identityNeeded !== null && options.memberId === undefined) {
     return {
       ...base,
@@ -160,11 +203,17 @@ export async function answerTurn(
     // tier question about a drug we hold cannot degrade to prose search.
     const snapshotId = latestSnapshotId();
     const memberId = options.memberId;
-    route = chooseRoute(question, await drugIndexFor(client, snapshotId), memberId !== undefined);
+    const topic = identityNeeded?.topic ?? null;
+    // Being signed in is not a reason to read. The question has to need it. D-091.
+    const needsRecord = memberId !== undefined && topic !== null;
+    route = chooseRoute(question, await drugIndexFor(client, snapshotId), needsRecord);
 
-    // Scoped by member id in the query, never by the prompt. D-080.
+    // Scoped by member id in the query and by policy in the database. D-080, FR-P3-08.
     const record =
-      memberId === undefined ? null : await loadMemberRecord(client, memberId);
+      memberId === undefined || topic === null
+        ? null
+        : await loadMemberRecord(client, memberId, topic);
+    read.fields = fieldsRead(record);
     const memberSources =
       record === null ? [] : record.facts.map((fact) => memberFactAsChunk(record, fact));
 

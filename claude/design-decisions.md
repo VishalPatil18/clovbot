@@ -3466,6 +3466,47 @@ Cite-or-refuse is satisfied either way. The difference is whether the member is 
 
 ---
 
+## Decision D-094 - The sign-in lookups get a definer function, not a policy
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 2, repairing Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+D-090 exempted `login_codes` and `member_sessions` from the policies because they are read before an identity exists. It missed that both sign-in paths then read `members`, which is behind a policy. Verified against the live database after the fact: the session join returned zero rows and the email lookup returned zero rows, so nobody could sign in and no code could be issued. Neither the test suite nor `check:rls` caught it, because both tested member-scoped reads and neither tested the path that creates an identity.
+
+### Options considered
+
+1. A policy on `members` allowing a row to be read when a live session references it.
+2. A `security definer` function for the email lookup, and a two-step read for the session lookup.
+3. Move `display_name` and `email` out of `members` into a table exempt from the policies.
+
+### Decision
+
+Option 2.
+
+### Rationale
+
+Option 1 is a hole wearing a policy's clothes: any member with a live session would have their row readable by anyone, which is what the policy exists to prevent.
+
+Option 3 is schema churn that splits a member's identity across two tables to work around one lookup, and the exempt table then holds the two most identifying columns in the system.
+
+The session lookup needs nothing new. It reads its exempt row first, which names the member, and that name is the identity every later read is filtered by. That is exactly what the exemption was for; Stage 1 simply did not follow it through to the join.
+
+The email lookup has nothing to establish an identity from, so it gets a function narrow enough to be safe on its own terms: one address in, at most an id and the matching address out. No name, no plan, no record. `search_path` is pinned, because a definer function that resolves names through the caller's path runs whatever the caller put there first, and `execute` is revoked from public.
+
+### Consequences
+
+- One `security definer` function in the schema, which is one more thing to review than zero. Its whole body is a single select and its comment says why it exists.
+- `check:rls` now covers the sign-in path, so this gap cannot reopen silently.
+- The failure mode is worth remembering: a policy that is correct for the data path can still be wrong for the path that creates the identity, and the symptom is silence rather than an error.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

@@ -11,8 +11,8 @@ describe("member data needs a live session [FR-P2-45 structural half]", () => {
    * classifier can be wrong, and this is what makes being wrong harmless.
    */
   it("takes the member id from a resolved session, never from the request", () => {
-    expect(server).toMatch(/const member = await currentSession\(client, memberToken, new Date\(\)\)/);
-    expect(server).toMatch(/member === null \? \{\} : \{ memberId: member\.memberId \}/);
+    expect(server).toMatch(/\{ session: member, ended \} = await currentSession\(client, memberToken, new Date\(\)\)/);
+    expect(server).toMatch(/member === null\s*\?\s*\{\}\s*:\s*\{ memberId: member\.memberId, sessionId: member\.sessionId \}/);
   });
 
   it("never reads a member id out of the request body", () => {

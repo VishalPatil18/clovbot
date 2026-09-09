@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
 import { generateCode, hashCode, newSalt, verifyCode, type VerifyResult } from "./otp.ts";
-import { sessionState } from "./session.ts";
+import { sessionState, type SessionState } from "./session.ts";
+import { withMemberIdentity } from "../members/store.ts";
 
 export interface MemberSession {
   sessionId: string;
@@ -14,10 +15,9 @@ export async function memberByEmail(
   client: pg.Client,
   email: string,
 ): Promise<{ id: number; email: string } | null> {
-  const { rows } = await client.query(
-    "select id, email from members where lower(email) = lower($1)",
-    [email.trim()],
-  );
+  // Through a definer function: `members` is behind a policy and a sign-in has
+  // no identity yet to satisfy it. FR-P3-07, migration 013.
+  const { rows } = await client.query("select id, email from member_for_login($1)", [email]);
   const row = rows[0] as Record<string, unknown> | undefined;
   return row === undefined ? null : { id: Number(row["id"]), email: String(row["email"]) };
 }
@@ -104,20 +104,30 @@ export async function endSession(client: pg.Client, sessionId: string): Promise<
  * classifier can be wrong, so nothing downstream takes a member id that did not
  * come from here.
  */
+export interface SessionLookup {
+  session: MemberSession | null;
+  /** Why there is no session, when the reason is that one ran out. */
+  ended: Exclude<SessionState, "live"> | null;
+}
+
 export async function currentSession(
   client: pg.Client,
   sessionId: string | null,
   now: Date,
-): Promise<MemberSession | null> {
-  if (sessionId === null || !/^[0-9a-f-]{36}$/.test(sessionId)) return null;
+): Promise<SessionLookup> {
+  if (sessionId === null || !/^[0-9a-f-]{36}$/.test(sessionId)) {
+    return { session: null, ended: null };
+  }
+  // member_sessions is exempt from the policies, which is what lets this run
+  // before an identity exists. The row then names the member, and that is the
+  // identity every later read is filtered by. FR-P3-07.
   const { rows } = await client.query(
-    `select s.id, s.member_id, s.created_at, s.last_seen_at, m.display_name
-       from member_sessions s join members m on m.id = s.member_id
-      where s.id = $1 and s.ended_at is null`,
+    `select id, member_id, created_at, last_seen_at from member_sessions
+      where id = $1 and ended_at is null`,
     [sessionId],
   );
   const row = rows[0] as Record<string, unknown> | undefined;
-  if (row === undefined) return null;
+  if (row === undefined) return { session: null, ended: null };
 
   const state = sessionState(
     {
@@ -128,13 +138,18 @@ export async function currentSession(
   );
   if (state !== "live") {
     await endSession(client, sessionId);
-    return null;
+    // FR-P3-24. Told apart from never having signed in, so the member can be
+    // told their session ended rather than left to wonder.
+    return { session: null, ended: state };
   }
 
   await client.query("update member_sessions set last_seen_at = now() where id = $1", [sessionId]);
-  return {
-    sessionId,
-    memberId: Number(row["member_id"]),
-    displayName: String(row["display_name"]),
-  };
+  const memberId = Number(row["member_id"]);
+  const displayName = await withMemberIdentity(client, memberId, async () => {
+    const named = await client.query("select display_name from members where id = $1", [memberId]);
+    const self = named.rows[0] as Record<string, unknown> | undefined;
+    return self === undefined ? "your account" : String(self["display_name"]);
+  });
+
+  return { session: { sessionId, memberId, displayName }, ended: null };
 }

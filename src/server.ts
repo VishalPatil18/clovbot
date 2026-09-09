@@ -194,12 +194,21 @@ async function handleLoginVerify(body: string, res: ServerResponse): Promise<voi
     }
     const sessionId = await startSession(client, memberId);
     setMemberCookie(res, sessionId, MEMBER_COOKIE_MAX_AGE);
-    const session = await currentSession(client, sessionId, new Date());
+    const { session } = await currentSession(client, sessionId, new Date());
     json(res, 200, { signedInAs: session?.displayName ?? null });
   } finally {
     await client.end();
   }
 }
+
+/**
+ * FR-P3-24. Said when a session ran out, rather than showing a sign-in form with
+ * no explanation. Being signed in a minute ago and not now reads as a fault.
+ */
+const SESSION_ENDED: Record<"idle" | "expired", string> = {
+  idle: "You were signed out after 30 minutes without activity. Sign in again to see your own details.",
+  expired: "Your sign-in lasted its full 8 hours and has ended. Sign in again to see your own details.",
+};
 
 /** FR-P2-36. Plain language, and never a raw error. */
 const SIGN_IN_MESSAGE: Record<string, string> = {
@@ -247,8 +256,10 @@ const server = createServer((req, res) => {
       const client = connect();
       await client.connect();
       try {
-        const session = await currentSession(client, memberCookie(req), new Date());
-        json(res, 200, { signedInAs: session?.displayName ?? null });
+        const { session, ended } = await currentSession(client, memberCookie(req), new Date());
+        // FR-P3-24. A session that ran out is told apart from never having one,
+        // so the panel can say what happened rather than just showing a form.
+        json(res, 200, { signedInAs: session?.displayName ?? null, sessionEnded: ended });
       } finally {
         await client.end();
       }
@@ -590,7 +601,8 @@ async function handleAsk(
      * and from nowhere else, so no classifier - Stage 7's or any later one -
      * can cause member data to be retrieved for someone without a session.
      */
-    const member = await currentSession(client, memberToken, new Date());
+    const { session: member, ended } = await currentSession(client, memberToken, new Date());
+    if (ended !== null) send(res, { type: "session_ended", message: SESSION_ENDED[ended] });
 
     const turn = await answerTurn(
       client,
@@ -598,7 +610,9 @@ async function handleAsk(
       planRef ?? firstIndexedPlan(),
       {
         onToken: () => send(res, { type: "progress" }),
-        ...(member === null ? {} : { memberId: member.memberId }),
+        ...(member === null
+          ? {}
+          : { memberId: member.memberId, sessionId: member.sessionId }),
       },
     );
 

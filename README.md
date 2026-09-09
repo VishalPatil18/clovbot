@@ -147,7 +147,14 @@ migrations/008_member_records.sql      # five synthetic members and their record
 migrations/009_member_login.sql        # one-time codes and member sessions
 migrations/010_needs_login_outcome.sql # let a turn record the outcome "needs_login"
 migrations/011_row_level_security.sql  # member scoping enforced by the database
+migrations/012_member_access_log.sql   # one audit row per authenticated turn
+migrations/013_login_path_under_rls.sql # repairs sign-in, which 011 broke
 ```
+
+**013 is not optional.** 011 put `members` behind a policy, and both sign-in
+paths read that table before any identity exists to satisfy it, so no code could
+be issued and no session resolved. Applying 011 without 013 leaves sign-in
+silently broken.
 
 **011 has a prerequisite and changes how the service connects.** Create the role
 first, with a password of your choosing that never enters the repository:
@@ -166,10 +173,14 @@ every member. Add it to the Cloud Run environment and to the CI secrets.
 Prove it holds:
 
 ```bash
-npm run check:rls
+npm run check:rls      # no member's rows reachable from another's session
+npm run check:audit    # every authenticated read recorded, and unalterable
 ```
 
-To reverse: `migrations/011_row_level_security_down.sql`.
+To reverse, in this order: `013_login_path_under_rls_down.sql`,
+`012_member_access_log_down.sql`, `011_row_level_security_down.sql`. The 012
+rollback leaves the log table itself in place; dropping an audit trail is a
+separate, deliberate act.
 
 Each is additive and guarded with `if not exists` or `if exists`, so re-running one is safe.
 Without 010 a gated question still answers, but the turn row is rejected and the

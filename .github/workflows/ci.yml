@@ -47,6 +47,17 @@ jobs:
           DATABASE_APP_URL: ${{ secrets.DATABASE_APP_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: node --experimental-strip-types scripts/rls-check.ts
+      # FR-P3-17 to FR-P3-22. Runs real turns, so it needs the model too.
+      - name: Access log
+        env:
+          DATABASE_APP_URL: ${{ secrets.DATABASE_APP_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+          AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_EMBEDDING_DEPLOYMENT }}
+        run: node --experimental-strip-types scripts/audit-check.ts
       # Exits non-zero when faithfulness < 0.90, any answer carries an uncited
       # factual claim, or the refusal rate exceeds 35%. NFR-QUAL-01..03.
       - name: Golden set eval

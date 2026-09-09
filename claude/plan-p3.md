@@ -63,18 +63,18 @@
   - Audit log immutability from the application - append only, no update or delete path.
 - **Scope out:** Retention policy and disclosure accounting. Both are described in Stage 3 rather than built, since they are policy rather than code at this scale.
 - **Acceptance criteria:**
-  - [ ] Every authenticated answer writes exactly one audit record.
-  - [ ] The record names the specific fields read, not the table.
-  - [ ] A question needing one field does not read the whole record, asserted by inspecting the executed query.
-  - [ ] A refused authenticated question is also audited, with the refusal as the outcome.
-  - [ ] The application has no code path that updates or deletes an audit record, asserted by test.
-  - [ ] An expired session cannot read member data and prompts re-authentication in plain language.
-  - [ ] Given an audit record, the fields read can be reconstructed and match what the answer actually cited.
-  - [ ] No protected field value appears in the audit record itself - it records which fields, not their contents.
+  - [x] Every authenticated answer writes exactly one audit record.
+  - [x] The record names the specific fields read, not the table. Column plus row id, per D-092.
+  - [x] A question needing one field does not read the whole record, asserted by inspecting the executed query. A plan-document question from a signed-in member now reads nothing at all.
+  - [x] A refused authenticated question is also audited, with the refusal as the outcome.
+  - [x] The application has no code path that updates or deletes an audit record, asserted by test, and the database refuses both by grant.
+  - [x] An expired session cannot read member data and prompts re-authentication in plain language, naming which limit was reached.
+  - [x] Given an audit record, the fields read can be reconstructed and match what the answer actually cited.
+  - [x] No protected field value appears in the audit record itself - it records which fields, not their contents.
 - **Test plan:** Integration tests asserting one record per answer including the refusal path. Query inspection for the minimum-necessary assertion, which cannot be verified from the response alone. A test attempting audit mutation through every application entry point. Reconstruction test tying an audit record to the citations in its answer.
 - **Effort:** M
-- **Exit signal:** Every member answer has an audit row naming the exact fields it read, and nothing in the application can alter one.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Exit signal:** Every member answer has an audit row naming the exact fields it read, and nothing in the application can alter one. Met: `npm run check:audit`.
+- **Status:** [x] done, 2026-09-09. Also repaired sign-in, which Stage 1 broke: see D-094.
 
 ---
 
@@ -129,7 +129,7 @@
 ## Completion Checklist
 
 - [x] Stage 1 - Row-level security
-- [ ] Stage 2 - Audit log and minimum-necessary access
+- [x] Stage 2 - Audit log and minimum-necessary access
 - [ ] Stage 3 - Real-PHI writeup
 - [ ] Stage 4 - Spanish
 

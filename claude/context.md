@@ -621,3 +621,24 @@ Two faults, not one. The constraint is the cause; migration 010 widens it. But t
 **Open:** `DATABASE_APP_URL` must be added to Cloud Run and to the CI secrets before the next deploy; the deploy script requires it and will refuse without it.
 
 **Next:** P3 Stage 2, the audit log and minimum-necessary access, on the user's word.
+
+## 2026-09-09 - P3 Stage 2: the access log, and a Stage 1 repair
+
+**Did:** narrowed what an authenticated turn reads and recorded every read. The rule that decides whether a signed-out member must sign in now also decides what is read, so the gate and the access are one call. Every authenticated turn writes exactly one access-log row naming columns and row ids, never values.
+
+**Files:** added `migrations/012_member_access_log.sql`, `013_login_path_under_rls.sql`, both down scripts, `scripts/audit-check.ts`, `tests/unit/member-audit.test.ts`. Changed `src/members/store.ts` (rewritten), `src/rag/answer-turn.ts`, `src/rag/router.ts`, `src/auth/store.ts`, `src/server.ts`, `src/members/cli.ts`, `scripts/member-scope-check.ts`, `scripts/rls-check.ts`, four test files, CI and the runbook. 717 tests pass.
+
+**Verified against the live database:** 14 audit checks green. One row per turn with the topic that caused it; eight claim columns each naming their row; no amount anywhere in the row; zero fields read for a plan-document question asked by the same signed-in member; `update` and `delete` refused by grant; the insert policy refusing a row about another member; the cited field present in the log. `check:rls` green at 38 checks.
+
+**Stage 1 had broken sign-in and nothing caught it.** 011 put `members` behind a policy, and both sign-in paths read that table before an identity exists. The session join returned zero rows and the email lookup returned zero rows, so nobody could sign in. Found by reading the code for Stage 2, not by a test. D-094 records the fix: the session lookup reads its exempt row first and sets the identity before reading the member row, and the email lookup gets a narrow `security definer` function. Both verified end to end.
+
+**What building it surfaced:**
+
+- **A policy correct for the data path can be wrong for the path that creates the identity.** The symptom is silence: a join returns zero rows and every caller reads that as "not signed in".
+- **The schema check earned itself on its first opportunity.** Adding `member_access_log` made `check:rls` fail, because the table carries a `member_id` and was not declared. It has policies; it just was not on the list. Exactly the failure FR-P3-10 exists for.
+- **The audit is derived from the facts, not compiled beside them.** Each fact carries the columns it was built from, and the log is the union. A cited field cannot be missing from the log because both come from the same structure.
+- **Minimum-necessary removed a read nobody had noticed.** A signed-in member asking a specialist copay used to have their claims, prior authorisations and appointments read. It now reads nothing. The member's name is read by no answer path at all.
+
+**Open:** the deployed browser flow for sign-in under the policies is unverified; `DATABASE_APP_URL` still needs to reach Cloud Run and the CI secrets.
+
+**Next:** P3 Stage 3, the real-PHI writeup, on the user's word.

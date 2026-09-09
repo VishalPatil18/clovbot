@@ -25,6 +25,9 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Security
 
 - Which member's record the assistant can read is now enforced by the database, not only by the query that asks for it. One member's session reads zero rows belonging to another, proven by a check that queries the database directly with the application bypassed. Every record is still invented demonstration data.
+- The assistant reads only the part of your record your question needs. Asking what a specialist visit costs no longer touches your claims, your prior authorisations or your appointments, and nothing it does reads your name.
+- Every read of your record is recorded: which fields, from which rows, when, and what came of it. The record holds the names of the fields and never their contents, and nothing in the assistant can alter or remove an entry once written.
+- If your sign-in runs out, the assistant says so and which limit was reached, instead of quietly showing you a sign-in form again.
 
 ---
 

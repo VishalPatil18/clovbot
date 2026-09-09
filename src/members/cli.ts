@@ -5,7 +5,7 @@ import { citationLabel } from "../rag/payload.ts";
 import { connect, connectAdmin, writeTurn } from "../rag/store.ts";
 import { latestSnapshotId } from "../corpus/snapshot.ts";
 import { SEED_MEMBERS, memberEmail } from "./seed.ts";
-import { loadMemberRecord } from "./store.ts";
+import { loadMemberPlan } from "./store.ts";
 
 const flags = new Map<string, string>();
 const words: string[] = [];
@@ -119,16 +119,18 @@ async function ask(): Promise<void> {
   const client = connect();
   await client.connect();
   try {
-    const record = await loadMemberRecord(client, id);
-    if (record === null) {
+    // Only the plan, which scoping needs. What the question needs from the
+    // record is read inside the turn, and only if the question needs it. D-091.
+    const plan = await loadMemberPlan(client, id);
+    if (plan === null) {
       throw new Error(`no member ${String(id)}. Run npm run seed:members first.`);
     }
-    const planRef = findPlanRef(record.contractId, record.planId);
+    const planRef = findPlanRef(plan.contractId, plan.planId);
     if (planRef === null) {
-      throw new Error(`member ${String(id)} is on ${record.contractId}-${record.planId}, which is not indexed`);
+      throw new Error(`member ${String(id)} is on ${plan.contractId}-${plan.planId}, which is not indexed`);
     }
 
-    console.log(`\n${record.displayName} · ${formatPlanRef(planRef)} · synthetic record\n`);
+    console.log(`\nMember ${String(id)} · ${formatPlanRef(planRef)} · synthetic record\n`);
     const turn = await answerTurn(client, question, planRef, { memberId: id });
     console.log(`${turn.answer}\n`);
     if (turn.citedIds.length > 0) {

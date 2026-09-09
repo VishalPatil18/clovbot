@@ -30,9 +30,12 @@ const escape = (value: string): string => value.replace(/[.*+?^${}()|[\]\\-]/g, 
 export function chooseRoute(
   question: string,
   index: DrugIndex,
-  /** Set when the caller has already identified the member. Stage 7 owns the
-      classifier that decides this from the question; Stage 5's CLI is told. */
-  memberIdentified = false,
+  /**
+   * Set when the member is identified AND the question needs their record.
+   * Identity alone is not enough: a signed-in member asking a plan-document
+   * question must not have their record read to answer it. D-091.
+   */
+  needsRecord = false,
 ): RouteDecision {
   const haystack = question.toLowerCase();
 
@@ -57,13 +60,13 @@ export function chooseRoute(
     .map((hit) => hit.canonical);
 
   const withMember = (paths: RoutePath[]): RoutePath[] =>
-    memberIdentified ? [...paths, "member"] : paths;
+    needsRecord ? [...paths, "member"] : paths;
 
   if (drugs.length === 0) {
     return {
       paths: withMember(["rag"]),
       drugs,
-      reason: memberIdentified ? "member identified, no indexed drug named" : "no indexed drug named",
+      reason: needsRecord ? "question needs the member record, no indexed drug named" : "no indexed drug named",
     };
   }
 

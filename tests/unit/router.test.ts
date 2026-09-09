@@ -96,7 +96,9 @@ describe("member path [FR-P2-29, D-080]", () => {
     }
   });
 
-  it("says a member was identified in its reason", () => {
-    expect(withMember("how do I file an appeal").reason).toMatch(/member identified/);
+  // D-091: the flag now means the question needs the record, not that someone
+  // is signed in, and the reason has to say which.
+  it("says the record was needed in its reason", () => {
+    expect(withMember("how do I file an appeal").reason).toMatch(/needs the member record/);
   });
 });
