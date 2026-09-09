@@ -10,6 +10,13 @@
 </p>
 
 <p align="center">
+  <a href="https://clovbot.v-ai.org/"><strong>Website</strong></a> ·
+  <a href="https://github.com/VishalPatil18/clovbot/blob/development/docs/research-init.md"><strong>Research</strong></a> ·
+  <a href="https://github.com/VishalPatil18/clovbot/blob/development/docs/guardrails-and-evaluation.md"><strong>Guardrails & Evaluation</strong></a> ·
+  <a href="https://github.com/VishalPatil18/clovbot/blob/development/docs/future-work.md"><strong>Future Work</strong></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Node-26-339933?logo=nodedotjs&logoColor=white" alt="Node 26">
   <img src="https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
@@ -23,15 +30,10 @@
 </p>
 
 <p align="center">
-  <img src="./docs/assets/landing.png" alt="Landing page with the assistant launcher" width="32%" />
-  <img src="./docs/assets/answer.png" alt="A cited answer with its source list" width="32%" />
-  <img src="./docs/assets/voice.png" alt="Voice mode with the microphone" width="32%" />
-</p>
-
-<p align="center">
-  <em>Screenshots are placeholders. Drop the real captures at
-  <code>docs/assets/landing.png</code>, <code>docs/assets/answer.png</code> and
-  <code>docs/assets/voice.png</code>.</em>
+  <img src="./docs/assets/landing.png" alt="Landing page with the assistant launcher" width="24%" />
+  <img src="./docs/assets/answer.png" alt="A cited answer with its source list" width="24%" />
+  <img src="./docs/assets/voice.png" alt="Voice mode with the microphone" width="24%" />
+  <img src="./docs/assets/voiceanswer.png" alt="Voice mode answer read by the voice assistant" width="24%" />
 </p>
 
 ---
@@ -48,16 +50,16 @@ Built with [_throughspec_](https://throughspec.v-ai.org/), a Spec-Driven Develop
 
 The audience is Clover Health members, **mostly 65 and over**. Nearly every visible decision follows from that rather than from taste, and the research behind it is in [docs/research-init.md](./docs/research-init.md).
 
-| The choice | Why, for this audience |
-| --- | --- |
-| **A citation under every sentence** | The University of Michigan's 2025 healthy-aging poll found 46% of adults over 50 have little or no trust in AI. Trust is not won by sounding confident; it is won by showing the document. |
-| **"Talk to a person" on screen at all times**, including mid-answer | The fastest path to a human is never more than one tap away, so a member who gives up on the bot does not give up on the plan. |
-| **Refuse rather than guess** | A wrong copay is worse than no copay. The member acts on it, and finds out at the pharmacy counter. |
-| **Voice, with press-and-hold *and* tap-to-start** | A hold sustained for the length of a spoken question is hard with tremor or arthritis, and a slipped finger loses the whole question. Both gestures always work, and neither is a setting to find. |
-| **18px text floor, 44x44px targets** | WCAG 2.2 asks for 24x24; this uses the AAA 44x44 instead. Nielsen Norman's senior guidelines are explicit about small, clustered targets being the common failure. |
-| **Pasteable sign-in codes** | WCAG 2.2 criterion 3.3.8. A code you must retype from memory is a cognitive test, and it is the single highest-friction surface in the product. |
-| **Spanish end to end**, from Spanish source documents | Clover publishes its plan documents in Spanish. Answering a Spanish question from an English document, or by translating an English answer, would produce a claim no source supports. |
-| **Answers say when the plan year has passed** | Audio cannot be scrolled back to, so the staleness notice is read aloud with the answer as well as shown. |
+| The choice                                                          | Why, for this audience                                                                                                                                                                             |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A citation under every sentence**                                 | The University of Michigan's 2025 healthy-aging poll found 46% of adults over 50 have little or no trust in AI. Trust is not won by sounding confident; it is won by showing the document.         |
+| **"Talk to a person" on screen at all times**, including mid-answer | The fastest path to a human is never more than one tap away, so a member who gives up on the bot does not give up on the plan.                                                                     |
+| **Refuse rather than guess**                                        | A wrong copay is worse than no copay. The member acts on it, and finds out at the pharmacy counter.                                                                                                |
+| **Voice, with press-and-hold _and_ tap-to-start**                   | A hold sustained for the length of a spoken question is hard with tremor or arthritis, and a slipped finger loses the whole question. Both gestures always work, and neither is a setting to find. |
+| **18px text floor, 44x44px targets**                                | WCAG 2.2 asks for 24x24; this uses the AAA 44x44 instead. Nielsen Norman's senior guidelines are explicit about small, clustered targets being the common failure.                                 |
+| **Pasteable sign-in codes**                                         | WCAG 2.2 criterion 3.3.8. A code you must retype from memory is a cognitive test, and it is the single highest-friction surface in the product.                                                    |
+| **Spanish end to end**, from Spanish source documents               | Clover publishes its plan documents in Spanish. Answering a Spanish question from an English document, or by translating an English answer, would produce a claim no source supports.              |
+| **Answers say when the plan year has passed**                       | Audio cannot be scrolled back to, so the staleness notice is read aloud with the answer as well as shown.                                                                                          |
 
 ---
 
@@ -70,6 +72,9 @@ The audience is Clover Health members, **mostly 65 and over**. Nearly every visi
 - **Sign in without a password.** A six-digit code by email, entered inside the conversation, so the conversation survives.
 - **Ask about your own record** once signed in, cited to the exact field it read.
 - **Talk instead of typing**, and hear the answer read back while the written version stays on screen.
+- **Use it on a phone**, where it opens as the whole screen rather than a panel floating over one.
+- **Keep the conversation.** One press downloads a PDF of every question, answer and source, built on your device.
+- **Say an answer was wrong**, and pick why from four choices, so the people running it can see which answers are failing.
 - **Get handed to a person** when the assistant cannot help, with your question, your plan and the documents already searched carried across.
 
 ---
@@ -85,7 +90,7 @@ cp .env.example .env        # every value is commented in the file
 
 You need a Postgres database with `pgvector` (a free Supabase project is easiest) and an Azure OpenAI resource (`gpt-4o` plus `text-embedding-3-small`). Voice, email sign-in and the reranker are optional and degrade rather than fail.
 
-Apply the migrations in `migrations/` in numeric order, then build the corpus and index it:
+Apply the migrations in `migrations/` in numeric order, then fetch the plan documents and index them:
 
 ```bash
 npm run corpus:discover     # resolve the document URLs from Clover's catalog
@@ -118,7 +123,7 @@ Three deployable pieces and one database.
 
 1. **Web** - a Vite + React 19 single-page app on Vercel, which also proxies `/api/*` so the session cookie stays first-party.
 2. **API** - a Node HTTP server on Cloud Run. No framework: `node:http`, server-sent events for streaming, and hand-rolled routing.
-3. **Corpus pipeline** - command-line only, run before deploy. It fetches, converts and indexes the plan documents; the running service never touches a PDF.
+3. **Document pipeline** - command-line only, run before deploy. It fetches, converts and indexes the plan documents; the running service never touches a PDF.
 
 ### System architecture
 
@@ -153,7 +158,7 @@ flowchart TB
         RS["Resend<br/>sign-in codes"]
     end
 
-    PIPE["Corpus pipeline<br/>fetch, convert, chunk, embed"]
+    PIPE["Document pipeline<br/>fetch, convert, chunk, embed"]
 
     UI --> STATIC
     UI --> PROXY --> API
@@ -200,7 +205,7 @@ flowchart TD
 
 The load-bearing idea is the last two steps. **The model never writes the prose.** It returns typed claims, each carrying the ids of the chunks that support it; the application validates that every claim is cited and every citation was actually retrieved, then renders the sentences itself. An uncited claim is not a claim that gets flagged, it is a payload that fails validation and never reaches the screen.
 
-### How the corpus is built
+### How the plan documents are collected
 
 ```mermaid
 flowchart LR
@@ -267,47 +272,65 @@ Architecture long-form: **[docs/architecture.md](./docs/architecture.md)**.
 
 ## Tech stack
 
-| Layer | Choice | Why this and not the obvious alternative |
-| --- | --- | --- |
-| Runtime | **Node 26**, native TypeScript type-stripping | No build step for the server. `node --experimental-strip-types` runs the source. |
-| Language | **TypeScript 7**, strict, no `any` | Unions over loose strings; Zod at every trust boundary. |
-| API | **`node:http`**, no framework | The whole surface is a dozen routes and one SSE stream. Express would be a dependency for routing that fits on a page. |
-| Database | **Postgres + pgvector** (Supabase) | Vectors, lexical search, typed rows and row-level security in one place. A separate vector store would mean two systems to keep consistent. |
-| Retrieval | **Hybrid dense + lexical, fused by RRF inside one SQL function** | Scoped to the plan *before* ranking. Ranking first and filtering after lets the wrong plan's copay win on similarity. |
-| Reranking | **Local ONNX cross-encoder** via `@huggingface/transformers` | Runs on the box. No per-query cost, no third vendor. |
-| Generation | **Azure OpenAI** `gpt-4o`, temperature 0 | A BAA-eligible tier, which is hygiene even with zero real data. |
-| Frontend | **React 19 + Vite 8**, hand-written CSS | The design system is 40 tokens. Tailwind would add a build dependency to ship them. |
-| Animation | **Framer Motion 13** | The only runtime UI dependency added, and it respects `prefers-reduced-motion`. |
-| Voice | **ElevenLabs, Fish Audio, then the browser synthesiser** | The last tier cannot run out of credits, which is the point of having it. |
-| Email | **Resend** free tier | Sign-in codes only. |
-| Caching | **Postgres, exact-keyed** | Answers, query embeddings and synthesised audio in the store the app already has. Rejected: semantic caching on similarity, which can return a confidently wrong amount; and in-process or on-disk caches, which die with a Cloud Run instance. |
-| Tests | **Vitest 5** | 857 tests, no DOM library, offline, about a second. |
+| Layer      | Choice                                                           | Why this and not the obvious alternative                                                                                                                                                                                                        |
+| ---------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime    | **Node 26**, native TypeScript type-stripping                    | No build step for the server. `node --experimental-strip-types` runs the source.                                                                                                                                                                |
+| Language   | **TypeScript 7**, strict, no `any`                               | Unions over loose strings; Zod at every trust boundary.                                                                                                                                                                                         |
+| API        | **`node:http`**, no framework                                    | The whole surface is a dozen routes and one SSE stream. Express would be a dependency for routing that fits on a page.                                                                                                                          |
+| Database   | **Postgres + pgvector** (Supabase)                               | Vectors, lexical search, typed rows and row-level security in one place. A separate vector store would mean two systems to keep consistent.                                                                                                     |
+| Retrieval  | **Hybrid dense + lexical, fused by RRF inside one SQL function** | Scoped to the plan _before_ ranking. Ranking first and filtering after lets the wrong plan's copay win on similarity.                                                                                                                           |
+| Reranking  | **Local ONNX cross-encoder** via `@huggingface/transformers`     | Runs on the box. No per-query cost, no third vendor.                                                                                                                                                                                            |
+| Generation | **Azure OpenAI** `gpt-4o`, temperature 0                         | A BAA-eligible tier, which is hygiene even with zero real data.                                                                                                                                                                                 |
+| Frontend   | **React 19 + Vite 8**, hand-written CSS                          | The design system is 40 tokens. Tailwind would add a build dependency to ship them.                                                                                                                                                             |
+| Animation  | **Framer Motion 13**                                             | The only runtime UI dependency added, and it respects `prefers-reduced-motion`.                                                                                                                                                                 |
+| Voice      | **ElevenLabs, Fish Audio, then the browser synthesiser**         | The last tier cannot run out of credits, which is the point of having it.                                                                                                                                                                       |
+| Email      | **Resend** free tier                                             | Sign-in codes only.                                                                                                                                                                                                                             |
+| Caching    | **Postgres, exact-keyed**                                        | Answers, query embeddings and synthesised audio in the store the app already has. Rejected: semantic caching on similarity, which can return a confidently wrong amount; and in-process or on-disk caches, which die with a Cloud Run instance. |
+| Tests      | **Vitest 5**                                                     | 891 tests, no DOM library, offline, about a second.                                                                                                                                                                                             |
 
 ---
 
 ## Features
 
 **Answering**
+
 - Cited answers built from typed claims, with cite-or-refuse enforced by validation rather than by prompt
-- Hybrid retrieval over 26 documents, three plans, two contracts, scoped by plan and language before ranking
+- Hybrid retrieval over 28 documents, three plans, two contracts, scoped by plan and language before ranking
 - Typed drug-list lookup with tier, class and utilisation-management flags
 - Combined answers: a drug question and a rules question in one sentence get both halves, each with its own source
 - Long answers grouped under the part of the document each set of sentences came from
 - Staleness notice once the calendar passes the plan year, spoken as well as written
 
 **Authenticated tier** (synthetic records only)
+
 - Passwordless sign-in with an emailed six-digit code, inside the conversation
 - Member-record answers cited to the record and the exact field
 - Questions the plan documents can answer are never put behind a sign-in
 - Signing out removes record-sourced answers from the conversation saved on the device
 
+**Spanish, end to end**
+
+- Answers from Clover's own Spanish documents, not a translation of an English answer
+- Language scoped in SQL before ranking, and the lexical index stemmed in Spanish rather than English
+- Detected from the question and switchable at any time; the choice persists
+- Every button, refusal, help line and progress message written by a person in both languages
+- The drug list is published only in English, so a Spanish drug answer cites it and says so rather than refusing
+
+**On a phone**
+
+- The assistant is the whole screen, not a panel floating over one; the menu becomes a bar beside Back
+- Held to an iPhone 14 Pro at 393x852, verified by rendering at that size and looking, not by reading the stylesheet
+- 44px targets and the 18px reading floor hold at every width; chrome shrinks, controls and body text do not
+
 **Voice**
+
 - Press-and-hold or tap-to-start, both always available
 - The transcript is shown and editable before it is sent
 - Answers read aloud while the written version stays on screen
 - Spanish answers read in a Spanish voice
 
 **Interface**
+
 - Panel and full-page layouts, keyboard reachable, `prefers-reduced-motion` honoured
 - Language control beside the voice control, in both layouts
 - Conversation saved on the device and restored, with an explicit clear
@@ -315,41 +338,55 @@ Architecture long-form: **[docs/architecture.md](./docs/architecture.md)**.
 - Help panel, plan switcher, suggested questions
 
 **Performance**
+
 - Repeated questions answered from cache with no model call, keyed exactly so a near-identical question never inherits the wrong answer
-- Re-indexing the corpus clears the answers cached against it, so a document change can never be answered from before it
+- Re-indexing the plan documents clears the answers cached against them, so a document change can never be answered from before it
 - Query embeddings cached on the text and the model
 - Spoken answers synthesised once and served from the database, so a recording survives a restart and is shared between instances
 
 **Learning from members**
+
 - "Did this answer your question?" records the rating, the answer that was rated and, after a no, one of four fixed reasons
 - No free-text box anywhere in it: identifier redaction catches a member id, not a condition someone types
 - A signed-in member's answer text is never stored, only the rating
 - `npm run insights` lists rated-wrong answers with their reason and route, as candidate golden-set cases
 
+**Security and privacy**
+
+- Member scoping enforced by the database, not by the query: a `NOBYPASSRLS` role, `FORCE ROW LEVEL SECURITY`, and an unidentified connection that reads zero rows
+- Proven with the application bypassed, in CI, by connecting as the app role and selecting another member's rows directly
+- Minimum necessary: a cost question touches no claim, no prior authorisation and no appointment, and nothing reads the member's name
+- Every authenticated read logged with field names and row ids, never values; append-only by grant, so history cannot be rewritten
+- One validation module at the HTTP boundary with a ceiling on every field; parameterised queries throughout
+- Prompt injection bounded by the answer contract rather than by a prompt instruction: typed claims, citation containment, prose rendered by the application
+- Identifier redaction before the model call as well as the log write
+
 **Operations**
+
 - One eval run reports four gates
 - Turn log with route, reason, latency and outcome; answer reproduction from a turn id
-- Row-level security and an append-only access log over the member record
+- `npm audit` on every push, with open advisories documented individually
 
 ---
 
 ## Key design decisions
 
-Ninety-four decisions are recorded in [claude/design-decisions.md](./claude/design-decisions.md). These are the ones that shaped everything after them.
+One hundred and five decisions are recorded in [claude/design-decisions.md](./claude/design-decisions.md). These are the ones that shaped everything after them.
 
-| Decision | What it changed |
-| --- | --- |
-| **The model returns claims, not prose** | Cite-or-refuse became a property of the type system instead of an instruction the model might ignore. Every later feature, including member records and Spanish, travels the same validation path for free. |
-| **Zero real PHI, at every version** | Not a v1 limitation but a permanent boundary. It is what makes an authenticated tier defensible in a case study, and it is why [docs/real-phi.md](./docs/real-phi.md) exists to say what would change if the data were real. |
-| **Deterministic rules wherever the gate is zero-tolerance** | Guardrails, the router and login detection are regex rules, not classifiers. Slower to write, and every decision can be explained by pointing at the rule that fired. |
-| **Plan scoping in SQL, before ranking** | Two plans share near-identical prose with different amounts. This is the difference between a correct answer and a confidently wrong one. |
-| **The Summary of Benefits is parsed by geometry** | Two plans in two columns. A page that cannot be attributed fails the build rather than guessing, which is what caught a lowercase Spanish header that would otherwise have merged the columns silently. |
-| **Retrieval paths are additive** | A question that is both a drug lookup and a rules question keeps both halves. Neither can be dropped by a router that picked one. |
-| **The same rule gates a question and scopes the read** | Whether you must sign in and what gets read from your record are one call, so they cannot disagree. |
-| **The Spanish instruction rides on the user message** | Measurement showed that touching the system prompt moves faithfulness and flips cases, so the English prompt stays byte-identical and Spanish costs English nothing. |
-| **The answer cache is keyed on the question, not its meaning** | "What is my specialist copay" and "what is my out-of-network specialist copay" are one word and ten dollars apart. Semantic caching is the documented design in `docs/ideas.md`, and its own warning is why this one keys on the exact question inside its plan, language and corpus scope. A signed-in member's turn is never cached at all. |
-| **Feedback is four fixed reasons, never a text box** | A thumbs-down needs a reason to be actionable, and free text is the one surface in this product that could put a diagnosis into the database. The four reasons are enforced by a database constraint, not just the form, and a rated-wrong answer becomes a candidate golden-set case rather than training data for a pipeline that does not exist. |
-| **A regression gate one case below the measured baseline** | Set from a measurement, with the measurement written beside it, rather than a round number that would drift upward every time it failed. |
+| Decision                                                       | What it changed                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The model returns claims, not prose**                        | Cite-or-refuse became a property of the type system instead of an instruction the model might ignore. Every later feature, including member records and Spanish, travels the same validation path for free.                                                                                                                                         |
+| **Zero real PHI, at every version**                            | Not a v1 limitation but a permanent boundary. It is what makes an authenticated tier defensible in a case study, and it is why [docs/real-phi.md](./docs/real-phi.md) exists to say what would change if the data were real.                                                                                                                        |
+| **Deterministic rules wherever the gate is zero-tolerance**    | Guardrails, the router and login detection are regex rules, not classifiers. Slower to write, and every decision can be explained by pointing at the rule that fired.                                                                                                                                                                               |
+| **Plan scoping in SQL, before ranking**                        | Two plans share near-identical prose with different amounts. This is the difference between a correct answer and a confidently wrong one.                                                                                                                                                                                                           |
+| **The Summary of Benefits is parsed by geometry**              | Two plans in two columns. A page that cannot be attributed fails the build rather than guessing, which is what caught a lowercase Spanish header that would otherwise have merged the columns silently.                                                                                                                                             |
+| **Retrieval paths are additive**                               | A question that is both a drug lookup and a rules question keeps both halves. Neither can be dropped by a router that picked one.                                                                                                                                                                                                                   |
+| **Member scoping moved into the database**                     | A `where member_id = $1` in one function was the only thing keeping members apart. Now a `NOBYPASSRLS` role and `FORCE ROW LEVEL SECURITY` mean a code path that forgets to scope is refused rather than answered, and the proof runs with the application bypassed.                                                                                |
+| **The same rule gates a question and scopes the read**         | Whether you must sign in and what gets read from your record are one call, so they cannot disagree.                                                                                                                                                                                                                                                 |
+| **The Spanish instruction rides on the user message**          | Measurement showed that touching the system prompt moves faithfulness and flips cases, so the English prompt stays byte-identical and Spanish costs English nothing.                                                                                                                                                                                |
+| **The answer cache is keyed on the question, not its meaning** | "What is my specialist copay" and "what is my out-of-network specialist copay" are one word and ten dollars apart. Semantic caching is the documented design in `docs/ideas.md`, and its own warning is why this one keys on the exact question inside its plan, language and document-set scope. A signed-in member's turn is never cached at all. |
+| **Feedback is four fixed reasons, never a text box**           | A thumbs-down needs a reason to be actionable, and free text is the one surface in this product that could put a diagnosis into the database. The four reasons are enforced by a database constraint, not just the form, and a rated-wrong answer becomes a candidate golden-set case rather than training data for a pipeline that does not exist. |
+| **A regression gate one case below the measured baseline**     | Set from a measurement, with the measurement written beside it, rather than a round number that would drift upward every time it failed.                                                                                                                                                                                                            |
 
 ---
 
@@ -357,7 +394,7 @@ Ninety-four decisions are recorded in [claude/design-decisions.md](./claude/desi
 
 ### Guardrails
 
-Ten refusal categories, as rules. Emergencies are checked first, because a member describing acute symptoms needs care guidance before any other boundary applies. Each rule carries an `unless` for the answerable question that looks like it: *"how do I file an appeal"* is a process question the documents answer, while *"was my denial correct"* is a coverage determination and is refused.
+Ten refusal categories, as rules. Emergencies are checked first, because a member describing acute symptoms needs care guidance before any other boundary applies. Each rule carries an `unless` for the answerable question that looks like it: _"how do I file an appeal"_ is a process question the documents answer, while _"was my denial correct"_ is a coverage determination and is refused.
 
 The regulatory line is CMS-4201-F and the February 2024 CMS FAQ: the assistant **informs, it does not adjudicate**. It answers in English and Spanish; any other language gets a plain handover rather than a half-translated guess. Rules fire in both languages, which the golden set proved was not automatic: translating the explanations left the English-only patterns unable to match a Spanish emergency at all.
 
@@ -369,12 +406,12 @@ One command, four reports, all gating:
 npm run eval
 ```
 
-| Report | What it measures | Last run |
-| --- | --- | --- |
-| Answers | Faithfulness judged against the retrieved chunks, structural compliance, refusal rate, per bucket and per language | 0.963 faithfulness, 100% structural, 10.0% refusal |
-| Router | Whether each question took the right retrieval path | 32/32, zero drug questions degraded to prose |
-| Login detection | Both directions, reported separately and never pooled | 34 cases, zero false negatives, zero false positives |
-| Regression gate | Every P1 metric against its measured floor | all floors met |
+| Report          | What it measures                                                                                                   | Last run                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| Answers         | Faithfulness judged against the retrieved chunks, structural compliance, refusal rate, per bucket and per language | 0.963 faithfulness, 100% structural, 10.0% refusal   |
+| Router          | Whether each question took the right retrieval path                                                                | 32/32, zero drug questions degraded to prose         |
+| Login detection | Both directions, reported separately and never pooled                                                              | 34 cases, zero false negatives, zero false positives |
+| Regression gate | Every P1 metric against its measured floor                                                                         | all floors met                                       |
 
 The golden set is 66 hand-labelled cases: answerable, member-specific, guarded, adversarial and Spanish. Faithfulness is reported **per language**, because six Spanish cases against sixty English ones could score zero and barely move a pooled average.
 
@@ -391,27 +428,48 @@ More: **[docs/testing-strategy.md](./docs/testing-strategy.md)**.
 
 ---
 
+## Browser performance
+
+Lighthouse 12.8.2 against the deployed site, 2026-09-09. Production numbers, nothing tuned for the scan.
+
+| Route | Profile | Perf | A11y | Best practices | SEO |
+| --- | --- | --- | --- | --- | --- |
+| Landing | Desktop | **100** | **100** | **100** | 91 |
+| Assistant | Desktop | **100** | **100** | **100** | 90 |
+| Landing | Mobile, throttled | 94 | **100** | **100** | 91 |
+| Assistant | Mobile, throttled | 97 | **100** | **100** | 90 |
+
+**Total blocking time is 0 ms on every route and profile**, and accessibility is 100 on all four. The assistant is 134 KiB and paints in 0.3 s on desktop, 1.5 s throttled; the PDF renderer is a separate chunk fetched only when someone exports.
+
+None of that was a performance optimisation. There are no third-party origins, no webfonts, no analytics and no tag manager, the API is proxied same-origin, and the reranker runs server-side so no model reaches the browser.
+
+Open findings, unchanged by the scan: 481 KiB recoverable from three **landing** images, one layout shift on the assistant at mobile width (CLS 0.101), and a missing meta description, which is the whole SEO deduction.
+
+Full numbers, method and how to reproduce: **[docs/performance.md](./docs/performance.md)**.
+
+---
+
 ## Development workflow
 
 Every feature moves through six phases, and skipping one needs a logged override. The contract Claude Code works under is [CLAUDE.md](./CLAUDE.md); read it before changing anything.
 
 1. Requirements → 2. Architecting → 3. Product Specs → 4. Tech Specs → 5. Planning → 6. Code
 
-| Skill | Purpose |
-| --- | --- |
-| `/spec-requirements` | Build or amend the SRS |
-| `/spec-design` | Build or amend the design system |
-| `/spec-plan` | Build the staged plan |
-| `/spec-feature` | Run a full feature cycle |
-| `/spec-bug` | Reproduce, regression-test, fix |
-| `/spec-docs` | Diff docs against reality and apply |
+| Skill                | Purpose                             |
+| -------------------- | ----------------------------------- |
+| `/spec-requirements` | Build or amend the SRS              |
+| `/spec-design`       | Build or amend the design system    |
+| `/spec-plan`         | Build the staged plan               |
+| `/spec-feature`      | Run a full feature cycle            |
+| `/spec-bug`          | Reproduce, regression-test, fix     |
+| `/spec-docs`         | Diff docs against reality and apply |
 
 Four rules are non-negotiable and bind subagents too: **spec before code**, **test before implementation**, **zero real PHI ever**, and **cite or refuse**.
 
 The memory layer is updated in a fixed order after every cycle: `claude/context.md`, `claude/features.md`, `claude/design-decisions.md`, `claude/learnings.md`, `CHANGELOG.md`.
 
 ```bash
-npm test          # 756 tests, offline, about a second
+npm test          # 892 tests, offline, about a second
 npm run typecheck # both projects
 npm run eval      # the four gates, needs a database and a model
 ```
@@ -422,25 +480,41 @@ Before opening a PR, read **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
 
 ## Documentation
 
-| Document | What is in it |
-| --- | --- |
-| [Architecture](./docs/architecture.md) | The long-form walk through retrieval, the answer contract and the data model |
-| [Where the data came from](./docs/corpus.md) | Scope, discovery, fetching, conversion, chunking and what reached the index, measured |
-| [Security posture](./docs/security.md) | Input validation, prompt injection, access, monitoring, dependencies, and what is not protected |
-| [Deployment](./docs/deployment.md) | Migrations, secrets, Cloud Run and Vercel, in order |
-| [Guardrails and evaluation](./docs/guardrails-and-evaluation.md) | Every refusal category, the golden set, the gates |
-| [Future work](./docs/future-work.md) | What is next, and what it would cost |
-| [What changes with real PHI](./docs/real-phi.md) | Control by control, what exists here and what a real deployment would owe |
-| [Testing strategy](./docs/testing-strategy.md) | What is tested where, and why |
-| [Research briefing](./docs/research-init.md) | The sources behind every regulatory and audience claim |
-| [Call drivers](./docs/call-drivers.md) | The question buckets the golden set is built from |
-| [Build journal](./docs/build-journal.md) | What went wrong, in order |
-| [Design decisions](./claude/design-decisions.md) | 103 ADRs |
-| [Learnings](./claude/learnings.md) | What each stage taught |
+| Document                                                         | What is in it                                                                                   |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| [Architecture](./docs/architecture.md)                           | The long-form walk through retrieval, the answer contract and the data model                    |
+| [Where the data came from](./docs/corpus.md)                     | Scope, discovery, fetching, conversion, chunking and what reached the index, measured           |
+| [Security posture](./docs/security.md)                           | Input validation, prompt injection, access, monitoring, dependencies, and what is not protected |
+| [Browser performance](./docs/performance.md)                     | Lighthouse scores, Core Web Vitals, why it is fast, and what is still open                      |
+| [Deployment](./docs/deployment.md)                               | Migrations, secrets, Cloud Run and Vercel, in order                                             |
+| [Guardrails and evaluation](./docs/guardrails-and-evaluation.md) | Every refusal category, the golden set, the gates                                               |
+| [Future work](./docs/future-work.md)                             | What is next, and what it would cost                                                            |
+| [What changes with real PHI](./docs/real-phi.md)                 | Control by control, what exists here and what a real deployment would owe                       |
+| [Testing strategy](./docs/testing-strategy.md)                   | What is tested where, and why                                                                   |
+| [Research briefing](./docs/research-init.md)                     | The sources behind every regulatory and audience claim                                          |
+| [Call drivers](./docs/call-drivers.md)                           | The question buckets the golden set is built from                                               |
+| [Build journal](./docs/build-journal.md)                         | What went wrong, in order                                                                       |
+| [Design decisions](./claude/design-decisions.md)                 | 105 ADRs                                                                                        |
+| [Learnings](./claude/learnings.md)                               | What each stage taught                                                                          |
 
 ---
 
 ## Future work
+
+### Fine tuning
+
+Nothing here is built, deliberately: answers come from retrieval and a prompt, not from weights. But every rated turn already stores the question, the answer, the reason, the route and the exact chunk ids that produced it, so a preference dataset accumulates as a side effect of asking "Did this answer your question?".
+
+- **Three of the four reason codes are not training signals.** *Not about my plan* is a retrieval bug, *not what I asked* is a router bug, and *I think this is covered* is usually a missing document. Only *hard to understand* trains the model, and feeding all four in would teach it to answer confidently over bad retrieval, which is the failure this product is built against.
+- **The chunk ids are what make the data unusual.** An example reconstructs as `(retrieved context, question) -> (answer, verdict)`, so the model learns what a good answer looks like given the evidence it actually had, rather than learning style from bare question-and-answer pairs.
+- **Train on the payload, not the prose**, since the model returns typed claims with citation ids and the application renders the sentences. The objective is a well-formed, fully cited payload.
+- **The rejected sample already exists**, so preference optimisation fits directly: an operator rewrites a rated-wrong answer over the same retrieved chunks, and the pair differs in nothing else.
+- **Readability is its own dataset**, targeting a reading grade for an audience mostly over 65 rather than being folded into the same objective.
+- **Internal data is what the feedback loop cannot supply**: call transcripts and their dispositions, resolved grievance and appeal narratives, approved agent phrasing, and marketing-review rejections, which are negative examples of exactly the kind a preference method uses. All of it needs de-identifying first, and the training set becomes a new store to govern.
+- **The existing harness is the gate.** A fine-tuned model ships only if it beats the base model on faithfulness, structural compliance, refusal rate and every bucket, with Spanish reported separately. The floor does not move to accommodate a model.
+- **The commercial case is a smaller model at the same floor.** If a fine-tuned small model holds the faithfulness floor `gpt-4o` holds today, the win is latency and cost per turn for an audience on slow connections. Better refusal calibration is the next most valuable outcome.
+- **It cannot fix facts or currency.** A copay comes from a document, so a more fluent wrong answer is worse than an obvious one, and a model trained in March knows nothing about a document published in April.
+- **The data is not there yet.** 113 turns, 98 answered, 2 rated. A useful preference set starts in the low thousands of curated pairs, so this is a question of traffic rather than engineering.
 
 ### Logging and monitoring
 
@@ -461,13 +535,6 @@ Escalation today hands over a form: the question, the plan, and the documents al
 - **The assistant staying in the room after the transfer**, as a tool the agent drives: the agent asks for the deductible, the bot returns it cited, and the agent decides what to say. That keeps the CMS boundary intact, since a person makes every determination and the assistant only ever informs.
 - **Write-backs behind real identity proofing.** An emailed code proves control of an inbox, which is enough to read synthetic data and nowhere near enough to change a real record. This is the gap [docs/real-phi.md](./docs/real-phi.md) states explicitly, and no agentic write should ship before it closes.
 
-### Also on the list
-
-- Row-level security keyed to something the application cannot set, so trust leaves the application rather than moving inside it
-- The keyboard and screen-reader pass over the login flow, which is the highest-friction surface for this audience
-- Contextual follow-up suggestions after an answer
-- Throttled real-device latency measurement, rather than unthrottled desktop numbers
-
 ---
 
 ## Contributing
@@ -480,14 +547,14 @@ Every member record in this repository is synthetic, enforced by a database
 constraint rather than a convention. Real addresses used for the sign-in
 demonstration live in the environment and are never committed.
 
-**Input.** Every request body crosses one validation module. Nothing throws on
+**Input:** Every request body crosses one validation module. Nothing throws on
 bad input; a wrong type becomes a safe default and a body that is not a JSON
 object is a 400 before a handler runs. Every entry point has a ceiling (200 KB
 body, 8 MB audio, 500-character question) and an oversized request is destroyed
 while being read. Every query is parameterised, and there is no
 `dangerouslySetInnerHTML` anywhere.
 
-**Prompt injection.** The prompt rule that fences sources as data is the weakest
+**Prompt injection:** The prompt rule that fences sources as data is the weakest
 layer, and is not what this relies on. The model returns typed claims carrying
 citation ids; the application validates them, rejects any id that was not
 retrieved on that turn, and renders the prose itself. An injected instruction
@@ -495,18 +562,18 @@ cannot produce an uncited claim, cannot cite a chunk that was not in context, an
 cannot emit markup. Guardrails and the sign-in gate are deterministic rules that
 run **before** retrieval, so a guarded question never reaches the model.
 
-**Access.** One-time codes stored as scrypt hashes and never in plaintext,
+**Access:** One-time codes stored as scrypt hashes and never in plaintext,
 `HttpOnly`/`SameSite=Lax` cookies with `Secure` over HTTPS, rate limits per
 session, per IP and per address, and member scoping enforced by row-level
 security on a `NOBYPASSRLS` role. `npm run check:rls` proves it with the
 application bypassed, in CI.
 
-**Monitoring.** Every turn and every authenticated read is recorded, with field
+**Monitoring:** Every turn and every authenticated read is recorded, with field
 names and never values; the audit log is append-only by grant. What does not
 exist is alerting, a dashboard or anomaly detection: the data is recorded, and
 nothing watches it.
 
-**Dependencies.** `npm audit` runs on every push. A critical advisory fails the
+**Dependencies:** `npm audit` runs on every push. A critical advisory fails the
 build; highs are reported and tracked. Four are open today, all through the local
 reranker, all without an available fix, each documented with why its path is
 unreachable here.
@@ -518,4 +585,4 @@ Do not open a public issue for a vulnerability. See [SECURITY.md](./SECURITY.md)
 
 ## License
 
-_<choose a license>_
+[MIT](./LICENSE)

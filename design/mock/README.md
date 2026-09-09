@@ -70,7 +70,7 @@ The `＋` control next to the composer is document upload. P4-07 is **auth-gated
 
 ### 6. Plan names are invented
 
-"Clover Choice PPO", "Clover Value PPO", "Clover Simple HMO" are placeholders. Real plan benefit package names come from the Stage 1 corpus fetch. `H5141-001` and `New Jersey` in the header do match the working default and the fixture corpus.
+"Clover Choice PPO", "Clover Value PPO", "Clover Simple HMO" are placeholders. Real plan benefit package names come from the plan-document fetch. `H5141-001` and `New Jersey` in the header do match the working default and the fixture document set.
 
 ## Content in the mock that is genuinely useful
 

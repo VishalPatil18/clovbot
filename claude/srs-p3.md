@@ -10,7 +10,7 @@
 | --- | --- |
 | Project | Clover Member Assistant |
 | Version | 1.6.0 |
-| Status | Frozen |
+| Status | Frozen. Shipped as v1.2.0, 2026-09-09. |
 | Last Updated | 2026-09-09 |
 | Covers | `claude/plan-p3.md` stages 1-10, shipping as v1.2.0 |
 | Sources | `docs/ideas.md` §7 P3-01 and P3-02, `claude/plan-p3.md`, `claude/srs.md` v1.1.0, `claude/srs-p2.md` v1.0.1, `docs/research-init.md`, D-047, D-080, D-085 |

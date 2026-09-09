@@ -51,6 +51,8 @@ function runDeploy(): string[] {
       "AZURE_OPENAI_DEPLOYMENT=gpt-4o",
       "AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small",
       "ELEVENLABS_API_KEY=stub-voice-key",
+      "ELEVENLABS_VOICE_ID=stub-english-voice",
+      "ELEVENLABS_VOICE_ID_SPANISH=stub-spanish-voice",
       "",
     ].join("\n"),
   );
@@ -79,6 +81,13 @@ describe("deploy passes an environment Cloud Run can read", () => {
 
   it("leaves no separator fragment in a value", () => {
     expect(Object.values(env).filter((value) => value.includes("^"))).toEqual([]);
+  });
+
+  // Without these the service falls back to the English voice and reads a
+  // Spanish answer in it, which is a silent degrade rather than an error.
+  it("carries the Spanish voice ids", () => {
+    expect(env["ELEVENLABS_VOICE_ID"]).toBe("stub-english-voice");
+    expect(env["ELEVENLABS_VOICE_ID_SPANISH"]).toBe("stub-spanish-voice");
   });
 });
 

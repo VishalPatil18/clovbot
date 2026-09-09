@@ -887,3 +887,31 @@ Two more were the same shape: `.assistant--page > .assistant__foot` out-specifie
 **`SECURITY.md` left alone at the user's direction.** It still carries a placeholder contact and claims CSRF protection where the actual control is `SameSite=Lax` with no token. `docs/security.md` states that accurately.
 
 **Next:** cut v1.2.0.
+
+## 2026-09-09 - v1.2.0 released
+
+**Did:** cut v1.2.0. Version bumped, changelog closed, plan and SRS marked shipped, stale counts corrected. 892 tests pass.
+
+**Found a deploy blocker while writing the steps.** `scripts/deploy-api.sh` forwarded `ELEVENLABS_VOICE_ID` and `FISH_AUDIO_VOICE_ID` but neither `_SPANISH` variant, so the deployed service would have fallen back to the English voice and read every Spanish answer in it. A silent degrade, not an error, and it would have shipped the Spanish tier half-working. Both added, with a test asserting the forwarded set.
+
+**Ten stages: row-level security, audit log and minimum-necessary reads, the real-PHI writeup, Spanish end to end, the mobile layout, three caches, feedback that goes somewhere, a PDF transcript, the comment sweep with its gate, and the security review.**
+
+**Migrations 011 to 016 are the operator's to apply**, in order, with 014 followed by a re-ingest.
+
+**README brought up to the release.** Spanish and the phone layout had no feature block of their own despite being half of v1.2.0; row-level security was one line under Operations and is now its own block plus a row in the decisions table. Corrected three stale counts: 26 documents to 28, 756 tests to 892, ninety-four decisions to 105. `docs/future-work.md` claimed the help panel's Spanish copy was outstanding; the lists are bilingual and only the four button descriptions are not, so the entry now says that.
+
+**Next:** P4, or whatever the next brief is.
+
+## 2026-09-09 - Browser performance scan
+
+**Did:** ran Lighthouse 12.8.2 against the deployed site, four scans, and wrote up the results. No application code changed.
+
+**Files:** added `docs/performance.md`. Changed README and `docs/future-work.md`.
+
+**Results:** desktop 100 performance on both routes, throttled mobile 94 on the landing and 97 on the assistant. Accessibility 100 on all four. **Total blocking time 0 ms everywhere**, which follows from having no third-party origin, no webfont and no analytics rather than from any optimisation. Confirmed from the scan's own network records: one host, 10 requests on the landing and 6 on the assistant.
+
+**No dependency added.** Lighthouse runs from `npx` against the Chromium Playwright already installs, so nothing entered `package.json`. The reproduction command is in the doc.
+
+**Three findings left open rather than fixed**, so the published numbers keep matching production: 481 KiB recoverable from three landing JPEGs served full-size and scaled by CSS, one layout shift on the assistant at mobile width (CLS 0.101, element is the page container), and a missing meta description, which is the whole SEO deduction on both routes.
+
+**No changelog entry.** Nothing user-facing changed.

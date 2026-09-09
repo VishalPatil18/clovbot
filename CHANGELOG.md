@@ -6,6 +6,14 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [1.2.0] - 2026-09-09
+
+Spanish end to end, the assistant on a phone, and the security beneath the authenticated tier moved into the database. A conversation can be saved as a PDF, a wrong answer can say what was wrong with it, and repeated questions come back without asking the model again.
+
 ### Added
 
 - **Save the whole conversation as a PDF.** One press downloads a file with every question, every answer and every source, along with the plan it was answered under and the date the plan documents were collected. It is a document, not a picture of the screen, so the text can be selected, searched and read aloud. If any answer came from your own record, the first page says so. The file is made on your device and is not sent anywhere.
@@ -28,10 +36,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Fixed
 
 - Signing out while using the assistant in Spanish now clears the answers that came from your own record, as it already did in English.
-
-### Removed
-
-- _<removed capabilities>_
+- Deploying no longer leaves the Spanish voice behind: answers in Spanish are read in a Spanish voice on the deployed service, not just locally.
 
 ### Security
 

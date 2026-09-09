@@ -76,7 +76,17 @@ An emailed code proves control of an inbox. That is adequate for reads of synthe
 
 ---
 
-## 4. Product
+## 4. Fine tuning
+
+The "Did this answer your question?" control writes a rating, a reason from four fixed values, the answer text and the chunk ids that produced it. That is a preference dataset accumulating as a side effect of asking.
+
+Three of the four reasons are not generation signals: **it is not about my plan** is a retrieval bug, **not what I asked** is a router bug, and **I think this is covered** is usually a missing document. Only **hard to understand** trains the model. A pipeline that treated all four alike would teach it to answer confidently over bad retrieval, which is the failure the whole product is built against.
+
+The method, the internal data that would supplement it, the outcomes worth expecting and the ones that are not, and the current volume (113 turns, 2 rated) are in the README's [Fine tuning](../README.md#fine-tuning) section.
+
+Nothing is built. Answers come from retrieval and a prompt, and a rated-wrong answer's home today is the golden set that gates every release.
+
+## 5. Product
 
 - **Contextual follow-up suggestions** after an answer. Built and not shipped: measurement showed the prompt change moved faithfulness, so it waits for a way to add it without touching the answering prompt.
 - **The answer card** with the amount dominant. Same reason, recorded as D-069.
@@ -85,8 +95,16 @@ An emailed code proves control of an inbox. That is adequate for reads of synthe
 
 ---
 
-## 5. Accessibility
+## 6. Browser performance
+
+Measured, not assumed: [docs/performance.md](./performance.md). Three findings are open.
+
+- **481 KiB recoverable from three landing images**, which are full-size JPEGs scaled down by CSS. `hero-member.jpg` alone is the mobile LCP element at 3.0 s. The assistant route carries none of them.
+- **One layout shift on the assistant at mobile width**, CLS 0.101, just past the threshold that counts as good. The element is the page container settling as it mounts, not an image without dimensions.
+- **No meta description**, which is the entire SEO deduction on both routes and a one-line fix.
+
+## 7. Accessibility
 
 - **A keyboard and screen-reader pass over the login flow.** Static assertions cover target size, contrast, focus and the pasteable code field. None of that is the same as a person using it with a screen reader, and the login is the highest-friction surface in the product for a 65+ audience.
 - **Throttled real-device latency.** Current numbers are unthrottled desktop, which is not the network this audience is on.
-- **Spanish help-panel prose.** The panel chrome, answers, refusals and guardrails are all Spanish; the help panel's longer explanatory copy is not yet.
+- **The help panel's button descriptions in Spanish.** The panel chrome, answers, refusals, guardrails and the help panel's two lists are all Spanish. The four sentences explaining what each button does are still hard-coded English.

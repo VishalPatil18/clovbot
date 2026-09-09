@@ -13,7 +13,7 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
-| Status | **Complete.** Ten stages done, shipping as v1.2.0 |
+| Status | **Shipped as v1.2.0**, 2026-09-09. Ten stages done. |
 | Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
 | Last Updated | 2026-09-09 |
 | Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
