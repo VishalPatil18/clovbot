@@ -3926,6 +3926,46 @@ The two-line exemption exists because several comments mark traps that have alre
 
 ---
 
+## Decision D-105 - Validation stays hand-written, and the advisory gate blocks on critical only
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 10 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+A security review found five gaps. Two needed a decision rather than a fix: `CLAUDE.md` rule 5 requires Zod at every trust boundary and Zod is not installed, and four high-severity advisories are open with no fix available in any published version.
+
+### Options considered
+
+**Validation.** Adopt Zod everywhere the rule names; adopt it at the HTTP boundary only; centralise the existing narrowing into one module; or leave it scattered.
+
+**Advisories.** Block CI on high; block on critical and report high; drop the dependency; or add no audit step.
+
+### Decision
+
+Centralise the hand-written narrowing into `src/validate.ts` with its own tests, and record that Zod was not adopted. Run `npm audit` on every push, failing the build on **critical** and printing **high** as a warning, with each open advisory documented individually.
+
+### Why
+
+Zod would replace working, tested code to satisfy a contract rather than to close a risk. The model-output validator in `src/answer.ts` does something a schema alone does not: it accumulates *which* constraints a payload broke, and rejects a payload that both refuses and makes claims, which is a cross-field rule rather than a shape. The HTTP boundary genuinely was scattered, and consolidating it gets the real benefit — one place, one behaviour, one set of tests — without a dependency.
+
+Blocking on high would fail every build from today, because `@huggingface/transformers@4.2.0` is the latest version and `npm audit` reports `fixAvailable: false` on all four advisories. The predictable outcome is an `--omit` flag that hides them permanently. Blocking on critical means a red build is always actionable, and the highs stay visible in the log and in `docs/security.md` with the reason each path is unreachable: nothing in this application decodes an image or unpacks an archive.
+
+Dropping `@huggingface/transformers` would clear all four, and would remove the cross-encoder the confidence floor is calibrated against. That trades a documented, unreachable advisory for a measurable change in answer quality.
+
+### Consequences
+
+- `CLAUDE.md` rule 5's Zod clause is not satisfied by this project, deliberately and on the record.
+- The four advisories are accepted risk with a written reachability argument, re-checked when `@huggingface/transformers` publishes past 4.2.0 or at the next release.
+- The residual risk is the supply chain rather than these code paths: if the pinned model artefact were replaced upstream, the reachability argument stops holding. That is why the audit runs on every push rather than never.
+- `SECURITY.md` keeps a placeholder contact and a CSRF claim that is not accurate, at the user's direction. `docs/security.md` states the real position, so the two documents disagree.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

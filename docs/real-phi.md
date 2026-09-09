@@ -8,6 +8,8 @@
 
 ---
 
+> The posture that exists **today**, over synthetic data, is in [docs/security.md](./security.md). This document is the delta a real deployment would owe on top of it.
+
 ## 1. The boundary that already exists
 
 `docs/research-init.md` §2 draws the line this product is built on, and it is worth restating before the controls, because most of the HIPAA surface is avoided rather than mitigated.

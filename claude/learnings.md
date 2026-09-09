@@ -369,3 +369,17 @@ _<How this concept will apply to future work in this project.>_
 **Count before publishing a count.** The `chunks` table holds 3,345 rows, and only 2,737 belong to the current snapshot; the rest are an older ingest left unreachable. The number that was easy to reach was 22% wrong.
 
 **`--` is not always a comment.** The comment extractor treated CSS custom properties as SQL comments. It changed nothing in the end, but the first version of the gate was scanning `--color-forest-ink` as prose.
+
+## P3 Stage 10 - what the security review taught
+
+**Audit before speccing, again.** The request listed four areas as things to add. Three of them were already built and one was already built better than the request implied. The work that remained was five specific gaps, which is a different and much smaller job than "add security".
+
+**The prompt rule is the weakest anti-injection layer.** Fencing sources and telling the model they are data asks the model to police itself. What actually bounds an injection here is the answer contract: typed claims, citation containment, and the application rendering the prose. Writing the posture down forced that distinction into words, and the words are more useful than the rule.
+
+**A gate that can never pass gets ignored.** Four advisories with no fix in any published version would make `--audit-level=high` a permanently red build, and the fix people reach for is a flag that hides it. Blocking on critical and reporting high keeps a red build meaningful.
+
+**"No fix available" is not the end of the analysis.** The useful question is whether the vulnerable path is reachable. Neither an image decoder nor an archive extractor is on any path here, and writing that down per advisory is worth more than a version bump that does not exist.
+
+**Verify a CSP in a browser, not in a diff.** Reading the header back proves nothing about whether the page still works. Serving the built bundle under the policy and counting violations took ten minutes and is the only thing that could have caught a missing `blob:` for synthesised audio.
+
+**Deriving config beats configuring it.** The `Secure` cookie flag comes from `x-forwarded-proto`, so production sets it and local development does not, with no environment variable to set wrong and no way for the two to disagree.

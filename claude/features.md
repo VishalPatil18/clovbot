@@ -1895,3 +1895,55 @@ Unchanged.
 ### Verification
 
 The full suite is the behaviour proof: 857 tests pass, the same set as before the sweep plus the five the gate adds, and both typechecks and the web build are clean. Corpus figures were read from the snapshot manifest and the live database, which is what caught the two-snapshot chunk count.
+
+---
+
+## Feature: Security review and posture (P3 Stage 10)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-84 to FR-P3-91, NFR-P3-20, NFR-P3-21. **Decision:** D-105.
+
+### What was already there
+
+More than the request assumed. Body ceilings at every entry point, rate limits per session, per IP and per address, `HttpOnly`/`SameSite=Lax` cookies, parameterised queries throughout, row-level security with `FORCE` on a `NOBYPASSRLS` role, identifier redaction before the model call as well as the log write, scrypt-hashed one-time codes, an append-only audit log enforced by grant, a secret scan in CI, four security headers, and no `dangerouslySetInnerHTML` anywhere.
+
+### Interrogation summary
+
+Four forks went to the user; three took the recommendation.
+
+1. **Scope:** document, plus the small safe fixes. Anything larger comes back first.
+2. **Zod:** centralise the existing narrowing into one module, no dependency.
+3. **Advisories:** CI blocks on critical, reports high. A gate that can never pass gets ignored.
+4. **`SECURITY.md`:** **left alone** at the user's direction, against the recommendation. Its placeholder contact and inaccurate CSRF claim remain; `docs/security.md` states the real position.
+
+### UI
+
+None. No user-visible surface changed.
+
+### UX flow
+
+Unchanged, with one invisible difference: a malformed request body now returns 400 rather than reaching a handler that would default every field.
+
+### Frontend entities
+
+None.
+
+### Backend entities
+
+- `src/validate.ts`: `LIMITS` plus one parser per endpoint (`askRequest`, `callbackRequest`, `loginRequest`, `loginVerify`, `feedbackRequest`, `speakRequest`). Returns `null` for a body that is not a JSON object; coerces every field otherwise.
+- `cookieFlags(req)` and `overHttps(req)` in `src/server.ts`: `Secure` derived from `x-forwarded-proto`.
+- `feedbackRequest` takes the allowed reasons as an argument, so the wire values keep one home and the module stays free of the database layer.
+
+### DB schema
+
+Unchanged.
+
+### Tech specs
+
+- **Validation:** one hand-written module. Rejected: Zod, which `CLAUDE.md` names but which would replace a validator that accumulates failure reasons and rejects a payload that both refuses and makes claims; and per-handler narrowing, which is what was there.
+- **CSP:** a header in `vercel.json`. Rejected: a meta tag, which cannot express `frame-ancestors`.
+- **Advisory gate:** `npm audit` in the existing CI job. Rejected: a scheduled scan, which reports after a merge rather than before; and Dependabot, which opens pull requests for advisories that have no fix.
+- **Deployment target:** unchanged.
+
+### Verification
+
+27 unit tests over the validation module: malformed bodies, wrong types, prototype-shaped objects, enumerated fields and every ceiling. Static assertions over the cookie helper, the CSP directives and the CI audit step. The CSP verified by serving the built bundle under it in Chromium and checking for violations and page errors: zero, with the panel opened. Advisory reachability checked by grepping the source for image and archive decoding: none.

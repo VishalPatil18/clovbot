@@ -29,7 +29,7 @@ describe("callback request [FR-22]", () => {
 
   it("redacts the stored text [FR-31]", () => {
     expect(server).toMatch(/question: redactIdentifiers\(question\)/);
-    expect(server).toMatch(/redactIdentifiers\(parsed\["note"\]/);
+    expect(server).toMatch(/redactIdentifiers\(request\.note\)/);
   });
 
   it("says plainly that nothing is sent anywhere [D-026]", () => {

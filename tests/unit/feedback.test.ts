@@ -34,8 +34,11 @@ describe("the reason is one of four, never free text [FR-P3-65]", () => {
   });
 
   // The endpoint is the surface an attacker or a bug would reach first.
+  // The filter moved into the shared validator; the endpoint hands it the list.
   it("drops anything the endpoint is sent that is not one of the four", () => {
-    expect(server).toMatch(/FEEDBACK_REASONS\.find\(\(allowed\) => allowed === parsed\.reason\) \?\? null/);
+    expect(server).toMatch(/feedbackRequest\(body, FEEDBACK_REASONS\)/);
+    const validate = readFileSync("src/validate.ts", "utf8");
+    expect(validate).toMatch(/allowed\.find\(\(candidate\) => candidate === fields\["reason"\]\) \?\? null/);
   });
 
   it("offers no text input anywhere in the feedback surface", () => {

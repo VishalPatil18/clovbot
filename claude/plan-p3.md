@@ -13,7 +13,7 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
-| Status | **Complete.** Nine stages done, shipping as v1.2.0 |
+| Status | **Complete.** Ten stages done, shipping as v1.2.0 |
 | Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
 | Last Updated | 2026-09-09 |
 | Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
@@ -234,6 +234,27 @@
 
 ---
 
+## Stage 10 - Security review and posture
+
+- **Goal:** Audit what is actually enforced, fix what is small and safe, and write the posture down including its gaps.
+- **Context:** Added 2026-09-09. The controls were strong and scattered: body ceilings, rate limits, row-level security, redaction, scrypt OTPs, an append-only audit log and a secret scan all existed, but nothing stated the posture in one place, and an audit found five real gaps.
+- **Scope in:** One request-validation module replacing narrowing scattered across handlers; `Secure` on both cookies, derived from the forwarded protocol; a Content-Security-Policy on the served page; a dependency audit in CI that blocks on critical and reports high; `docs/security.md` covering input validation, prompt injection, monitoring, dependency posture and what is not protected.
+- **Scope out:** Zod, which `CLAUDE.md` names but which would replace working, tested validation with a dependency. `SECURITY.md`, left as the user chose. Dropping the local reranker to clear four unfixable advisories, which would remove the cross-encoder the confidence floor is calibrated against.
+- **Acceptance criteria:**
+  - [x] One module validates every request body; handlers call it rather than narrowing inline.
+  - [x] Oversized bodies are destroyed before a handler runs.
+  - [x] Both cookies carry `Secure` over HTTPS and not on a plaintext local port.
+  - [x] The page carries a Content-Security-Policy and still works under it, verified in a browser.
+  - [x] CI fails on a critical advisory and prints highs.
+  - [x] Four unfixable advisories are documented with the reason each vulnerable path is unreachable.
+  - [x] The security document states what is not protected.
+- **Test plan:** Unit tests over the validation module for every field, type and ceiling. Static assertions over the cookie flags, the CSP and the CI audit step. The built page loaded in a real browser under the CSP, checking for violations rather than reading the header.
+- **Effort:** M
+- **Exit signal:** A reader can learn what this product defends against, what it does not, and which dependency advisories are open and why, from one page.
+- **Status:** [x] done, 2026-09-09.
+
+---
+
 ## Completion Checklist
 
 - [x] Stage 1 - Row-level security
@@ -245,6 +266,7 @@
 - [x] Stage 7 - Feedback that goes somewhere
 - [x] Stage 8 - A transcript the member can keep
 - [x] Stage 9 - Comments that earn their place, and a documented corpus
+- [x] Stage 10 - Security review and posture
 
 ---
 

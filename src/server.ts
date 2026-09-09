@@ -41,6 +41,15 @@ import { shouldPresentCallbackForm } from "./session.ts";
 import { readAudio, writeAudio } from "./cache.ts";
 import { degradeNotice } from "./voice/chain.ts";
 import { speak, transcribe } from "./voice/providers.ts";
+import {
+  LIMITS,
+  askRequest,
+  callbackRequest,
+  feedbackRequest,
+  loginRequest,
+  loginVerify,
+  speakRequest,
+} from "./validate.ts";
 
 const PORT = Number(process.env["PORT"] ?? "5174");
 const PLAN_YEAR = CORPUS_SCOPE.planYear;
@@ -63,9 +72,6 @@ function firstIndexedPlan(): PlanRef {
 }
 
 
-const MAX_QUESTION = 500;
-const MAX_NOTE = 1_000;
-
 /** Generous enough for a demo, low enough to bound cost. */
 const SESSION_LIMIT = 20;
 const SESSION_WINDOW = "1 hour";
@@ -77,15 +83,25 @@ const SESSION_COOKIE = "clovbot_sid";
 const MEMBER_COOKIE = "clovbot_member";
 
 /** Opaque and server-issued. Carries no member identity. */
+/**
+ * Derived from the forwarded protocol rather than configured: Vercel and Cloud
+ * Run both set it, and a plaintext local port correctly gets no Secure flag.
+ */
+const overHttps = (req: IncomingMessage): boolean => {
+  const forwarded = req.headers["x-forwarded-proto"];
+  const header = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return (header ?? "").split(",")[0]?.trim() === "https";
+};
+
+const cookieFlags = (req: IncomingMessage): string =>
+  `Path=/; HttpOnly; SameSite=Lax${overHttps(req) ? "; Secure" : ""}`;
+
 function sessionId(req: IncomingMessage, res: ServerResponse): string {
   const existing = /clovbot_sid=([0-9a-f-]{36})/.exec(req.headers.cookie ?? "")?.[1];
   if (existing !== undefined) return existing;
 
   const created = randomUUID();
-  res.setHeader(
-    "set-cookie",
-    `${SESSION_COOKIE}=${created}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
-  );
+  res.setHeader("set-cookie", `${SESSION_COOKIE}=${created}; ${cookieFlags(req)}; Max-Age=86400`);
   return created;
 }
 
@@ -102,10 +118,15 @@ const send = (res: ServerResponse, event: unknown): void => {
 const memberCookie = (req: IncomingMessage): string | null =>
   new RegExp(`${MEMBER_COOKIE}=([0-9a-f-]{36})`).exec(req.headers.cookie ?? "")?.[1] ?? null;
 
-const setMemberCookie = (res: ServerResponse, value: string, maxAge: number): void => {
+const setMemberCookie = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  value: string,
+  maxAge: number,
+): void => {
   res.setHeader(
     "set-cookie",
-    `${MEMBER_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${String(maxAge)}`,
+    `${MEMBER_COOKIE}=${value}; ${cookieFlags(req)}; Max-Age=${String(maxAge)}`,
   );
 };
 
@@ -125,14 +146,12 @@ const MEMBER_COOKIE_MAX_AGE = 8 * 60 * 60;
 const CODE_SENT = { sent: true } as const;
 
 async function handleLoginRequest(body: string, res: ServerResponse, ip: string): Promise<void> {
-  let email = "";
-  try {
-    const parsed = JSON.parse(body) as { email?: unknown };
-    email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 254) : "";
-  } catch {
+  const request = loginRequest(body);
+  if (request === null) {
     json(res, 400, { error: "malformed request" });
     return;
   }
+  const { email } = request;
   if (email.length === 0) {
     json(res, 400, { error: "email is required" });
     return;
@@ -163,17 +182,17 @@ async function handleLoginRequest(body: string, res: ServerResponse, ip: string)
   }
 }
 
-async function handleLoginVerify(body: string, res: ServerResponse): Promise<void> {
-  let email = "";
-  let code = "";
-  try {
-    const parsed = JSON.parse(body) as { email?: unknown; code?: unknown };
-    email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 254) : "";
-    code = typeof parsed.code === "string" ? parsed.code.slice(0, 32) : "";
-  } catch {
+async function handleLoginVerify(
+  body: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const request = loginVerify(body);
+  if (request === null) {
     json(res, 400, { error: "malformed request" });
     return;
   }
+  const { email, code } = request;
 
   const client = connect();
   await client.connect();
@@ -184,7 +203,7 @@ async function handleLoginVerify(body: string, res: ServerResponse): Promise<voi
       return;
     }
     const sessionId = await startSession(client, memberId);
-    setMemberCookie(res, sessionId, MEMBER_COOKIE_MAX_AGE);
+    setMemberCookie(req, res, sessionId, MEMBER_COOKIE_MAX_AGE);
     const { session } = await currentSession(client, sessionId, new Date());
     json(res, 200, { signedInAs: session?.displayName ?? null });
   } finally {
@@ -218,7 +237,7 @@ async function handleLogout(req: IncomingMessage, res: ServerResponse): Promise<
       await client.end();
     }
   }
-  setMemberCookie(res, "", 0);
+  setMemberCookie(req, res, "", 0);
   json(res, 200, { signedOut: true });
 }
 
@@ -260,7 +279,7 @@ const server = createServer((req, res) => {
   }
 
   if (req.method === "POST" && req.url === "/api/login/verify") {
-    collect(req, (body) => void handleLoginVerify(body, res));
+    collect(req, (body) => void handleLoginVerify(body, req, res));
     return;
   }
 
@@ -304,12 +323,10 @@ function collect(req: IncomingMessage, done: (body: string) => void): void {
   let body = "";
   req.on("data", (chunk: Buffer) => {
     body += chunk.toString("utf8");
-    if (body.length > 200_000) req.destroy();
+    if (body.length > LIMITS.body) req.destroy();
   });
   req.on("end", () => done(body));
 }
-
-const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 
 function collectBinary(
   req: IncomingMessage,
@@ -319,7 +336,7 @@ function collectBinary(
   let size = 0;
   req.on("data", (chunk: Buffer) => {
     size += chunk.byteLength;
-    if (size > MAX_AUDIO_BYTES) {
+    if (size > LIMITS.audioBytes) {
       req.destroy();
       return;
     }
@@ -332,24 +349,14 @@ function collectBinary(
 
 /** Logged against the turn it answers. */
 async function handleFeedback(body: string, res: ServerResponse): Promise<void> {
-  let turnId = "";
-  let resolved: boolean | null = null;
-  let reason: FeedbackReason | null = null;
-  try {
-    const parsed = JSON.parse(body) as {
-      turnId?: unknown;
-      resolved?: unknown;
-      reason?: unknown;
-    };
-    turnId = typeof parsed.turnId === "string" ? parsed.turnId : "";
-    resolved = typeof parsed.resolved === "boolean" ? parsed.resolved : null;
-    // Dropped rather than stored, so this cannot become a free-text channel.
-    reason = FEEDBACK_REASONS.find((allowed) => allowed === parsed.reason) ?? null;
-  } catch {
+  // Anything outside the four is dropped, so this cannot become a free-text channel.
+  const request = feedbackRequest(body, FEEDBACK_REASONS);
+  if (request === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
     return;
   }
+  const { turnId, resolved, reason } = request;
   if (turnId.length === 0 || resolved === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "turnId and resolved are required" }));
@@ -372,17 +379,13 @@ async function handleFeedback(body: string, res: ServerResponse): Promise<void> 
 
 /** Runs here so the provider keys stay off the page. */
 async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
-  let text = "";
-  let speech: Speech = "en";
-  try {
-    const parsed = JSON.parse(body) as { text?: unknown; language?: unknown };
-    text = typeof parsed.text === "string" ? parsed.text.slice(0, 5_000).trim() : "";
-    speech = parsed.language === "es" ? "es" : "en";
-  } catch {
+  const request = speakRequest(body);
+  if (request === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
     return;
   }
+  const { text, language: speech } = request;
   if (text.length === 0) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "nothing to read aloud" }));
@@ -479,16 +482,13 @@ async function handleCallback(
   res: ServerResponse,
   session: string,
 ): Promise<void> {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(body) as Record<string, unknown>;
-  } catch {
+  const request = callbackRequest(body);
+  if (request === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
     return;
   }
-
-  const question = typeof parsed["question"] === "string" ? parsed["question"].slice(0, MAX_QUESTION) : "";
+  const { question } = request;
   if (question.trim().length === 0) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "A question is required so a person knows what to call about." }));
@@ -501,12 +501,10 @@ async function handleCallback(
     const id = await writeCallback(client, {
       // Persisted, so it is redacted like everything else.
       question: redactIdentifiers(question),
-      planContext: typeof parsed["planContext"] === "string" ? parsed["planContext"] : null,
-      documentsSearched: Array.isArray(parsed["documentsSearched"])
-        ? parsed["documentsSearched"].filter((entry): entry is string => typeof entry === "string")
-        : [],
-      refusalTrigger: typeof parsed["refusalTrigger"] === "string" ? parsed["refusalTrigger"] : null,
-      note: typeof parsed["note"] === "string" ? redactIdentifiers(parsed["note"].slice(0, MAX_NOTE)) : null,
+      planContext: request.planContext,
+      documentsSearched: request.documentsSearched,
+      refusalTrigger: request.refusalTrigger,
+      note: request.note === null ? null : redactIdentifiers(request.note),
       sessionId: session,
     });
     res.writeHead(200, { "content-type": "application/json" });
@@ -532,26 +530,13 @@ async function handleAsk(
   /** Resolved to a session row, never trusted as an id. */
   memberToken: string | null,
 ): Promise<void> {
-  let question = "";
-  let planId: string | null = null;
-  let contractId: string | null = null;
-  let language: Speech = "en";
-  try {
-    const parsed = JSON.parse(body) as {
-      question?: unknown;
-      planId?: unknown;
-      contractId?: unknown;
-      language?: unknown;
-    };
-    language = parsed.language === "es" ? "es" : "en";
-    question = typeof parsed.question === "string" ? parsed.question.slice(0, MAX_QUESTION).trim() : "";
-    planId = typeof parsed.planId === "string" ? parsed.planId : null;
-    contractId = typeof parsed.contractId === "string" ? parsed.contractId : null;
-  } catch {
+  const request = askRequest(body);
+  if (request === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
     return;
   }
+  const { question, planId, contractId, language } = request;
 
   if (question.length === 0) {
     res.writeHead(400, { "content-type": "application/json" });

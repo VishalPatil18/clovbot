@@ -270,6 +270,19 @@ gcloud iam service-accounts keys create key.json \
 Paste `key.json` into the `GCP_SA_KEY` secret, then **delete the local file**:
 it is a credential and `.gitignore` will not save you if you move it.
 
+### Security checks before a deploy
+
+```bash
+npm audit --audit-level=critical   # what CI gates on
+npm run check:rls                  # no member's rows reachable from another's session
+npm run check:audit                # every authenticated read recorded, and unalterable
+```
+
+Four high-severity advisories are open and have no fix available, all through the
+local reranker. They are documented individually with reachability reasoning in
+[docs/security.md](./security.md) §6, and CI reports rather than blocks on them so
+the pipeline fails only on something actionable.
+
 ### Operating it
 
 ```bash

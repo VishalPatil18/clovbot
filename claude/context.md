@@ -867,3 +867,23 @@ Two more were the same shape: `.assistant--page > .assistant__foot` out-specifie
 **The corpus documentation is measured, not recalled.** Counting exposed that `chunks` holds 3,345 rows across two snapshots, of which 2,737 belong to the current one. Publishing the larger number would have overstated the corpus by 22%.
 
 **Next:** cut v1.2.0.
+
+## 2026-09-09 - P3 Stage 10: security review and posture
+
+**Did:** audited what is actually enforced, fixed four things the audit found, and wrote the posture down including its gaps. 891 tests pass.
+
+**Files:** added `src/validate.ts`, `tests/unit/validate.test.ts` and `docs/security.md`. Changed `src/server.ts`, `vercel.json`, `.github/workflows/ci.yml`, three tests, README, architecture, the runbook, real-phi, the SRS to v1.6.0, plan-p3, D-105 and the changelog.
+
+**The controls were strong and undocumented.** Body ceilings on every entry point, rate limits at three levels, row-level security with FORCE on a NOBYPASSRLS role, redaction before both the model call and the log write, scrypt OTPs, an append-only audit log enforced by grant, and a secret scan in CI all existed. Nothing stated the posture in one place.
+
+**The prompt-injection answer was already structural, and now says so.** The prompt sentence fencing sources as data is the weakest layer. The control is the answer contract: typed claims carrying citation ids, citation containment rejecting any id not retrieved that turn, and the application rendering the prose. The ceiling on a successful injection is a refusal or a claim cited to a document that was actually retrieved.
+
+**Five gaps found, four fixed.** Validation was scattered across handlers and is now one module with 27 tests. Cookies had no `Secure` flag and now derive it from `x-forwarded-proto`, so production sets it and a local plaintext port does not, with nothing to configure. There was no Content-Security-Policy and now there is, verified by loading the built page in a real browser under it rather than by reading the header. There was no `npm audit` in CI at all.
+
+**Four high-severity CVEs are open and unfixable.** All reach through `@huggingface/transformers@4.2.0`, which is the latest published version, with `fixAvailable: false` on every one: `sharp`/libvips CVE-2026-33327 and -33328, and `adm-zip` via `onnxruntime-node`. Nothing in this application decodes an image or unpacks an archive, so the paths are unreachable; that argument is written down per advisory with a re-check trigger. CI blocks on critical and warns on high, because a gate that can never pass gets ignored.
+
+**Zod was not adopted**, though `CLAUDE.md` names it. The model-output validator accumulates why a payload failed and rejects one that both refuses and makes claims, which a schema alone does not; replacing working tested code with a dependency for contract compliance is the wrong trade. Recorded in D-105.
+
+**`SECURITY.md` left alone at the user's direction.** It still carries a placeholder contact and claims CSRF protection where the actual control is `SameSite=Lax` with no token. `docs/security.md` states that accurately.
+
+**Next:** cut v1.2.0.

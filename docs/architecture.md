@@ -192,6 +192,19 @@ Synthesised audio is cached by text and voice id, so a repeated answer is never 
 
 ---
 
+## Security
+
+The structural answer to prompt injection is the answer contract itself: the model
+returns typed claims carrying citation ids, the application validates them and
+rejects any id not retrieved that turn, and the application renders the prose. The
+prompt sentence fencing sources as data is a helpful layer on top, not the control.
+Guardrails and the sign-in gate are deterministic rules evaluated **before**
+retrieval, so a guarded question never reaches a model at all.
+
+Request bodies cross one validation module with a ceiling on every field. Member
+scoping is enforced by row-level security rather than by the query. Full posture,
+including what is not protected: **[docs/security.md](./security.md)**.
+
 ## What is deliberately not here
 
 - **No backend framework.** A dozen routes and one SSE stream.

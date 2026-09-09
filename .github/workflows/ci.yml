@@ -18,6 +18,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # A critical advisory fails the build. Highs are printed and tracked in
+      # docs/security.md, because a gate that can never pass gets ignored.
+      - name: Dependency advisories
+        run: |
+          npm audit --audit-level=critical
+          npm audit --audit-level=high || echo "::warning::high-severity advisories open; see docs/security.md"
 
   # Slower, real model and database calls. Gated on secrets being present, so a
   # fork without them reports skipped rather than a misleading pass.

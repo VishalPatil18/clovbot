@@ -426,6 +426,7 @@ Before opening a PR, read **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
 | --- | --- |
 | [Architecture](./docs/architecture.md) | The long-form walk through retrieval, the answer contract and the data model |
 | [Where the data came from](./docs/corpus.md) | Scope, discovery, fetching, conversion, chunking and what reached the index, measured |
+| [Security posture](./docs/security.md) | Input validation, prompt injection, access, monitoring, dependencies, and what is not protected |
 | [Deployment](./docs/deployment.md) | Migrations, secrets, Cloud Run and Vercel, in order |
 | [Guardrails and evaluation](./docs/guardrails-and-evaluation.md) | Every refusal category, the golden set, the gates |
 | [Future work](./docs/future-work.md) | What is next, and what it would cost |
@@ -475,9 +476,45 @@ PRs welcome. Start with [CONTRIBUTING.md](./CONTRIBUTING.md). The workflow is st
 
 ## Security
 
-Do not open a public issue for a vulnerability. See [SECURITY.md](./SECURITY.md).
+Every member record in this repository is synthetic, enforced by a database
+constraint rather than a convention. Real addresses used for the sign-in
+demonstration live in the environment and are never committed.
 
-Every member record in this repository is synthetic. Real addresses used for the sign-in demonstration live in the environment and are never committed.
+**Input.** Every request body crosses one validation module. Nothing throws on
+bad input; a wrong type becomes a safe default and a body that is not a JSON
+object is a 400 before a handler runs. Every entry point has a ceiling (200 KB
+body, 8 MB audio, 500-character question) and an oversized request is destroyed
+while being read. Every query is parameterised, and there is no
+`dangerouslySetInnerHTML` anywhere.
+
+**Prompt injection.** The prompt rule that fences sources as data is the weakest
+layer, and is not what this relies on. The model returns typed claims carrying
+citation ids; the application validates them, rejects any id that was not
+retrieved on that turn, and renders the prose itself. An injected instruction
+cannot produce an uncited claim, cannot cite a chunk that was not in context, and
+cannot emit markup. Guardrails and the sign-in gate are deterministic rules that
+run **before** retrieval, so a guarded question never reaches the model.
+
+**Access.** One-time codes stored as scrypt hashes and never in plaintext,
+`HttpOnly`/`SameSite=Lax` cookies with `Secure` over HTTPS, rate limits per
+session, per IP and per address, and member scoping enforced by row-level
+security on a `NOBYPASSRLS` role. `npm run check:rls` proves it with the
+application bypassed, in CI.
+
+**Monitoring.** Every turn and every authenticated read is recorded, with field
+names and never values; the audit log is append-only by grant. What does not
+exist is alerting, a dashboard or anomaly detection: the data is recorded, and
+nothing watches it.
+
+**Dependencies.** `npm audit` runs on every push. A critical advisory fails the
+build; highs are reported and tracked. Four are open today, all through the local
+reranker, all without an available fix, each documented with why its path is
+unreachable here.
+
+Full posture, including what is **not** protected:
+**[docs/security.md](./docs/security.md)**.
+
+Do not open a public issue for a vulnerability. See [SECURITY.md](./SECURITY.md).
 
 ## License
 
