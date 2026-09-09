@@ -17,6 +17,8 @@ const STRINGS = {
     "Ask about costs, drugs, providers or appeals",
     "Pregunte sobre costos, medicamentos, proveedores o apelaciones",
   ],
+  // The long one wraps to two lines in a 48px field on a phone and clips.
+  askPlaceholderShort: ["Ask about your plan", "Pregunte sobre su plan"],
   copy: ["Copy", "Copiar"],
   sourcesTitle: ["Where this comes from", "De dónde viene esto"],
   // Was "it holds no member data", which stopped being true when sign-in
@@ -42,10 +44,18 @@ const STRINGS = {
   whatYouCanAsk: ["What you can ask", "Lo que puede preguntar"],
   whatItCannotDo: ["What it cannot do", "Lo que no puede hacer"],
   theButtons: ["The buttons", "Los botones"],
+  closeHelp: ["Close help", "Cerrar la ayuda"],
+  playAgain: ["Play the answer again", "Reproducir la respuesta otra vez"],
+  pauseAnswer: ["Pause", "Pausar"],
+  resumeAnswer: ["Resume", "Continuar"],
   openFullPage: ["Open full page", "Abrir a pantalla completa"],
   closeAssistant: ["Close the assistant", "Cerrar el asistente"],
   switchToVoice: ["Switch to voice", "Cambiar a voz"],
   switchToText: ["Switch to text", "Cambiar a texto"],
+  // Beside Back in a 393px bar, the long forms do not fit and the bar becomes
+  // the page's width floor. The icon carries the rest of the meaning.
+  switchToVoiceShort: ["Voice", "Voz"],
+  switchToTextShort: ["Text", "Texto"],
   workingOnIt: ["Working on it", "Trabajando en ello"],
   readingAloud: ["Reading this answer aloud", "Leyendo esta respuesta en voz alta"],
   signInAndAnswer: ["Sign in and answer this", "Inicie sesión y responda esto"],

@@ -10,10 +10,14 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 - **Ask in Spanish and get a Spanish answer**, from Clover's own Spanish plan documents rather than a translation, cited to the Spanish document you can go and read. The assistant notices you have written Spanish and follows, and a language button beside the microphone switches it back at any time. Answers are read aloud in a Spanish voice, and the buttons, help and refusals are Spanish too.
 - The drug list is published only in English, so a Spanish answer about a medication says so and points at the English list rather than refusing.
+- **The assistant works on a phone.** It opens as the full screen rather than a floating panel, the menu stacks into one row per item with nothing hidden behind a button, and the microphone in voice mode is centred and full size. Nothing is cut off at the edge of the screen any more, and the conversation itself now takes about half the screen instead of a third.
 
 ### Changed
 
-- _<changed behaviour>_
+- **A spoken answer can be paused and picked up where it left off.** The Stop button is gone: it threw away your place, and playing again from the start was already a button of its own. Controls that are unavailable now look unavailable instead of doing nothing when pressed.
+- The assistant panel on a desktop was quietly cutting off the right-hand edge of its own contents at narrower window sizes. It now fits whatever width it is given.
+- On the full page, the tools down the left are now one consistent column in a deliberate order, and they highlight when you point at them rather than staying lit after a click. Back reads as a way out rather than a seventh button.
+- Tidier throughout after a pass on a real phone: the controls sit on the same line as the title and against the right edge, the help panel closes with its own X, the suggested questions always form an even grid, and on a phone the voice, language and help controls move up beside the Back button so the conversation gets the room instead.
 
 ### Fixed
 

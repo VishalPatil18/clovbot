@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { IoArrowBack, IoCall, IoChatbubbleEllipses, IoClose } from "react-icons/io5";
 import { Assistant, MEMBER_SERVICES_DISPLAY as MEMBER_SERVICES } from "./components/Assistant.tsx";
+import { useIsPhone } from "./viewport.ts";
 import { Landing } from "./components/Landing.tsx";
 
 type Route = "home" | "assistant";
@@ -11,6 +12,19 @@ const readRoute = (): Route => (window.location.pathname === "/assistant" ? "ass
 export function App(): React.JSX.Element {
   const [route, setRoute] = useState<Route>(readRoute);
   const [panelOpen, setPanelOpen] = useState(false);
+  const isPhone = useIsPhone();
+
+  /*
+   * On a phone the assistant is the full page and nothing else. Opening the
+   * panel navigates instead, and a panel left open when the window narrows
+   * becomes the page rather than a clipped overlay. D-097.
+   */
+  useEffect(() => {
+    if (isPhone && panelOpen) {
+      setPanelOpen(false);
+      go("assistant");
+    }
+  }, [isPhone, panelOpen]);
   const launcher = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   // Held above the panel so a close never discards a half-typed question. D-076.
@@ -73,8 +87,13 @@ export function App(): React.JSX.Element {
    * locking body alone leaves the page scrolling behind the backdrop.
    * Released on unmount, or the page stays frozen after a close.
    */
+  /*
+   * The full-page route is a fixed-height flex shell, so nothing should scroll
+   * outside it. On a phone `100vh` counts the browser chrome that `100dvh` does
+   * not, and the difference showed up as a screen of white below the composer.
+   */
   useEffect(() => {
-    if (!panelOpen) return;
+    if (!panelOpen && route !== "assistant") return;
     const root = document.documentElement;
     const previous = { root: root.style.overflow, body: document.body.style.overflow };
     root.style.overflow = "hidden";
@@ -83,7 +102,7 @@ export function App(): React.JSX.Element {
       root.style.overflow = previous.root;
       document.body.style.overflow = previous.body;
     };
-  }, [panelOpen]);
+  }, [panelOpen, route]);
 
   useEffect(() => {
     if (panelOpen) panel.current?.focus();
@@ -129,7 +148,7 @@ export function App(): React.JSX.Element {
 
   return (
     <>
-      <Landing onAsk={() => setPanelOpen(true)} />
+      <Landing onAsk={() => (isPhone ? go("assistant") : setPanelOpen(true))} />
 
       {/* FR-12: launcher bottom right; panel 40% of viewport, full width on mobile. */}
       <button

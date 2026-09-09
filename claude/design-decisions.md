@@ -3586,6 +3586,122 @@ The lexical half matters more than expected. Spanish text under the English text
 
 ---
 
+## Decision D-097 - On a phone the assistant is the whole page, and the panel is not offered
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 5 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The product had two responsive rules and had never been rendered at a phone size. At 393x852 the assistant laid out 726px of content inside a 393px frame. It did not scroll sideways, because `html, body { overflow-x: hidden }` clipped it, which is worse: the Ask button was simply unreachable.
+
+### Options considered
+
+1. Below the breakpoint, switch the component to the full-page route. The launcher navigates rather than opening an overlay.
+2. Keep the panel and size it to the viewport with CSS alone.
+3. A phone-specific component.
+
+### Decision
+
+Option 1, with the breakpoint as a single constant shared by the CSS and the code that reads it.
+
+### Rationale
+
+Option 2 leaves the panel's own chrome in place: an expand control with nothing to expand to, a close control that returns to a page the member never chose to leave, and no home for the rail's human-contact card. It is a panel pretending to be a page.
+
+Option 3 doubles the surface for a layout difference, and the two would drift.
+
+The breakpoint being one constant matters more than it sounds. A CSS breakpoint and a JavaScript `matchMedia` string that disagree by a pixel produce a state where the layout is the page and the component thinks it is a panel, which is not a bug anyone finds by reading.
+
+### Consequences
+
+- A panel left open while the window narrows converts to the page, rather than becoming a clipped overlay.
+- The rail's controls move into the header by passing no rail id, reusing the branch the panel already had. No new rendering path.
+- The rail's human card is dropped on a phone rather than relocated, because "Talk to a person" is already the first chip above the composer and on screen at all times. Repeating it would cost a screen of height to say the same thing twice.
+
+---
+
+## Decision D-098 - The width floor was fixed at every viewport, not behind the phone breakpoint
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 5 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The cause of the phone overflow was one rule: `.assistant__bar` was `flex-wrap: nowrap`, so its min-content width - the title plus every control - became a floor that propagated up the flex and grid tree. A flex item's default `min-width` is `auto`, so nothing below it could shrink.
+
+Measuring the desktop panel afterwards found the same floor: 726px of content in a 576px frame at 1440, 512px at 1280, 410px at 1024.
+
+### Options considered
+
+1. Clear the floor unconditionally, at every width.
+2. Clear it inside the phone media query, where it was found.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 would have left the desktop panel clipping its own content, which it had been doing since it was built. The bug was never a phone bug; the phone is only where it became impossible to miss.
+
+Putting the fix behind a breakpoint would also have encoded a false claim about where the problem lives, which the next person to read the stylesheet would have believed.
+
+### Consequences
+
+- The desktop panel gained back roughly 150px of usable width at 1440, and more at narrower windows.
+- A comment beside the rule states that it is not a phone bug, because the surrounding media queries invite exactly that assumption.
+- The screenshot harness now renders a desktop viewport as well, so the same class of regression is caught above the breakpoint too.
+
+---
+
+## Decision D-099 - Playback is pause and resume, and Stop is gone
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 5, device pass |
+| Status | accepted |
+| Supersedes | the playback half of D-045 |
+
+### Context
+
+The spoken answer had two controls: "Play the answer again" and "Stop". Stop was disabled when nothing was playing and looked identical to an enabled button, so it read as broken rather than unavailable. Stop also discarded the position, so a member who silenced it mid-sentence had to hear the whole answer again.
+
+### Options considered
+
+1. Keep both buttons and their positions; the second becomes Pause, and Resume while paused. Disabled only when there is nothing to pause or resume.
+2. One control that cycles Play, Pause and Resume.
+3. Keep Stop, and only fix its disabled appearance.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 3 leaves the real problem: Stop's only behaviour beyond pausing was resetting the position, which the button beside it already does. It was a second control for a job already covered.
+
+Option 2 is the cheaper design and the worse one here. A single button that relabels itself under a finger asks the member to track state before they act, and this audience is the reason the product avoids that everywhere else. Two buttons in fixed positions with fixed jobs cost one more control and no thought.
+
+Both audio tiers support this natively: `HTMLAudioElement.pause()` and `speechSynthesis.pause()`. No new dependency and no state machine of our own.
+
+### Consequences
+
+- A paused answer keeps its place, which is what a member reaching for silence actually wants.
+- The recorded tier's `pause` listener had to go: it could not tell a member pausing from playback ending, and with a resume path those are different states.
+- Disabled controls are now visibly disabled everywhere, with `cursor: not-allowed`. The pause button spends most of its life unavailable and was the surface that made this obvious.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

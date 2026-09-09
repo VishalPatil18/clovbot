@@ -1,6 +1,6 @@
 # Software Requirements Specification - P3 (v1.2)
 
-> **Scope of this document is `docs/ideas.md` §7 (P3-01, P3-02) plus the Spanish tier, built as the four stages of `claude/plan-p3.md`.** It is a companion to `claude/srs.md` and `claude/srs-p2.md`, not a replacement. Both predecessors stay frozen as the requirements their releases were built against (D-050).
+> **Scope of this document is `docs/ideas.md` §7 (P3-01, P3-02), the Spanish tier and the mobile layout, built as the five stages of `claude/plan-p3.md`.** It is a companion to `claude/srs.md` and `claude/srs-p2.md`, not a replacement. Both predecessors stay frozen as the requirements their releases were built against (D-050).
 >
 > Requirement ids are namespaced `FR-P3-NN` and `NFR-P3-NN` and do not collide with P1's `FR-NN` or P2's `FR-P2-NN`. Where an earlier requirement still binds, it is cited by its own id.
 >
@@ -9,12 +9,13 @@
 | Field | Value |
 | --- | --- |
 | Project | Clover Member Assistant |
-| Version | 1.0.0 |
+| Version | 1.1.0 |
 | Status | Frozen |
 | Last Updated | 2026-09-09 |
-| Covers | `claude/plan-p3.md` stages 1-4, shipping as v1.2.0 |
+| Covers | `claude/plan-p3.md` stages 1-5, shipping as v1.2.0 |
 | Sources | `docs/ideas.md` §7 P3-01 and P3-02, `claude/plan-p3.md`, `claude/srs.md` v1.1.0, `claude/srs-p2.md` v1.0.1, `docs/research-init.md`, D-047, D-080, D-085 |
 | Predecessor | `claude/srs-p2.md` v1.0.1 (P2, frozen) |
+| Amendments | 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14 |
 
 ---
 
@@ -31,6 +32,8 @@ P3 closes it three ways and then adds a fourth thing that is not security at all
 **Stage 2** makes each authenticated answer accountable and narrows what it reads. Today, being signed in is by itself enough to read the whole record: the router adds the member path on identity alone, and `loadMemberRecord` runs `select *` across five tables. A signed-in member asking a specialist copay has their claims, prior authorisations and appointments read to answer it. After Stage 2, the rule that decides whether a member must sign in also decides what is read, and every read is recorded.
 
 **Stage 3** writes down what changes when the records stop being synthetic. It builds nothing.
+
+**Stage 5** makes every surface work on a phone. It was added on 2026-09-09, after measurement found the assistant rendering 726 pixels of content inside a 393 pixel frame, clipped rather than scrollable because `html, body { overflow-x: hidden }` hid the evidence. The same floor clipped the desktop panel at 1440.
 
 **Stage 4** answers a Spanish-speaking member in Spanish from Spanish source documents. Clover publishes a Spanish Evidence of Coverage, Summary of Benefits and Annual Notice of Change for all three indexed plans, confirmed present in the catalog. They are not ingested, and `FR-24` currently refuses in English.
 
@@ -132,6 +135,19 @@ No existing job is removed. One is narrowed on purpose: a signed-in member askin
 | FR-P3-42 | `FR-24` is amended. The English-only refusal is replaced for Spanish and retained unchanged for every other language. |
 | FR-P3-43 | Refusals, guardrail responses, the staleness notice and the login copy exist in Spanish. A Spanish question that hits a guardrail must not fall back to an English refusal. |
 | FR-P3-44 | Record-sourced answers work in Spanish. The stored values are language-neutral; the prose around them and the field labels are Spanish. |
+
+### 4.6 Mobile layout (Stage 5)
+
+| ID | Requirement |
+| --- | --- |
+| FR-P3-45 | Every surface is usable on a phone down to 360 CSS pixels wide, with the floor held at an iPhone 14 Pro: 393x852. No content is clipped, and no page scrolls horizontally. |
+| FR-P3-46 | Below the phone breakpoint the assistant is the full page and the panel is never offered. The launcher opens the page directly, and a panel left open while the window narrows becomes the page rather than a clipped overlay. |
+| FR-P3-47 | The breakpoint is one constant, shared by the CSS and the code that switches layout, so the two cannot disagree. |
+| FR-P3-48 | On a phone the controls sit in the assistant header rather than a side rail, and the way back to the landing page stays visible without scrolling. |
+| FR-P3-49 | The human path stays on screen at all times on a phone, as it does on every other size. It is never moved behind a menu, and never duplicated to compensate. |
+| FR-P3-50 | Primary navigation is never hidden behind a menu control. |
+| FR-P3-51 | In voice mode the microphone is centred and full size on a phone, with its instruction beneath rather than beside it. |
+| FR-P3-52 | The conversation is the largest region on the screen. Chrome that reserves space it is not using yields it. |
 
 ---
 
@@ -330,10 +346,39 @@ Scenario: [FR-P3-41] Spanish faithfulness is reported on its own
 
 ---
 
+### Mobile layout
+
+```gherkin
+Scenario: [FR-P3-45] nothing is clipped at the floor viewport
+  Given a viewport of 393 by 852
+  When the landing page, the assistant and voice mode are each rendered
+  Then no element's content is wider than the frame that holds it
+  And the document does not scroll horizontally
+```
+
+```gherkin
+Scenario: [FR-P3-46] the panel is not offered on a phone
+  Given a viewport below the phone breakpoint
+  When the member taps the launcher
+  Then the assistant opens as the full page
+  And no expand control is shown, because there is nothing to expand to
+```
+
+```gherkin
+Scenario: [FR-P3-49] the human path survives the smallest screen
+  Given a viewport of 393 by 852
+  When the assistant is open in either mode
+  Then "Talk to a person" is on screen without scrolling
+```
+
+---
+
 ## 6. Non-Functional Requirements
 
 | ID | Requirement | Gate |
 | --- | --- | --- |
+| NFR-P3-13 | The floor is an iPhone 14 Pro, 393x852. Layout is verified by rendering at that size and looking, not by reading the stylesheet. | Screenshot run, recorded |
+| NFR-P3-14 | Every target stays at 44x44 CSS pixels and every reading surface at its type floor on a phone. Chrome may shrink; controls and body text may not. | Static assertion |
 | NFR-P3-01 | The row-level security proof runs against a real database with the application bypassed, as a step in the existing CI job that already holds `DATABASE_URL`. A control that only runs on one laptop is not a control. | CI, fails on any leaked row |
 | NFR-P3-02 | No P1 or P2 metric regresses. The existing regression gate covers faithfulness, structural compliance, refusal rate and the three buckets. | CI |
 | NFR-P3-03 | The number of member columns read per authenticated answer is measured before and after Stage 2 and reported. A minimum-necessary claim with no measurement behind it is an assertion. | Measured, reported |

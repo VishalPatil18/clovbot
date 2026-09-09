@@ -60,7 +60,21 @@
 }
 .button--primary { background: var(--color-forest-ink); color: var(--color-cream-paper); }
 .button--primary:hover { background: var(--color-forest-shadow); }
-.button--primary:disabled { opacity: 0.55; cursor: not-allowed; }
+/*
+ * A filled button cannot be dimmed. Fading it takes the label down with the
+ * fill, and dark text on a dark ground at half opacity is unreadable, which is
+ * what happened here. It gets a flat, inert ground instead of a faded one.
+ */
+.button.button--primary:disabled,
+.button.button--primary[disabled] {
+  opacity: 1; cursor: not-allowed;
+  background: var(--color-border-mist);
+  color: var(--color-charcoal);
+  border-color: transparent;
+}
+
+.button.button--primary:disabled:hover,
+.button.button--primary[disabled]:hover { background: var(--color-border-mist); }
 .button--quiet { background: var(--color-cream-paper); color: var(--color-forest-ink); border-color: var(--color-forest-ink); }
 .button--human { background: var(--color-cream-paper); color: var(--color-forest-ink); border-color: var(--color-forest-ink); width: 100%; margin-bottom: var(--spacing-16); }
 
@@ -122,7 +136,14 @@
 
 .assistant__header { display: grid; gap: var(--spacing-8); }
 
-.assistant__bar { display: flex; gap: var(--spacing-8); justify-content: space-between; align-items: center; }
+/* One line: the title gives way before the controls do. Wrapping it put the
+   controls on their own row, hard left, which is not where a member looks. */
+.assistant__bar { display: flex; gap: var(--spacing-8); justify-content: space-between; align-items: center; flex-wrap: nowrap; }
+.assistant__title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Holds the controls against the right edge even if the row ever does wrap. */
+.assistant__corner { margin-left: auto; }
 
 /* Title row: heading on the left, icon controls hard against the right edge. */
 .assistant__titles { flex: 1; min-width: 0; }
@@ -222,7 +243,10 @@
 /* Cards, not a list: an icon, what it answers, and an example of the kind. */
 .starters {
   display: grid; gap: var(--spacing-8); list-style: none; margin: 0; padding: 0;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  /* Fixed at two. auto-fit gave three across then one orphan below, which reads
+     as a mistake rather than a grid. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 44rem; margin-inline: auto; width: 100%;
 }
 
 .starter {
@@ -403,7 +427,6 @@
 
 @media (max-width: 48rem) {
   .panel { width: 100vw; min-width: 0; }
-  .launcher { left: var(--spacing-16); right: var(--spacing-16); }
 }
 
 /* Stage 8: refusal, escalation and limit surfaces. */
@@ -792,11 +815,39 @@
 }
 
 .rail {
-  display: flex; flex-direction: column; gap: var(--spacing-16);
+  display: flex; flex-direction: column; gap: var(--spacing-8);
   padding: var(--spacing-16); overflow-y: auto;
   background: var(--color-keylime-wash);
   border-right: 1px solid var(--color-border-mist);
 }
+
+/*
+ * One column of identical controls. They differed in width, padding and
+ * background before, which read as an accident rather than a set.
+ */
+.rail__tools { display: flex; flex-direction: column; gap: var(--spacing-4); }
+
+.rail__tools > * {
+  width: 100%; justify-content: flex-start;
+  min-height: var(--target-min); padding: 0 var(--spacing-12);
+  gap: var(--spacing-8); font-size: var(--text-body);
+  background: var(--color-cream-paper); color: var(--color-forest-ink);
+  border: 1px solid var(--color-forest-ink); border-radius: var(--radius-md);
+}
+
+.rail__tools > *:hover { background: var(--color-keylime-wash); }
+
+/*
+ * A tool that stays highlighted after a click looks selected, and none of these
+ * is a selection: they act and finish. Only hover changes the ground.
+ */
+.rail__tools > *[aria-pressed="true"],
+.rail__tools > *[aria-expanded="true"] {
+  background: var(--color-cream-paper); border-width: 1px;
+}
+
+.rail__tools > *[aria-pressed="true"]:hover,
+.rail__tools > *[aria-expanded="true"]:hover { background: var(--color-keylime-wash); }
 
 /* Pushed to the bottom so the rail reads as a column with a foot, not a void. */
 .rail__human {
@@ -840,6 +891,18 @@
 @media (max-width: 48rem) {
   .assistant--page .starters { grid-template-columns: 1fr; }
 }
+
+/*
+ * Back is navigation, not a tool: it leaves the page the others act on. No box,
+ * so it does not read as a seventh button in the set.
+ */
+.rail > .rail__back {
+  justify-content: flex-start;
+  background: none; border: 0; padding: 0 var(--spacing-8);
+  margin-bottom: 0;
+}
+
+.rail > .rail__back:hover { background: none; text-decoration: underline; }
 
 .rail__back {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1009,6 +1072,10 @@
 
 .signin__error svg { flex-shrink: 0; font-size: var(--text-subheading); }
 
+/* (2) The help panel's own way out, top right. */
+.help__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--spacing-8); }
+.help__head .help__title { margin-top: 0; }
+
 .meta-chip--signed { background: var(--color-mint-veil); border-color: var(--color-sage-mist); }
 
 /* FR-P2-43. An invitation, not a dead end: it says why and offers the way in. */
@@ -1023,4 +1090,257 @@
    inside the invitation does not read as one flat block. */
 .turn__answer--needs-login .signin {
   width: 100%; background: var(--color-cream-paper);
+}
+
+/*
+ * The panel is a flex and grid tree, and a flex item's default min-width is
+ * auto: it refuses to shrink below its content. `.assistant__bar` was nowrap,
+ * so its min-content width - the whole title plus every control - became a
+ * 694px floor that propagated up and forced the assistant to 726px.
+ *
+ * This is not a phone bug. Measured at 1440 the panel is 576px wide and its
+ * content was 726px, clipped by the panel's own overflow; at 1024 the panel is
+ * 410px. It was simply less obvious on a large screen. These belong at every
+ * width. FR-P3-45.
+ */
+.assistant,
+.assistant__header,
+.assistant__bar,
+.assistant__scroll,
+.assistant__thread,
+.assistant__foot,
+.composer,
+.turn {
+  min-width: 0;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+   Phones. FR-P3-45.
+
+   The floor is an iPhone 14 Pro: 393 CSS pixels wide. Everything here exists
+   because something was measured overflowing it, not because a breakpoint
+   looked tidy.
+   --------------------------------------------------------------------------- */
+@media (max-width: 48rem) {
+  /*
+   * The one that mattered. `.assistant__bar` was nowrap, so its min-content
+   * width - the whole title plus every control - became a 694px floor that
+   * propagated up the grid and forced the entire assistant to 726px inside a
+   * 393px panel. Everything else here was a symptom of that.
+   */
+  /* The title yields first: it is the one thing a member does not need to read
+     twice, and the controls beside it are what they came to tap. */
+  .assistant__title {
+    font-size: var(--text-heading-sm);
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .assistant__corner { flex-wrap: wrap; justify-content: flex-start; }
+  .assistant__meta { row-gap: var(--spacing-8); }
+
+  /* One column. Two 343px cards in 393px is where the right-hand column got
+     sliced down the middle. */
+  .starters,
+  .assistant--page .starters { grid-template-columns: 1fr; }
+
+  .empty__title { font-size: var(--text-heading-sm); }
+
+  /* The mic and its words stack, so the 128px well is not competing with a
+     paragraph for a 393px row. */
+  .voice__stage { flex-direction: column; text-align: center; gap: var(--spacing-12); }
+  .voice__lines { text-align: center; }
+  .voice__hint { text-align: center; }
+
+  .chips { row-gap: var(--spacing-8); }
+  .turn__answer p { max-width: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   The full page on a phone. The panel is never offered here, so this is the
+   only layout, and the rail cannot be a 15rem column beside anything.
+   --------------------------------------------------------------------------- */
+@media (max-width: 48rem) {
+  .workspace { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+
+  /*
+   * A bar, not a sidebar: the way back on the left, the controls on the right,
+   * which is where the eye goes for them on every other size too.
+   */
+  .rail {
+    flex-direction: row; align-items: center; gap: var(--spacing-8);
+    padding: var(--spacing-4) var(--spacing-12);
+    border-right: 0; border-bottom: 1px solid var(--color-border-mist);
+    overflow: visible;
+  }
+  /* Wrapping, and min-width 0. A nowrap bar's min-content became the page's
+     width floor and clipped every surface, which is the same fault this whole
+     stage started with. It must not be able to happen here either. */
+  .rail { flex-wrap: wrap; min-width: 0; }
+  .rail > #rail-slot {
+    display: flex; align-items: center; gap: var(--spacing-4);
+    margin-left: auto; flex-wrap: wrap; min-width: 0;
+  }
+  /* Four labelled controls beside Back will not hold 393px, so the words shrink
+     rather than the targets, which stay at 44px. */
+  .rail .assistant__mode {
+    font-size: var(--text-body); padding: 0 var(--spacing-8); gap: var(--spacing-4);
+  }
+  /* Matches the glyph size of the labelled controls beside it, which inherit
+     theirs from a smaller font. */
+  .rail .assistant__icon-button svg { font-size: var(--text-heading-sm); }
+  .rail .chip--human { display: none; }
+
+  /*
+   * The human card is redundant on a phone: "Talk to a person" is the first
+   * chip above the composer and is on screen at all times, which is the rule
+   * that card exists to satisfy. Repeating it would cost a screen of height.
+   */
+  .rail__human { display: none; }
+
+  .rail__back { flex: 0 0 auto; padding: 0 var(--spacing-12); }
+}
+
+/* ---------------------------------------------------------------------------
+   Phone: the height budget. Measured at 393x852 the conversation had 287px of
+   852, a third of the screen, with 565px of chrome around it. Every rule below
+   buys the reading surface back from a band that did not need the room.
+   --------------------------------------------------------------------------- */
+@media (max-width: 48rem) {
+  .cl-disclaimer, .disclaimer {
+    padding: var(--spacing-8) var(--spacing-12);
+    font-size: var(--text-caption); line-height: 1.4;
+  }
+
+  .rail { padding: var(--spacing-4) var(--spacing-12); }
+  .rail__back { min-height: 40px; }
+
+  .assistant__header { gap: var(--spacing-8); padding-bottom: var(--spacing-8); }
+
+  /* Context, not actions. They can be smaller than a control without becoming
+     unreadable, and it saves a whole wrapped row. */
+  .meta-chip { font-size: var(--text-caption); padding: 2px var(--spacing-8); }
+
+  .chips { gap: var(--spacing-8); }
+  .chips .chip { font-size: var(--text-body); padding: 0 var(--spacing-12); }
+
+  /* Has to match `.assistant--page > .assistant__foot`, which sets gap 16. */
+  .assistant--page > .assistant__foot,
+  .assistant--panel > .assistant__foot { gap: var(--spacing-8); padding-top: var(--spacing-8); }
+  .assistant__foot .chips { margin-bottom: 0; }
+  .assistant__scope { font-size: var(--text-caption); line-height: 1.35; }
+}
+
+@media (max-width: 48rem) {
+  /*
+   * Desktop reserves a line here so the composer does not jump when a status
+   * appears. On a phone that is 22px of permanent blank above the fold, and the
+   * jump it prevents is 22px once in a while. The reading surface wins.
+   */
+  .assistant__status { min-height: 0; }
+  .assistant__status:empty { display: none; }
+
+  .assistant__scope { padding-top: var(--spacing-8); }
+}
+
+/*
+ * Between a phone and the rail layout there is room for two cards but not for a
+ * sidebar. A portrait tablet reads the single column as sparse and the two
+ * column grid as intended. FR-P3-45.
+ */
+@media (min-width: 34rem) and (max-width: 48rem) {
+  .starters,
+  .assistant--page .starters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------------------------------------------------------------------------
+   Phone: the blocks that were eating the conversation. Each of these was
+   measured taking a share of a 852px screen that its content did not need.
+   --------------------------------------------------------------------------- */
+@media (max-width: 48rem) {
+  /* (4) Four labelled chips wrapped to two rows and cost a whole row of height.
+     Print and Clear saved carry their meaning in the icon; the two a member
+     reaches for under pressure keep their words. */
+  .chips { flex-wrap: nowrap; gap: var(--spacing-4); }
+  /* nowrap on the row squeezed the two labelled chips into two lines each,
+     which cost the height the single row was meant to save. */
+  .chips .chip {
+    flex: 0 0 auto; min-width: 0; white-space: nowrap;
+    padding: 0 var(--spacing-4); gap: var(--spacing-4);
+  }
+  /* Specificity has to match `.chips .chip` above, or the width lands and the
+     font-size does not, which is a 44px button holding the whole label. */
+  .chips .chip--compact {
+    padding: 0; width: var(--target-min); min-width: var(--target-min);
+    justify-content: center; font-size: 0; gap: 0;
+  }
+  .chips .chip--compact svg { font-size: var(--text-subheading); flex-shrink: 0; }
+
+  /* (7) The mic and its words side by side, as on desktop. Stacked, this block
+     was taking close to 40% of the screen for one button and two lines. */
+  .voice__stage { flex-direction: row; align-items: center; text-align: left; gap: var(--spacing-12); }
+  .voice__lines, .voice__hint { text-align: left; }
+  .mic-well { width: 84px; height: 84px; }
+  .mic { width: 72px; height: 72px; min-width: 72px; min-height: 72px; }
+  .mic__icon { width: 32px; height: 32px; }
+  .voice__state { font-size: var(--text-body); }
+  .voice__hint { font-size: var(--text-caption); }
+
+  /* (8) Icon beside the words rather than above them, which halves the card. */
+  .starter {
+    grid-template-columns: auto 1fr; grid-template-rows: auto auto;
+    align-items: center; column-gap: var(--spacing-12); row-gap: 0;
+    padding: var(--spacing-8) var(--spacing-12);
+  }
+  .starter__icon { grid-row: 1 / span 2; width: 34px; height: 34px; }
+  .starter__title { grid-column: 2; }
+  .starter__caption { grid-column: 2; }
+}
+
+@media (max-width: 48rem) {
+  /*
+   * (4) The ring's radius lives in the sweep's mask, not in its wrapper, and
+   * `.mic-halo` is `inset: 0` so sizing that did nothing at all. Desktop tunes
+   * the band to a 112px mic: inner radius 62, outer 72, sweep 148. This mic is
+   * 72px, so every one of those scales with it or the ring orbits far outside
+   * the button it belongs to.
+   */
+  .mic-halo__sweep {
+    width: 96px; height: 96px;
+    mask: radial-gradient(circle, transparent 38px, #000 40px, #000 46px, transparent 48px);
+  }
+
+  /* The listening ripple scales to 1.8x its own width, so it starts smaller. */
+  .mic-ring { width: 72px; height: 72px; }
+}
+
+
+/*
+ * A disabled control has to look disabled. The pause button spends most of its
+ * life unavailable, and an enabled-looking button that does nothing when tapped
+ * reads as a broken product rather than an unavailable action.
+ *
+ * No colour here: an outlined button dims legibly, a filled one does not, and
+ * forcing a text colour on both gave the filled variant dark text on a dark
+ * ground. Each variant states its own disabled ground below.
+ */
+.button:disabled,
+.button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--color-border-mist);
+}
+
+.button:disabled:hover,
+.button[disabled]:hover { background: none; border-color: var(--color-border-mist); }
+
+/*
+ * Below the stated floor the actions wrap rather than clip. At 393 they hold one
+ * row; a 375 or 360 phone is 4 to 19 pixels short of that, and a second row is a
+ * graceful loss where a cut-off button is not.
+ */
+@media (max-width: 24.5rem) {
+  .chips { flex-wrap: wrap; }
 }

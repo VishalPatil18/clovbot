@@ -1626,3 +1626,54 @@ Against the live index, 2737 chunks (1913 English over 19 documents, 824 Spanish
 **Translating the guardrail explanations was not enough.** The match patterns were English-only, so a Spanish emergency fired no rule and the translated copy was never reached. The golden set caught it; nothing else would have.
 
 **The help panel claimed the assistant "holds no member data and never signs you in".** True in P1, false since P2 shipped sign-in. Found while translating it, and replaced with what is actually true: every record here is demonstration data.
+
+---
+
+## Feature: Mobile layout (P3 Stage 5)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-45 to FR-P3-52, NFR-P3-13, NFR-P3-14. **Decisions:** D-097, D-098.
+
+### What was actually wrong
+
+The product had two responsive rules in total and had never been rendered at a phone size. Measured at 393x852:
+
+- The assistant laid out **726px of content inside a 393px frame**. It did not scroll sideways, because `html, body { overflow-x: hidden }` clipped it. The Ask button was unreachable, not merely off to the side.
+- The cause was one declaration: `.assistant__bar` was `flex-wrap: nowrap`, so its min-content width became a floor that propagated up through a flex and grid tree where every item defaults to `min-width: auto`.
+- The same floor clipped the **desktop** panel: 726px of content in a 576px frame at 1440.
+- The conversation had **287px of 852**, a third of the screen, behind 565px of chrome.
+- The landing navigation was a wrapping flex row with `space-between`, producing ragged half-rows.
+
+### UX flow on a phone
+
+1. Member lands on the page. Navigation is one tap target per row, no menu control.
+2. Tapping the launcher opens the assistant as the **full page**, not a panel.
+3. The header carries the title, then voice, language and help; the way back sits above it.
+4. The conversation is the largest region. "Talk to a person" is above the composer, always.
+5. In voice mode the microphone is centred and full size, with its instruction beneath.
+
+### Frontend entities
+
+- `web/src/viewport.ts` - `PHONE_MAX` and `useIsPhone()`. The hook builds its query from the constant, so the CSS breakpoint and the layout switch cannot disagree.
+- `askPlaceholderShort` in `strings.ts` - the full placeholder wraps to two lines in a 48px field and clips.
+
+### Tech specs
+
+- **Layout switch:** JavaScript `matchMedia` against a shared constant. Rejected: a CSS-only panel resize, which leaves an expand control with nothing to expand to and no home for the rail; and a phone-specific component, which would drift.
+- **Rail:** controls move to the header by passing no rail id, reusing the branch the panel already had. Rejected: a bottom sheet, because hiding primary navigation is a documented failure for a 65+ audience, and "Talk to a person" must never be behind a tap.
+- **Verification:** Playwright, pinned at 1.63.0, devDependency. Rejected: reasoning from the stylesheet, which is what produced a product nobody had looked at on a phone.
+
+### Verification
+
+`npm run shoot` renders the landing page, the assistant and voice mode at four viewports, asserts no horizontal overflow, and writes a PNG per surface. The loop was: render, look, measure, fix, render again.
+
+Measured before and after at 393x852:
+
+| Band | Before | After |
+| --- | --- | --- |
+| Disclaimer | 66px | 44px |
+| Back bar | 61px | 49px |
+| Header | 196px | 158px |
+| **Conversation** | **287px** | **401px** |
+| Foot | 242px | 201px |
+
+Content width against its frame, after the fix: 1440 fits in 576, 1280 in 512, 1024 in 410, 393 in 393.

@@ -90,6 +90,9 @@ export async function transcribe(audio: Blob): Promise<Transcription> {
 export interface Spoken {
   play: () => void;
   stop: () => void;
+  /** Holds the place, unlike stop. Both tiers support it natively. */
+  pause: () => void;
+  resume: () => void;
   /** Fires when playback finishes or is stopped, so the interface can settle. */
   onStateChange: (handler: (speaking: boolean) => void) => void;
   notice: string | null;
@@ -131,6 +134,14 @@ export async function speak(text: string): Promise<Spoken> {
         window.speechSynthesis.cancel();
         notify(false);
       },
+      pause: () => {
+        window.speechSynthesis.pause();
+        notify(false);
+      },
+      resume: () => {
+        window.speechSynthesis.resume();
+        notify(true);
+      },
     };
   }
 
@@ -138,7 +149,6 @@ export async function speak(text: string): Promise<Spoken> {
   const audio = new Audio(URL.createObjectURL(await response.blob()));
   let notify: (speaking: boolean) => void = () => {};
   audio.addEventListener("ended", () => notify(false));
-  audio.addEventListener("pause", () => notify(false));
 
   return {
     notice: encoded === null ? null : decodeURIComponent(encoded),
@@ -154,6 +164,14 @@ export async function speak(text: string): Promise<Spoken> {
       audio.pause();
       audio.currentTime = 0;
       notify(false);
+    },
+    pause: () => {
+      audio.pause();
+      notify(false);
+    },
+    resume: () => {
+      void audio.play();
+      notify(true);
     },
   };
 }

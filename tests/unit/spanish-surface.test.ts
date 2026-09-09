@@ -97,7 +97,8 @@ describe("a Spanish answer is read in a Spanish voice [FR-P3-35]", () => {
 describe("the language control [FR-P3-34]", () => {
   it("sits beside the voice control in the panel and in the rail", () => {
     expect(assistant).toMatch(/railId === undefined && modeControl\}\s*\n\s*\{railId === undefined && languageControl/);
-    expect(assistant).toMatch(/railId !== undefined && modeControl\}\s*\n\s*\{railId !== undefined && languageControl/);
+    // The three controls travel together as one fragment now.
+    expect(assistant).toMatch(/const controls = \([\s\S]{0,160}\{languageControl\}/);
   });
 
   it("carries an icon and a label", () => {

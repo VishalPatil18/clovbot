@@ -553,16 +553,22 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
   // the assistant is the one header control worth naming.
   // Beside the close control it is an icon; in the rail it sits with the named
   // tools and carries its own label.
-  it("labels the help control in the rail and leaves it an icon in the header", () => {
-    expect(markup).toContain('railId === undefined ? "assistant__icon-button" : "assistant__mode"');
+  // Labelled where there is room for words, an icon where there is not: the
+  // panel header, and a phone's top bar beside Back.
+  it("labels the help control in the rail and leaves it an icon elsewhere", () => {
+    expect(markup).toContain('railId === undefined || isPhone ? "assistant__icon-button" : "assistant__mode"');
     expect(markup).toMatch(/\{helpOpen \? "Hide help" : "Show help"\}/);
+    // The label is always present for a screen reader, visible or not.
+    expect(markup).toMatch(/railId === undefined \|\| isPhone \? \(\s*<span className="visually-hidden">/);
   });
 
   it("names the voice toggle rather than leaving it an icon", () => {
     // The label moved into the copy module when the panel gained Spanish.
     expect(strings).toMatch(/switchToVoice: \["Switch to voice", ".+"\]/);
     expect(strings).toMatch(/switchToText: \["Switch to text", ".+"\]/);
-    expect(markup).toMatch(/say\("switchToText"\) : say\("switchToVoice"\)/);
+    // Short forms on a phone, where the long ones make the bar a width floor.
+    expect(strings).toMatch(/switchToTextShort: \["Text", ".+"\]/);
+    expect(markup).toMatch(/say\(isPhone \? "switchToTextShort" : "switchToText"\)/);
     expect(markup).toContain('aria-pressed={mode === "voice"}');
     const mode = rule(".assistant__mode");
     expect(Number(/min-height:\s*var\(--target-min\)/.test(mode))).toBe(1);
@@ -575,10 +581,12 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
    * twice or vanish from one variant.
    */
   it("renders help and the voice toggle exactly once, in one place per variant", () => {
+    // Three homes now: the panel header, the rail, and a phone's top bar. Each
+    // control is written once and placed by where the fragment is rendered.
     expect(markup.match(/railId === undefined && helpControl/g)).toHaveLength(1);
-    expect(markup.match(/railId !== undefined && helpControl/g)).toHaveLength(1);
     expect(markup.match(/railId === undefined && modeControl/g)).toHaveLength(1);
-    expect(markup.match(/railId !== undefined && modeControl/g)).toHaveLength(1);
+    expect(markup.match(/const controls = \(/g)).toHaveLength(1);
+    expect(markup).toMatch(/isPhone \? controls : railTools/);
     const header = markup.slice(markup.indexOf("<header"), markup.indexOf("</header>"));
     expect(header).not.toContain("chip--human");
   });
@@ -763,8 +771,21 @@ describe("voice stage layout [D-045]", () => {
   });
 
   // Stop with nothing playing is a control that does nothing.
-  it("disables Stop while no answer is playing", () => {
-    expect(markup).toContain("disabled={speakingTurn === null}");
+  // Stop became Pause: its only extra was resetting the position, which the
+  // button beside it already does. Paused audio still has a place to return to,
+  // so the control stays available while paused.
+  it("disables the transport only when there is nothing to pause or resume", () => {
+    expect(markup).toContain("disabled={speakingTurn === null && !paused}");
+    // The mic keeps its own stop icon for ending a recording; the playback
+    // controls no longer have one.
+    const playback = markup.slice(markup.indexOf('className="voice__playback"'));
+    expect(playback.slice(0, 1600)).not.toContain("IoStop");
+    expect(playback.slice(0, 1600)).toContain("IoPause");
+  });
+
+  it("shows a disabled control as disabled, and says so to the pointer", () => {
+    const css = readFileSync("web/src/app.css", "utf8");
+    expect(css).toMatch(/\.button:disabled[\s\S]{0,120}cursor: not-allowed;/);
   });
 
   // The composer owns its listening and review phases, so clearing the thread

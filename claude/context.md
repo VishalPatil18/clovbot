@@ -705,3 +705,79 @@ Both would have been written up as "encryption: done" from the code alone, becau
 **Open:** the local default snapshot is whatever directory sorts last, so a half-finished ingest silently becomes the one served locally. Production pins it at deploy time. Citations for chunks with no heading read "Unlabelled" in both languages, which is a pre-existing chunking artifact rather than a Spanish regression.
 
 **Next:** cut v1.2.0, or P4.
+
+## 2026-09-09 - P3 Stage 5: the mobile layout
+
+**Did:** made every surface work on a phone, with the floor at an iPhone 14 Pro. Added Playwright so the result could be looked at rather than reasoned about.
+
+**Files:** added `web/src/viewport.ts`, `scripts/shoot.ts`, `tests/unit/responsive.test.ts`. Changed `web/src/app.css`, `web/src/landing.css`, `web/src/App.tsx`, `web/src/components/Assistant.tsx`, `web/src/strings.ts`, `claude/srs-p3.md` (to v1.1.0), `claude/plan-p3.md`. 773 tests pass.
+
+**What measurement found that reading the CSS would not:**
+
+- **726px of content in a 393px frame.** Not scrolling sideways, clipped: `html, body { overflow-x: hidden }` hid it, so the Ask button was unreachable rather than off-screen.
+- **One declaration caused it.** `.assistant__bar` was `flex-wrap: nowrap`, and a flex item's default `min-width` is `auto`, so its min-content width became a floor for the entire tree.
+- **The same floor clipped the desktop panel.** 726px inside 576px at 1440, 410px at 1024. It had been there since the panel was built and was simply less obvious on a large screen. D-098 keeps the fix unconditional for that reason.
+- **The conversation had 287px of 852.** Now 401px, bought back from bands that were reserving space they did not use, including a status line holding a blank row against a jump that happens occasionally.
+- **The landing nav was ragged.** A wrapping flex row with `space-between` puts two links on one row and one on the next. Stacked, one tap target per row, no hamburger.
+
+**Two of my own regressions, caught by looking:** shrinking the disclaimer padding on a phone put the dismiss X on top of the last word, and the nav's two separate lists left a seam that read as a missing row.
+
+**Open:** landscape phone is usable but not optimised; at 393px tall a pinned header and composer leave little for the conversation. Screenshots live in the scratch directory rather than the repository.
+
+**Next:** cut v1.2.0.
+
+## 2026-09-09 - Ten fixes from a device pass
+
+**Did:** worked through ten specific layout problems found on a real phone and a real desktop, verified each with the screenshot harness.
+
+**Files:** `web/src/app.css`, `web/src/landing.css`, `web/src/App.tsx`, `web/src/components/Assistant.tsx`, `web/src/strings.ts`, `scripts/shoot.ts`, three test files. 781 tests pass.
+
+**The header was my regression.** `.assistant__bar` was built to hold one line with the title truncating; hoisting `flex-wrap: wrap` to fix the width floor broke that intent and dropped the controls under the title, hard left. Restored to nowrap with an explicit ellipsis on the title and `margin-left: auto` on the controls, so they hold the right edge in either case.
+
+**And I made the same class of mistake twice.** Putting the phone's controls in the rail as a `nowrap` row made the rail's min-content the page's width floor, clipping every surface exactly as `.assistant__bar` had. The rail now wraps and carries `min-width: 0`, and a test asserts it, because this is the second time one nowrap row has done this.
+
+**What changed:**
+
+- Controls right-aligned on the title's line, and the help panel gained a close control of its own.
+- The starter grid is fixed at two columns, centred. `auto-fit` gave three across and one orphan below, which reads as a mistake rather than a grid.
+- On a phone the controls sit in the top bar beside Back, with short labels: the long forms did not fit and made the bar a width floor.
+- The actions stay above the composer where a thumb is. Print and Clear saved shrink to their icons; the two a member reaches for under pressure keep their words.
+- The mic sits beside its words rather than above them, down from about 40% of the screen to 108px, which is also what gave the plan prompt room to scroll.
+- Starter cards put the icon beside the words, halving each card.
+- The full-page route locks the page scroll. `100vh` counts browser chrome that `100dvh` does not, and the difference was a screen of white below the composer.
+- The launcher is as wide as its words, in the corner.
+
+**Not reproduced:** the page overflow and the unscrollable plan prompt did not appear headless at 393x852. The scroll lock addresses the first at its cause; the second had 294px of content in a 449px region once the mic shrank.
+
+## 2026-09-09 - Second device pass, and playback becomes pause
+
+**Did:** five more fixes from a real phone, and replaced Stop with Pause and Resume. 789 tests pass.
+
+**Files:** `web/src/app.css`, `web/src/voice.ts`, `web/src/components/Assistant.tsx`, `web/src/strings.ts`, three test files.
+
+**Two of the five were my own bugs from the previous pass:**
+
+- **`.chips .chip` (0,2,0) beat `.chip--compact` (0,1,0).** The width landed and the font-size did not, so Print and Clear saved became 44px buttons holding their whole label. Specificity, again.
+- **The halo was sized for a 128px well.** I shrank the well to 84px and left the ring at 148px, so it swept past the card and off the side of the screen.
+
+Two more were the same shape: `.assistant--page > .assistant__foot` out-specified my gap override, and the phone's help control was an `assistant__mode`, so the icon rule I wrote for it never matched.
+
+**Then nowrap cost what it saved.** Forcing the actions onto one row wrapped each label to two lines, so the row was the same height with worse typography. Fixed with `white-space: nowrap` and tighter padding: one row at 393, and below 24.5rem the row wraps rather than clips, because a 375 phone is four pixels short and a cut-off button is worse than a second row.
+
+**Stop became Pause and Resume.** D-099. Stop's only behaviour beyond pausing was resetting the position, which the button beside it already did. Both audio tiers support pause natively. The two buttons keep their positions and their jobs, because a single control that relabels itself under a finger asks this audience to track state before acting.
+
+**Open:** desktop was untouched by this pass and re-verified unchanged.
+
+## 2026-09-09 - The full-page rail as one set of tools
+
+**Did:** the desktop rail's controls were three separate groups rendered in whatever order the chips row happened to be, at three different widths. They are now one column with an explicit order. 795 tests pass.
+
+**Order, decided rather than inherited:** mode and language first because they change how the whole conversation behaves, the destructive pair beside each other, help last where a reference belongs.
+
+**Ground changes on hover only.** A tool that stays highlighted after a click looks selected, and none of these is a selection: they act and finish. `aria-pressed` and `aria-expanded` no longer paint the button.
+
+**Back is not a tool.** It leaves the page the others act on, so it lost its box and reads as navigation. The extra 16px between it and the set is gone.
+
+**Two specificity traps in one change.** The Back override sat earlier in the file than the base rule it was meant to beat, so it silently did nothing until moved and given a `.rail >` prefix. And a first measurement showed the pressed state still painting keylime, which turned out to be the harness leaving the pointer on the button after clicking: `:hover` was correctly applying. Moving the mouse away first showed the rule working. Worth remembering before chasing a CSS bug that is not there.
+
+**Side effect worth naming:** the desktop full page no longer renders the chips row at all, so its "Talk to a person" chip is gone. FR-13 still holds through the rail's human card, which is on screen at all times and larger.

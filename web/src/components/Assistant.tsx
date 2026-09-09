@@ -1,4 +1,5 @@
 import { help, s, type StringKey } from "../strings.ts";
+import { useIsPhone } from "../viewport.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -35,7 +36,7 @@ import {
   IoTrash,
   IoPlay,
   IoSend,
-  IoStop,
+  IoPause,
   IoThumbsDown,
   IoThumbsUp,
   IoVolumeHigh,
@@ -151,6 +152,7 @@ export function Assistant({
   const [limited, setLimited] = useState<string | null>(null);
   const [mode, setMode] = useState<VoiceMode>(() => readMode());
   const [language, setLanguage] = useState<Speech>(() => readLanguage());
+  const isPhone = useIsPhone();
   /** Panel chrome follows the answer's language, not a separate setting. */
   const say = useCallback((key: StringKey): string => s(key, language), [language]);
   const [spoken, setSpoken] = useState<Spoken | null>(null);
@@ -170,10 +172,15 @@ export function Assistant({
   const [stageElapsed, setStageElapsed] = useState(0);
   const reduceMotion = useReducedMotion();
   const [speakingTurn, setSpeakingTurn] = useState<number | null>(null);
+  /** Distinct from "not speaking": paused audio still has a place to return to. */
+  const [paused, setPaused] = useState(false);
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
 
   useEffect(() => {
+    // Nothing to scroll to when the thread is empty, and doing it anyway pushed
+    // the empty state's own heading off the top of a phone screen.
+    if (turns.length === 0 && planPrompt === null) return;
     threadEnd.current?.scrollIntoView({ block: "end" });
   }, [turns, planPrompt]);
 
@@ -468,7 +475,9 @@ export function Assistant({
               ) : (
                 <IoMic aria-hidden="true" />
               )}
-              {mode === "voice" ? say("switchToText") : say("switchToVoice")}
+              {mode === "voice"
+                ? say(isPhone ? "switchToTextShort" : "switchToText")
+                : say(isPhone ? "switchToVoiceShort" : "switchToVoice")}
             </button>
   );
 
@@ -494,7 +503,7 @@ export function Assistant({
   const helpControl = (
     <button
       type="button"
-      className={railId === undefined ? "assistant__icon-button" : "assistant__mode"}
+      className={railId === undefined || isPhone ? "assistant__icon-button" : "assistant__mode"}
       aria-expanded={helpOpen}
       aria-controls="assistant-help"
       onClick={() => setHelpOpen((open) => !open)}
@@ -502,11 +511,27 @@ export function Assistant({
       <IoHelpCircleOutline aria-hidden="true" />
       {/* Icon-only beside the close control; labelled in the rail, where it sits
           with the other named tools. */}
-      {railId === undefined ? (
+      {railId === undefined || isPhone ? (
         <span className="visually-hidden">{helpOpen ? "Hide help" : "Show help"}</span>
       ) : (
         <>{helpOpen ? "Hide help" : "Show help"}</>
       )}
+    </button>
+  );
+
+  const startOverChip = (
+    <button type="button" className="chip" onClick={startOver}>
+      <IoRefresh aria-hidden="true" /> {say("startOver")}
+    </button>
+  );
+  const printChip = (
+    <button type="button" className="chip chip--compact" onClick={() => window.print()}>
+      <IoPrint aria-hidden="true" /> Print
+    </button>
+  );
+  const clearChip = (
+    <button type="button" className="chip chip--compact" onClick={forgetHistory}>
+      <IoTrash aria-hidden="true" /> {say("clearSaved")}
     </button>
   );
 
@@ -517,22 +542,34 @@ export function Assistant({
       <a className="chip chip--human" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
         <IoCall aria-hidden="true" /> {say("talkToPerson")}
       </a>
-      <button type="button" className="chip" onClick={startOver}>
-        <IoRefresh aria-hidden="true" /> {say("startOver")}
-      </button>
-      {railId !== undefined && modeControl}
-      {railId !== undefined && languageControl}
-      {railId !== undefined && helpControl}
+      {startOverChip}
       {turns.length > 0 && (
         <>
-          <button type="button" className="chip" onClick={() => window.print()}>
-            <IoPrint aria-hidden="true" /> Print
-          </button>
-          <button type="button" className="chip" onClick={forgetHistory}>
-            <IoTrash aria-hidden="true" /> {say("clearSaved")}
-          </button>
+          {printChip}
+          {clearChip}
         </>
       )}
+    </div>
+  );
+
+  /*
+   * The rail is a column of tools, so it gets an explicit order rather than
+   * whatever the chips row happens to be. Mode and language first because they
+   * change how the whole conversation behaves; the destructive pair next to
+   * each other; help last, where a reference belongs.
+   */
+  const railTools = (
+    <div className="rail__tools">
+      {modeControl}
+      {languageControl}
+      {startOverChip}
+      {turns.length > 0 && (
+        <>
+          {clearChip}
+          {printChip}
+        </>
+      )}
+      {helpControl}
     </div>
   );
 
@@ -540,9 +577,26 @@ export function Assistant({
    * The full page gives these a column of their own; the panel keeps them
    * pinned above the composer. One piece of markup, two homes.
    */
+  const controls = (
+    <>
+      {modeControl}
+      {languageControl}
+      {helpControl}
+    </>
+  );
+
+  /*
+   * Three homes, not two. The panel keeps the controls in its header and the
+   * actions above the composer. The full page gives both a column. A phone has
+   * no column, so the controls go to the bar beside Back and the actions stay
+   * where a thumb already is, above the composer.
+   */
   const railTarget =
     railId === undefined ? null : document.getElementById(railId);
-  const tools = railTarget === null ? chips : createPortal(chips, railTarget);
+  const tools =
+    railTarget === null
+      ? chips
+      : createPortal(isPhone ? controls : railTools, railTarget);
 
   return (
     <section
@@ -626,7 +680,17 @@ export function Assistant({
             className="help"
             aria-label={say("whatYouCanAsk")}
           >
-            <h3 className="help__title">{say("whatYouCanAsk")}</h3>
+            <div className="help__head">
+              <h3 className="help__title">{say("whatYouCanAsk")}</h3>
+              <button
+                type="button"
+                className="assistant__icon-button"
+                onClick={() => setHelpOpen(false)}
+              >
+                <IoClose aria-hidden="true" />
+                <span className="visually-hidden">{say("closeHelp")}</span>
+              </button>
+            </div>
             <ul className="help__list">
               {help("canAsk", language).map((line) => (
                 <li key={line}>{line}</li>
@@ -894,6 +958,7 @@ export function Assistant({
       </div>
 
       <div className="assistant__foot">
+        {railId !== undefined && isPhone && chips}
         {/* FR-P2-22, D-070: the three commands ideas.md P2-06 names. Contextual
           follow-ups are not built; D-069 measured what touching the prompt costs. */}
         {tools}
@@ -910,17 +975,46 @@ export function Assistant({
                 <button
                   type="button"
                   className="button button--quiet"
-                  onClick={() => spoken.play()}
+                  onClick={() => {
+                    setPaused(false);
+                    spoken.play();
+                  }}
                 >
-                  <IoPlay aria-hidden="true" /> Play the answer again
+                  <IoPlay aria-hidden="true" /> {say("playAgain")}
                 </button>
+                {/*
+                  * Stop was redundant: its only extra over pause was resetting
+                  * the position, which the button beside it already does. Pause
+                  * holds the place, which is what a member reaching for silence
+                  * mid-sentence actually wants.
+                  *
+                  * The two buttons keep their positions and their jobs. A single
+                  * control that relabels itself under a finger is the cheaper
+                  * design and the worse one for this audience.
+                  */}
                 <button
                   type="button"
                   className="button button--quiet"
-                  disabled={speakingTurn === null}
-                  onClick={() => spoken.stop()}
+                  disabled={speakingTurn === null && !paused}
+                  onClick={() => {
+                    if (paused) {
+                      spoken.resume();
+                      setPaused(false);
+                      return;
+                    }
+                    spoken.pause();
+                    setPaused(true);
+                  }}
                 >
-                  <IoStop aria-hidden="true" /> Stop
+                  {paused ? (
+                    <>
+                      <IoPlay aria-hidden="true" /> {say("resumeAnswer")}
+                    </>
+                  ) : (
+                    <>
+                      <IoPause aria-hidden="true" /> {say("pauseAnswer")}
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -958,7 +1052,7 @@ export function Assistant({
                 setDraft("");
                 void submit(question, plan);
               }}
-              placeholder={say("askPlaceholder")}
+              placeholder={isPhone ? say("askPlaceholderShort") : say("askPlaceholder")}
               autoComplete="off"
               maxLength={3_000}
             />

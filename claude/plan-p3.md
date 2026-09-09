@@ -13,7 +13,7 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
-| Status | **Complete.** All four stages done, shipping as v1.2.0 |
+| Status | **Complete.** Five stages done, shipping as v1.2.0 |
 | Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
 | Last Updated | 2026-09-09 |
 | Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
@@ -127,12 +127,35 @@
 
 ---
 
+## Stage 5 - Mobile layout
+
+- **Goal:** Make every surface work on a phone, with the floor held at an iPhone 14 Pro.
+- **Context:** Added 2026-09-09. The product had two responsive rules in total and had never been rendered at a phone size. Measurement found the assistant rendering 726px of content inside a 393px frame, clipped rather than scrollable because `html, body { overflow-x: hidden }` hid the evidence.
+- **Scope in:** A shared breakpoint constant; the assistant as the full page on a phone; the rail relocated; the landing navigation stacked; the voice stage stacked; the height budget rebalanced toward the conversation; a screenshot harness so the result is looked at rather than reasoned about.
+- **Scope out:** Landscape phone beyond usable. At 393px tall a pinned header and composer leave little for the conversation, and optimising for it would compromise portrait.
+- **Acceptance criteria:**
+  - [x] No content is clipped and no page scrolls horizontally at 393x852, 375x667, 768x1024 and 1440x900.
+  - [x] The assistant is the full page below the breakpoint, and an open panel converts when the window narrows.
+  - [x] The breakpoint is one constant shared by the CSS and the layout switch.
+  - [x] Controls sit in the header on a phone; the way back is visible without scrolling.
+  - [x] "Talk to a person" is on screen at all times, and not duplicated.
+  - [x] Navigation is stacked, with no menu control.
+  - [x] The microphone is centred and full size in voice mode.
+  - [x] The conversation is the largest region: measured 287px of 852 before, 401px after.
+- **Test plan:** `npm run shoot` renders every surface at four viewports, asserts no horizontal overflow, and writes a PNG per surface for review. Static assertions cover the rules themselves.
+- **Effort:** M
+- **Exit signal:** The floor viewport renders every surface with nothing clipped, verified by looking at it.
+- **Status:** [x] done, 2026-09-09. Found and fixed a pre-existing desktop bug: the same width floor clipped the panel at 1440, 1280 and 1024.
+
+---
+
 ## Completion Checklist
 
 - [x] Stage 1 - Row-level security
 - [x] Stage 2 - Audit log and minimum-necessary access
 - [x] Stage 3 - Real-PHI writeup
 - [x] Stage 4 - Spanish
+- [x] Stage 5 - Mobile layout
 
 ---
 
