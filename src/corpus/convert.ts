@@ -2,11 +2,7 @@ import { execFileSync } from "node:child_process";
 import type { DocumentKind } from "./types.ts";
 import { extractPlanColumn } from "./columns.ts";
 
-/**
- * Minimum converted size per kind, set well below what the real 2026 documents
- * produce. These catch a conversion that reported success and emitted nothing,
- * which is the failure that looks like a pass.
- */
+/** Catches a conversion that reported success and emitted nothing. */
 export const BYTE_FLOORS = {
   evidence_of_coverage: 100_000,
   summary_of_benefits: 5_000,
@@ -77,7 +73,7 @@ export function pdfToText(path: string): string {
   });
 }
 
-/** The Summary of Benefits is a two-plan comparison, so it needs coordinates. D-031. */
+/** The Summary of Benefits is a two-plan comparison, so it needs coordinates. */
 export function pdfToPlanColumn(path: string, planId: string): string {
   const xhtml = execFileSync("pdftotext", ["-bbox-layout", path, "-"], {
     encoding: "utf8",

@@ -1,13 +1,7 @@
 /**
- * FR-24, as amended by FR-P3-42. Tells English from Spanish from everything
- * else, so a Spanish question is answered in Spanish from Spanish documents and
- * any other language still gets the English handover rather than a half answer.
- *
- * Deliberately conservative in both directions: a false "other" refuses a member
- * who wrote English, and a false "es" answers a Spanish speaker from a corpus
- * their question was not asked against. Detection is by function words and
- * diacritics, which separate the Romance languages a New Jersey service area
- * most plausibly sees.
+ * English, Spanish or other, so anything else still gets the handover rather
+ * than half an answer. Conservative in both directions: a wrong call either
+ * refuses an English member or answers from the wrong corpus.
  */
 export type QuestionLanguage = "en" | "es" | "other";
 

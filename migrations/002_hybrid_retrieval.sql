@@ -1,7 +1,7 @@
--- Stage 4: hybrid retrieval. Lexical index alongside the existing HNSW vector index,
--- fused by Reciprocal Rank Fusion inside one database function. FR-02, D-004.
+-- A lexical index alongside the HNSW vector index, fused by reciprocal rank
+-- fusion inside one database function.
 
--- Contextual prefix per D-006, stored so the indexed text is reproducible.
+-- The contextual prefix is stored, so the indexed text is reproducible.
 alter table chunks add column if not exists context_prefix text not null default '';
 alter table chunks add column if not exists plan_id_scope text not null default '';
 
@@ -14,7 +14,7 @@ alter table chunks add column search_vector tsvector
 
 create index if not exists chunks_search_gin on chunks using gin (search_vector);
 
--- Reciprocal rank fusion, both halves scoped to the plan BEFORE ranking. D-033.
+-- Both halves scoped to the plan BEFORE ranking, or the wrong plan wins.
 -- Score is sum of 1/(k + rank); ties break by id so results are deterministic.
 create or replace function search_hybrid(
   query_embedding vector(1536),

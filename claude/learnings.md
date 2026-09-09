@@ -355,3 +355,17 @@ _<How this concept will apply to future work in this project.>_
 **Read the artifact, not the test output.** Rendering a sample and looking at it caught two things no test would have: body type set smaller than the 18px the product holds itself to on screen, and a cited headline amount dropped from the export because it lives in its own field rather than in a claim.
 
 **A shared predicate written for a new feature exposed an old bug.** The export needed to know whether a turn came from the member's record. The existing answer to that question matched only the English citation label, so signing out in Spanish left claim data in storage. One predicate, both callers, and a regression test.
+
+## P3 Stage 9 - what the comment sweep taught
+
+**A mechanical edit needs a mechanical check.** A regex stripping identifiers from 411 comment lines left "This is why exists", "failing loudly is's rule", and a punctuation rule that turned `0..1` into `0.1` in the reranker. The regex was not the mistake; running it without reading the diff would have been.
+
+**Tests that match source text are a hidden coupling.** Three broke on comment prose, one of them slicing the file from a comment string as an anchor. Two were re-anchored on code. The third stayed, because "the source explains why" is genuinely what it asserts, and that is the difference worth knowing.
+
+**A rule without a gate decays.** The comment rule has been in `CLAUDE.md` since the first commit and 411 lines ignored it. The durable output of this stage is not the sweep, it is the twenty-line test that fails on the next one.
+
+**Ask when a request contradicts itself.** "Sweep everything including `claude/`" and "add a stage entry to `plan-p3.md`" cannot both be done. Naming the contradiction took one question and changed the scope of the work.
+
+**Count before publishing a count.** The `chunks` table holds 3,345 rows, and only 2,737 belong to the current snapshot; the rest are an older ingest left unreachable. The number that was easy to reach was 22% wrong.
+
+**`--` is not always a comment.** The comment extractor treated CSS custom properties as SQL comments. It changed nothing in the end, but the first version of the gate was scanning `--color-forest-ink` as prose.

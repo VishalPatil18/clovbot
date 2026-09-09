@@ -1,11 +1,8 @@
 /**
- * Proves every authenticated read is recorded, and that the record cannot be
- * altered or made to hold what it audits. FR-P3-17 to FR-P3-22.
+ * Proves every authenticated read is recorded, and the record cannot be altered
+ * or made to hold what it audits. Writes real log rows, because the reads are real.
  *
  *   npm run check:audit
- *
- * Runs real turns, so it writes real rows to the access log. That is correct:
- * these are reads that actually happened.
  */
 import { answerTurn } from "../src/rag/answer-turn.ts";
 import { connect, connectAdmin } from "../src/rag/store.ts";
@@ -82,7 +79,7 @@ try {
       fail("a recorded field is not in table.column@row form");
     } else pass("every recorded field names a column and a row");
 
-    // FR-P3-19. The answer states an amount; the log must not.
+    // The answer states an amount; the log must not.
     const amounts = /\$?\d+\.\d{2}|\$\d+/.exec(JSON.stringify(record));
     if (amounts !== null) fail(`the row holds a value: ${amounts[0]}`);
     else pass("the row holds no amount from the record it describes");
@@ -90,7 +87,7 @@ try {
     if (record.outcome !== answered.outcome) fail("the row's outcome disagrees with the turn");
     else pass(`the row carries the turn's outcome, ${record.outcome}`);
 
-    // FR-P3-22. Every field the answer cited has to appear in the log.
+    // Every field the answer cited has to appear in the log.
     const citedFields = answered.retrieved
       .filter((chunk) => chunk.kind === "member_record" && answered.citedIds.includes(chunk.id))
       .map((chunk) => chunk.section);
@@ -121,7 +118,7 @@ try {
     } else pass("zero fields read for a plan-document question");
   }
 
-  // FR-P3-21. Not by convention, by grant.
+  // Not by convention, by grant.
   console.log("\nthe log cannot be rewritten");
   for (const [what, sql] of [
     ["update", "update member_access_log set outcome = 'answered' where member_id = $1"],

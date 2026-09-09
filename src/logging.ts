@@ -1,9 +1,8 @@
 const REDACTED = "[redacted]";
 
 /**
- * Ordered so the most specific shape wins. Each pattern removes an identifier
- * shape rather than any long number, because "30 day supply", "$40" and "2026"
- * all have to survive for the turn log to remain useful for corpus expansion.
+ * Most specific shape first. Identifier shapes only, never any long number:
+ * "30 day supply", "$40" and "2026" all have to survive.
  */
 const IDENTIFIER_PATTERNS: RegExp[] = [
   // Social security number.
@@ -18,12 +17,8 @@ const IDENTIFIER_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Removes identifier-shaped strings before a question is persisted. FR-31.
- * Conservative by design: the surrounding question must survive, because the
- * turn log drives corpus expansion.
- *
- * D-034 extends this ahead of the model call as well, not only the log write,
- * because the Gemini fallback may train on what it receives.
+ * Removes identifier-shaped strings before a question is persisted, and before
+ * the model call too, because the Gemini fallback may train on what it receives.
  */
 export function redactIdentifiers(text: string): string {
   let redacted = text;

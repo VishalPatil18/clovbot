@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
 
 /**
- * Below this the panel is not offered at all. FR-P3-45.
- *
- * A 393px phone cannot show a conversation beside anything else, and a floating
- * panel over a page that is itself only 393px wide is a smaller reading surface
- * for no gain. The full page is the only sensible layout, so the launcher opens
- * it directly rather than opening a panel with an expand button in it.
+ * Below this the panel is not offered: a floating panel over a 393px page is a
+ * smaller reading surface for no gain, so the launcher opens the full page.
  */
 export const PHONE_MAX = 48; // rem
 

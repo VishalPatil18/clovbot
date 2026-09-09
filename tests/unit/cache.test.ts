@@ -22,11 +22,7 @@ describe("the answer key is exact, not approximate [FR-P3-54, D-100]", () => {
     }
   });
 
-  /*
-   * The collision docs/ideas.md P4-01 warns about. These two questions are one
-   * word apart and ten dollars apart, which is why the key is the question
-   * rather than its embedding.
-   */
+  // One word apart and ten dollars apart: the key is the question, not its embedding.
   it("separates two questions that a similarity score would merge", () => {
     expect(answerKey("what is my specialist copay", PPO, "en", SNAP)).not.toBe(
       answerKey("what is my out-of-network specialist copay", PPO, "en", SNAP),
@@ -104,7 +100,7 @@ describe("the caches cannot change an answer [NFR-P3-15]", () => {
   it("holds no member data, so it needs no policy", () => {
     // A column, not the word in the comment explaining its absence.
     expect(up).not.toMatch(/member_id\s+(integer|text)/);
-    expect(up).toMatch(/None of these tables holds member data/);
+    expect(up).toMatch(/No table here holds member data/);
   });
 });
 
@@ -134,12 +130,8 @@ describe("ingest clears what an ingest can make stale [FR-P3-62, D-101]", () => 
     expect(phase.indexOf("pruneChunks")).toBeLessThan(phase.indexOf("clearAnswers"));
   });
 
-  /*
-   * The two that cannot go stale are left alone. A question's vector does not
-   * depend on the corpus, and audio is keyed on the answer text, so a changed
-   * answer gets a new key rather than a wrong recording. Clearing either would
-   * re-pay a provider bill to invalidate something that was never stale.
-   */
+  // Neither can go stale: a vector does not depend on the corpus, and a changed
+  // answer gets a new audio key rather than a wrong recording.
   it("leaves embeddings and audio alone", () => {
     expect(cache).not.toMatch(/delete from embedding_cache/);
     expect(cache).not.toMatch(/delete from audio_cache/);

@@ -9,12 +9,8 @@ export interface Delivery {
 }
 
 /**
- * Sends one code. FR-P2-41: the code appears in the request body and nowhere
- * else - not in a log line, not in an error, not in the returned detail.
- *
- * Without a key the code is written to the server log instead, so the whole
- * lifecycle stays exercisable in development. That path says so plainly rather
- * than pretending an email was sent.
+ * Sends one code. It appears in the request body and nowhere else: not a log
+ * line, not an error. Without a key it goes to the server log, and says so.
  */
 export async function sendLoginCode(to: string, code: string): Promise<Delivery> {
   const key = process.env["RESEND_API_KEY"];

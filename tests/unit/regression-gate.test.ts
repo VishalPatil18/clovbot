@@ -5,7 +5,7 @@ const harness = readFileSync("eval/harness/run.ts", "utf8");
 
 describe("regression gate [NFR-P2-04, FR-P2-52]", () => {
   // A floor of 0.90 lets a slide from 1.000 to 0.91 pass, which is what
-  // NFR-P2-04 exists to catch.
+  // exists to catch.
   it("gates faithfulness well above the P1 floor", () => {
     expect(harness).toMatch(/faithfulness: 0\.96/);
   });
@@ -24,6 +24,6 @@ describe("regression gate [NFR-P2-04, FR-P2-52]", () => {
   // beside it rather than being a round number.
   it("records why the floor sits one case below the baseline", () => {
     expect(harness).toMatch(/two of six runs/);
-    expect(harness).toMatch(/One flip passes here; two do not/);
+    expect(harness).toMatch(/one case of 36 is 0\.028/i);
   });
 });

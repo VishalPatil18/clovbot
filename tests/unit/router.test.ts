@@ -20,7 +20,7 @@ describe("chooseRoute [FR-P2-09, D-061]", () => {
     expect(route("is choline fenofibrate covered").paths).toContain("structured");
   });
 
-  // A bare "amlodipine" must not silently resolve to the combination product,
+  // A bare "amlodipine" must not silently resolve to the combination product
   // whose tier is a different number.
   it("prefers the longest matching name", () => {
     expect(route("what tier is amlodipine besylate-atorvastatin calcium on").drugs).toEqual([
@@ -32,7 +32,7 @@ describe("chooseRoute [FR-P2-09, D-061]", () => {
     expect(route("what tier is ozempic on").paths).toEqual(["rag"]);
   });
 
-  // NFR-P2-03's zero-tolerance direction: a tier question about an indexed drug
+  // Zero tolerance in this direction: a tier question about an indexed drug
   // can never fall through to prose search alone.
   it("never sends an indexed drug's tier question to prose search alone", () => {
     for (const phrasing of [
@@ -77,7 +77,7 @@ describe("member path [FR-P2-29, D-080]", () => {
     expect(withMember("what did my last claim cost").paths).toContain("member");
   });
 
-  // FR-P2-29: a combined question keeps both halves rather than choosing.
+  // A combined question keeps both halves rather than choosing.
   it("keeps the record and the documents together on a combined question", () => {
     const decision = withMember("what is my dental allowance and how much have I used");
     expect(decision.paths).toContain("member");
@@ -89,14 +89,14 @@ describe("member path [FR-P2-29, D-080]", () => {
     expect(decision.paths).toEqual(expect.arrayContaining(["structured", "rag", "member"]));
   });
 
-  // Without a member the behaviour is exactly what Stage 2 measured.
+  // Without a member the behaviour is exactly what was measured before.
   it("never adds the member path when nobody is identified", () => {
     for (const question of ["what did my last claim cost", "how do I file an appeal", "what tier is atorvastatin on"]) {
       expect(chooseRoute(question, index).paths, question).not.toContain("member");
     }
   });
 
-  // D-091: the flag now means the question needs the record, not that someone
+  // The flag now means the question needs the record, not that someone
   // is signed in, and the reason has to say which.
   it("says the record was needed in its reason", () => {
     expect(withMember("how do I file an appeal").reason).toMatch(/needs the member record/);

@@ -37,7 +37,7 @@ describe("parseFormulary [FR-P2-07, D-058]", () => {
   });
 
   // The heading carries a lowercase letter, so a letter-case rule misses it and
-  // every statin silently inherits the class above. D-059.
+  // every statin silently inherits the class above.
   it("assigns the class whose heading is not all uppercase", () => {
     expect(find("atorvastatin")?.category).toBe("ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS");
     expect(find("lovastatin")?.category).toBe("ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS");

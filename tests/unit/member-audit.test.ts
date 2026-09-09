@@ -20,7 +20,7 @@ describe("minimum-necessary access [FR-P3-13, FR-P3-14, FR-P3-15]", () => {
     expect(turn).toContain("const needsRecord = memberId !== undefined && topic !== null");
   });
 
-  // FR-P3-16: one call, two consequences, so they cannot drift.
+  // One call, two consequences, so they cannot drift.
   it("derives the topic from the same rule that gates the question", () => {
     expect(turn).toMatch(/const identityNeeded = needsMemberData\(question\)/);
     expect(turn).toMatch(/const topic = identityNeeded\?\.topic \?\? null/);
@@ -33,7 +33,7 @@ describe("minimum-necessary access [FR-P3-13, FR-P3-14, FR-P3-15]", () => {
     }
   });
 
-  // D-091: nothing in an answer addresses the member by name, so nothing reads it.
+  // Nothing in an answer addresses the member by name, so nothing reads it.
   it("never reads the member's name to answer a question", () => {
     expect(store).not.toMatch(/select[^;`]*display_name/);
   });
@@ -86,7 +86,7 @@ describe("the access log names fields, never values [FR-P3-17, FR-P3-18, FR-P3-1
     expect(fieldsRead({ ...record, facts: [] })).toEqual([]);
   });
 
-  // FR-P3-22: the audit is built from the same structure the answer is, so a
+  // The audit is built from the same structure the answer is, so a
   // cited field cannot be missing from the log.
   it("derives the log from the facts the answer was built from", () => {
     expect(store).toContain("record.facts.flatMap((fact) => fact.sources");

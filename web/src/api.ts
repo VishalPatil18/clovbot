@@ -35,7 +35,7 @@ export type AskEvent =
   | {
       type: "answer";
       answer: string;
-      /** What the assistant answered in, so the control can follow it. FR-P3-34. */
+      /** What the assistant answered in, so the control can follow. */
       language?: Speech;
       /** The answer without citation markers or the source list. Read aloud. */
       spokenAnswer?: string;
@@ -44,7 +44,7 @@ export type AskEvent =
       unanswered: string[];
       refusal: { trigger: string; explanation: string } | null;
       headline: Headline | null;
-      /** Non-null once the calendar has passed the corpus plan year. FR-P2-17. */
+      /** Non-null once the calendar has passed the corpus plan year. */
       staleness: string | null;
       citations: Citation[];
       /** Cited chunk id to display number, including ids merged onto one source. */
@@ -71,7 +71,7 @@ export interface CallbackDraft {
   refusalTrigger: string | null;
 }
 
-/** FR-22. Validates, stores and confirms; nothing is sent anywhere. */
+/** Validates, stores and confirms; nothing is sent anywhere. */
 export async function requestCallback(
   draft: CallbackDraft,
   note: string,
@@ -87,8 +87,8 @@ export async function requestCallback(
     : { ok: false, message: body.error ?? "The request could not be saved." };
 }
 
-/** FR-27. Recorded against the turn, so a "no" can be traced to its answer. */
-/** The four the member can pick after saying no. Never free text. D-102. */
+/** Recorded against the turn, so a "no" traces to its answer. */
+/** The four the member can pick after saying no. Never free text. */
 export const FEEDBACK_REASONS = [
   "wrong_plan",
   "not_what_i_asked",
@@ -121,7 +121,7 @@ export interface PlansResponse {
   corpus: { documentsFetchedAt: string; ingestedAt: string; planYear: number } | null;
 }
 
-/** What the corpus covers and when it was collected. FR-P2-16. */
+/** What the corpus covers and when it was collected. */
 export async function fetchPlans(): Promise<PlansResponse | null> {
   try {
     const response = await fetch("/api/plans");
@@ -183,7 +183,7 @@ export interface SessionState {
   signedInAs: string | null;
 }
 
-/** FR-P2-37. Asked on load so the indicator is right in every state. */
+/** Asked on load, so the indicator is right in every state. */
 export async function fetchSession(): Promise<SessionState> {
   try {
     const response = await fetch("/api/session");

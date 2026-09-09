@@ -10,7 +10,7 @@ export interface SeedMember {
   effectiveDate: string;
   assignedProvider: string;
   assignedSpecialty: string;
-  /** Read from this plan's Evidence of Coverage, not from one constant. D-081. */
+  /** Read from this plan's Evidence of Coverage, not from one constant. */
   drugDeductible: number;
   outOfPocketLimit: number;
   accumulators: {
@@ -43,23 +43,10 @@ export interface SeedMember {
 }
 
 /**
- * Five invented members. D-047: no real member data at any version.
+ * Five invented members. No real member data at any version.
  *
- * Addresses are the one thing not written here. OPERATOR_MEMBER_EMAILS carries
- * five real ones in member-id order so a code can be received and the login
- * demonstrated; CLAUDE.md forbids personal data in the repo, so the fallbacks
- * below are unreachable and the variable lives only in .env.
- *
- * Every provider name reuses the DEMO DATA roster from src/corpus/synthetic.ts,
- * so no real practice is named anywhere in this file.
- *
- * All five sit on H5141-004 or H5141-007, the two plans whose Part D deductible
- * the corpus actually states. H8010-002 does not state one in its converted
- * Evidence of Coverage, and inventing it would break CLAUDE.md rule 6.
- *
- * Each record answers at least four question types: what a claim cost, where a
- * prior authorisation stands, how much of an allowance is left, and who the
- * assigned provider is. FR-P2-25.
+ * Addresses live in OPERATOR_MEMBER_EMAILS, so the fallbacks below are
+ * unreachable and no real practice or person is named in this file.
  */
 export const SEED_MEMBERS: SeedMember[] = [
   {

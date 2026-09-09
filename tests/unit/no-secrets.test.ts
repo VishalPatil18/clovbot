@@ -3,14 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * NFR-SEC-03: no credential, key or endpoint appears in the repository.
- *
- * Environment variables stop a key being *needed* in the repo; they do not stop
- * one being committed. This scans what git actually tracks, so a key pasted into
- * a source file or an accidentally committed .env fails the build rather than
- * being published.
- *
- * Deliberately not a new tool: it runs in the suite that already gates CI.
+ * No credential, key or endpoint in the repository. Environment variables stop a
+ * key being needed, not committed, so this scans what git actually tracks.
  */
 const tracked = execFileSync("git", ["ls-files"], { encoding: "utf8" })
   .split("\n")

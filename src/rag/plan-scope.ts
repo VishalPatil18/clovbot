@@ -1,11 +1,6 @@
 /**
- * Whether a question's answer depends on which plan the member is on. FR-10, D-022.
- *
- * Plan context is requested lazily: the member may ask anything without setup,
- * and only a question whose answer differs between plans triggers the prompt.
- * Plans 004 and 007 share prose and differ on price, so cost, coverage, network
- * and drug-tier questions are plan-scoped while process and definition questions
- * are not.
+ * Whether an answer depends on the member's plan, so the prompt is lazy.
+ * Plans share prose and differ on price: cost and coverage are scoped, process is not.
  */
 const PLAN_SCOPED =
   /\b(copay|co-pay|coinsurance|deductible|premium|out[- ]of[- ]pocket|maximum|allowance|cost|costs|price|pay|paid|charge|owe|tier|covered|cover|coverage|in[- ]network|out[- ]of[- ]network|network|benefit|benefits)\b/i;

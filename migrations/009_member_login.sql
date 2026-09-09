@@ -1,11 +1,7 @@
--- Email one-time codes and the sessions they create. FR-P2-30 to FR-P2-41.
+-- Email one-time codes and the sessions they create.
 --
--- No code is ever stored. Only a scrypt hash and its salt, because a six-digit
--- code is a live credential with a million possibilities: a fast hash, or the
--- code itself, would fall to an offline sweep the moment this table leaked.
---
--- Row-level security is P3-01. Until then, scoping is enforced in the query and
--- a session is the only thing that makes member data reachable at all.
+-- No code is ever stored, only a scrypt hash and its salt: a six-digit code has
+-- a million possibilities and a fast hash would fall to an offline sweep.
 
 create table if not exists login_codes (
   id           bigserial primary key,

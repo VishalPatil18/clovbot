@@ -1,16 +1,9 @@
--- Repairs sign-in under the policies added by 011. Found by manual verification,
--- not by a failing test, which is why the check now covers this path too.
+-- Repairs sign-in, which 011 broke. It exempted login_codes and member_sessions
+-- but missed that both paths then read `members`, which is behind a policy.
 --
--- 011 exempted login_codes and member_sessions because they are read before an
--- identity exists. It missed that both paths then read `members`, which is
--- behind a policy: the email lookup that starts a sign-in returned nothing, so
--- no code could be issued, and the session lookup returned nothing, so nobody
--- was ever signed in.
---
--- The session lookup needs no help here: it holds a member id and can set the
--- identity before reading the row, which is what the exemption was for. The
--- email lookup has nothing to set an identity from, so it gets a function
--- narrow enough to be safe: one email in, at most one id out, nothing else.
+-- The session lookup holds a member id and can set the identity first. The email
+-- lookup cannot, so it gets a function narrow enough to be safe: one email in,
+-- at most one id out.
 
 create or replace function member_for_login(p_email text)
 returns table (id integer, email text)

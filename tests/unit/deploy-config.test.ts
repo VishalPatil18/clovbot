@@ -5,9 +5,8 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * A deploy that hands Cloud Run a malformed environment produces a service that
- * answers /api/plans and 503s on every question, because only the question path
- * reads the database. Both checks here catch that at build time instead.
+ * A malformed environment produces a service that answers /api/plans and 503s
+ * every question, because only the question path reads the database.
  */
 
 /** Splits a --set-env-vars value the way gcloud does: a leading ^X^ sets the separator. */

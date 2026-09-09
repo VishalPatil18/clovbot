@@ -64,11 +64,7 @@ import { answerAsText } from "../copy.ts";
 import { STEP_MS, progressMessage, type Stage } from "../progress.ts";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
-/**
- * FR-14. Four, not six: the highest-volume bucket A drivers in
- * docs/call-drivers.md, one per kind of question this assistant answers, so the
- * set teaches what it is for rather than listing everything it can do.
- */
+/** One per kind of question, so the set teaches what this is for. */
 /** Paired with the copy keys so the wire value and the label cannot drift. */
 const REASONS = [
   { value: "wrong_plan", key: "reasonWrongPlan" },
@@ -79,8 +75,7 @@ const REASONS = [
 
 const STARTERS = [
   {
-    // The title is the question that gets asked. A card that sends something
-    // other than what it shows is a small lie on a cite-or-refuse product.
+    // A card that sends something other than what it shows is a small lie.
     question: "What is my specialist copay?",
     caption: "Costs for visits, urgent care and the emergency room.",
     icon: IoCashOutline,
@@ -120,9 +115,9 @@ interface Turn {
   staleness: string | null;
   outcome: "answered" | "refused" | "upstream_failure" | "needs_login" | "pending";
   feedback: "yes" | "no" | null;
-  /** Why they said no, once they have said. FR-P3-65. */
+  /** Why they said no, once they have said. */
   feedbackReason: FeedbackReason | null;
-  /** Server id, so a feedback response can name the turn it answers. FR-27. */
+  /** Server id, so feedback can name the turn it answers. */
   turnId: string | null;
 }
 
@@ -176,8 +171,7 @@ export function Assistant({
   const [voiceReset, setVoiceReset] = useState(0);
   const [signedInAs, setSignedInAs] = useState<string | null>(null);
   /**
-   * FR-P2-46. The id of the turn the sign-in was asked for, so the form sits
-   * under that question and its text is what gets asked again on return.
+   * The turn the sign-in was asked for, so the form sits under that question.
    */
   const [signingInFor, setSigningInFor] = useState<number | null>(null);
   const [stage, setStage] = useState<Stage | null>(null);
@@ -190,8 +184,7 @@ export function Assistant({
   const nextId = useRef(1);
 
   useEffect(() => {
-    // Nothing to scroll to when the thread is empty, and doing it anyway pushed
-    // the empty state's own heading off the top of a phone screen.
+    // Scrolling an empty thread pushed its own heading off a phone screen.
     if (turns.length === 0 && planPrompt === null) return;
     threadEnd.current?.scrollIntoView({ block: "end" });
   }, [turns, planPrompt]);
@@ -274,7 +267,7 @@ export function Assistant({
           setLimited(event.message);
           return;
         }
-        // FR-23: after two refusals in a row, stop offering to try again.
+        // After two refusals in a row, stop offering to try again.
         if (event.type === "offer_callback") {
           setCallback({
             question: event.question,
@@ -299,16 +292,14 @@ export function Assistant({
           );
           return;
         }
-        // FR-19: spoken and written together. Audio is never the only copy.
-        // The source list is on screen to be read, not listened to.
+        // Audio is never the only copy, and the source list is read, not spoken.
         const toSpeak = (event.spokenAnswer ?? event.answer).trim();
         if (mode === "voice" && toSpeak.length > 0) {
           void speak(toSpeak)
             .then((audio) => {
               setSpoken(audio);
               setVoiceNotice(audio.notice);
-              // The border on the answer follows the audio, so it is always the
-              // paragraph being read that is marked, never a stale one.
+              // The border follows the audio, so it never marks a stale answer.
               audio.onStateChange((speaking) =>
                 setSpeakingTurn(speaking ? id : null),
               );
@@ -359,16 +350,12 @@ export function Assistant({
 
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
 
-  // Re-scopes what comes next. Answers already in the transcript keep the plan
-  // they were answered under, so switching never rewrites history.
+  // Answers keep the plan they were given under; switching rewrites nothing.
   const changePlan = (): void => {
     setPlanPrompt({ plans: planOptions, question: "" });
   };
 
-  /*
-   * Dismissing hands the pending question back to the composer rather than
-   * discarding it: the member typed it, and a close should not cost them that.
-   */
+  // Dismissing hands the question back: a close should not cost what they typed.
   const dismissPlanPrompt = (): void => {
     const pending = planPrompt?.question ?? "";
     setPlanPrompt(null);
@@ -382,9 +369,7 @@ export function Assistant({
     if (pending.length > 0) void submit(pending, option);
   };
 
-  // Plans and the corpus date, so the plan control and the freshness line exist
-  // before any plan-scoped question is asked. FR-P2-16.
-  // FR-P2-37. Asked once on load so the indicator is right before anything else.
+  // Loaded before any plan-scoped question, so both controls exist first.
   useEffect(() => {
     void fetchSession().then((state) => setSignedInAs(state.signedInAs));
   }, []);
@@ -397,17 +382,12 @@ export function Assistant({
     });
   }, []);
 
-  // Written on every settled turn rather than on unload, which mobile browsers
-  // do not reliably fire.
+  // On every settled turn: mobile browsers do not reliably fire unload.
   useEffect(() => {
     writeHistory(turns);
   }, [turns]);
 
-  /*
-   * FR-P2-46. The member never retypes: the question that triggered the login
-   * is asked again the moment they are back, and its placeholder turn is
-   * replaced rather than left above the answer.
-   */
+  // The member never retypes: the gated question is asked again on return.
   const resumeAfterLogin = (name: string): void => {
     setSignedInAs(name);
     const pending = turns.find((turn) => turn.id === signingInFor)?.question ?? null;
@@ -466,10 +446,7 @@ export function Assistant({
 
   const heading = "Clovbot - Member Assistant";
 
-  /*
-   * FR-16. The panel keeps these in its header; the full page puts them in the
-   * rail with the other tools, so the header carries only the title and close.
-   */
+  // Panel header, or the full page's rail. One markup, two homes.
   const modeControl = (
             <button
               type="button"
@@ -494,7 +471,7 @@ export function Assistant({
             </button>
   );
 
-  /** FR-P3-34. Named in the language it switches to, so it reads to either member. */
+  /** Named in the language it switches to, so either member can read it. */
   const languageControl = (
     <button
       type="button"
@@ -537,11 +514,7 @@ export function Assistant({
       <IoRefresh aria-hidden="true" /> {say("startOver")}
     </button>
   );
-  /**
-   * FR-P3-70. Built here on the device: the conversation is already in memory,
-   * and posting a signed-in member's answer to a renderer would put their own
-   * record back on the wire for nothing.
-   */
+  /** On the device: posting a member's answer would put their record on the wire. */
   const saveTranscript = async (): Promise<void> => {
     const savedOn = new Date();
     const context = {
@@ -560,7 +533,7 @@ export function Assistant({
       link.click();
       URL.revokeObjectURL(url);
     } catch {
-      // FR-P3-77. The print view is still a clean page, and silence is worse.
+      // The print view is still a clean page, and silence is worse.
       setStatus(say("transcriptFailed"));
       window.print();
     }
@@ -594,12 +567,7 @@ export function Assistant({
     </div>
   );
 
-  /*
-   * The rail is a column of tools, so it gets an explicit order rather than
-   * whatever the chips row happens to be. Mode and language first because they
-   * change how the whole conversation behaves; the destructive pair next to
-   * each other; help last, where a reference belongs.
-   */
+  // Explicit order: what changes the conversation, then the destructive pair, then help.
   const railTools = (
     <div className="rail__tools">
       {modeControl}
@@ -615,10 +583,7 @@ export function Assistant({
     </div>
   );
 
-  /*
-   * The full page gives these a column of their own; the panel keeps them
-   * pinned above the composer. One piece of markup, two homes.
-   */
+  // A column on the full page, pinned above the composer in the panel.
   const controls = (
     <>
       {modeControl}
@@ -627,12 +592,7 @@ export function Assistant({
     </>
   );
 
-  /*
-   * Three homes, not two. The panel keeps the controls in its header and the
-   * actions above the composer. The full page gives both a column. A phone has
-   * no column, so the controls go to the bar beside Back and the actions stay
-   * where a thumb already is, above the composer.
-   */
+  // A phone has no column, so the controls go beside Back and the actions stay put.
   const railTarget =
     railId === undefined ? null : document.getElementById(railId);
   const tools =
@@ -819,8 +779,7 @@ export function Assistant({
               <p className="turn__question">{turn.question}</p>
 
               {turn.outcome === "pending" ? (
-                /* Where the answer will appear, not below the composer: this
-                   is the spot the member is already looking at. */
+                /* Where the answer will appear, which is where they are looking. */
                 <p className="turn__pending" role="status" aria-live="polite">
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.span
@@ -901,9 +860,7 @@ export function Assistant({
                                       : item,
                                   ),
                                 );
-                                // Recorded, not just shown. FR-27.
-                                // A no is sent straight away: the reason is an
-                                // offer, not a toll on saying the answer failed.
+                                // Sent straight away: the reason is an offer, not a toll.
                                 if (turn.turnId !== null)
                                   void sendFeedback(
                                     turn.turnId,
@@ -939,10 +896,8 @@ export function Assistant({
                       </div>
 
                       {/*
-                        * FR-P3-65. Offered only after a no, and only once. Four
-                        * fixed reasons rather than a text box: free text is the
-                        * one surface that could put a diagnosis into the store,
-                        * and tapping is easier than typing for this audience.
+                        * Fixed reasons, never a text box: free text is the one
+                        * surface that could put a diagnosis into the store.
                         */}
                       {turn.feedback === "no" && turn.feedbackReason === null && (
                         <div className="feedback__why">
@@ -1067,14 +1022,8 @@ export function Assistant({
                   <IoPlay aria-hidden="true" /> {say("playAgain")}
                 </button>
                 {/*
-                  * Stop was redundant: its only extra over pause was resetting
-                  * the position, which the button beside it already does. Pause
-                  * holds the place, which is what a member reaching for silence
-                  * mid-sentence actually wants.
-                  *
-                  * The two buttons keep their positions and their jobs. A single
-                  * control that relabels itself under a finger is the cheaper
-                  * design and the worse one for this audience.
+                  * Pause holds the place; Stop only reset it, which the button
+                  * beside it already does. Two fixed controls, never one that relabels.
                   */}
                 <button
                   type="button"

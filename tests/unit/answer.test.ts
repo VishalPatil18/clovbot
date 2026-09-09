@@ -121,7 +121,7 @@ describe("headline amount [FR-P2-13, D-064]", () => {
     if (result.ok) expect(result.value.headline?.amount).toBe("$10");
   });
 
-  // The largest element on the screen cannot be the one uncited element. FR-05.
+  // The largest element on the screen cannot be the one uncited element.
   it("rejects a headline with no citation", () => {
     const result = validateAnswerPayload({
       ...base,

@@ -1,12 +1,8 @@
--- Every read of a member's record, recorded. FR-P3-17 to FR-P3-23.
+-- Every read of a member's record, recorded: column names and row ids, never
+-- contents. An amount here would make the trail a second copy of what it audits.
 --
--- Names columns and the rows they came from, never their contents. A claim id
--- locates a row; a claim amount is the thing being protected, and putting it
--- here would make the audit trail a second copy of the data it audits. D-092.
---
--- Append-only from the application, by grant rather than by convention: the
--- role holds insert and select and nothing else, so a code path that tried to
--- rewrite history would be refused by the database. FR-P3-21.
+-- Append-only by grant rather than convention: the role holds insert and select
+-- and nothing else, so rewriting history is refused by the database.
 
 create table if not exists member_access_log (
   id           bigserial   primary key,
@@ -16,7 +12,7 @@ create table if not exists member_access_log (
   read_at      timestamptz not null default now(),
   -- Which rule decided the record was needed. Null when nothing was read.
   topic        text,
-  -- Redacted before it is written, exactly as turns.question is. FR-P3-23.
+  -- Redacted before it is written, exactly as turns.question is.
   question     text        not null,
   -- 'member_claims.member_owes@CLM-0031'. Empty when the turn read nothing.
   fields_read  text[]      not null default '{}',

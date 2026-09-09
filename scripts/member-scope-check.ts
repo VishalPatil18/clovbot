@@ -1,16 +1,13 @@
 /**
- * Asserts FR-P2-26 against the live seed: one member's record never contains
- * another member's data. Exits non-zero on the first leak.
- *
- * This is the precursor to P3's row-level security. Until that exists, the
- * query is the only boundary, so it is worth checking rather than assuming.
+ * Asserts against the live seed that one member's record never contains
+ * another's. Exits non-zero on the first leak.
  */
 import { SEED_MEMBERS } from "../src/members/seed.ts";
 import { loadMemberRecord } from "../src/members/store.ts";
 import { connectAdmin } from "../src/rag/store.ts";
 import type { MemberTopic } from "../src/auth/login-required.ts";
 
-/** Every topic, so the check still covers the whole record after D-091. */
+/** Every topic, so the check still covers the whole record after. */
 const TOPICS: readonly MemberTopic[] = [
   "claim",
   "prior_authorization",

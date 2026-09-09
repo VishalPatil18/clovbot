@@ -1,10 +1,6 @@
 import { connectAdmin, readChunksByIds, readTurn } from "./rag/store.ts";
 
-/**
- * Operator tools. Both read the turn log, which holds redacted member questions,
- * so neither is exposed as a route: publishing a question log would undo what
- * NFR-SEC-01 promises.
- */
+/** Command line only: both read the turn log, which holds redacted questions. */
 
 async function reproduce(turnId: string): Promise<void> {
   const client = connectAdmin();
@@ -85,7 +81,7 @@ async function insights(days: number): Promise<void> {
       console.log(`    ${String(row["refusal_trigger"]).padEnd(24)} ${row["n"]}`);
     }
 
-    // The list that says where the corpus is thin. NFR-QUAL-03 treats a high
+    // The list that says where the corpus is thin. A high
     // refusal rate as a corpus deficiency to fix, and this is how it is found.
     const unanswered = await one(
       `select question, count(*) n from turns
@@ -108,12 +104,7 @@ async function insights(days: number): Promise<void> {
     console.log("\n  Did this answer your question?");
     console.log(`    yes ${yes}   no ${no}   ${yes + no === 0 ? "(no responses yet)" : ""}`);
 
-    /*
-     * FR-P3-67. Read through feedback_report, which excludes the session id: a
-     * report about answers has no use for what else that visit asked, and
-     * reading through the view is what lets the analysis surface be blind to it
-     * while the loop breaker keeps the column it needs. D-102.
-     */
+    // Through the view, which drops the session id the loop breaker still needs.
     const reasons = await one(
       `select feedback_reason, count(*) n from feedback_report
         where asked_at > now() - $1::interval and feedback_reason is not null
@@ -126,11 +117,7 @@ async function insights(days: number): Promise<void> {
       }
     }
 
-    /*
-     * The point of collecting any of this. A question that was answered and
-     * rated wrong is a candidate golden-set case: the answer is on the row, so
-     * the expected value can be written by hand and the case gated from then on.
-     */
+    // A rated-wrong answer is a golden-set candidate: the answer is on the row.
     const rejected = await one(
       `select question, answer, plan_context, route, feedback_reason
          from feedback_report

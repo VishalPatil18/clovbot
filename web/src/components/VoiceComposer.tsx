@@ -18,10 +18,8 @@ interface Props {
 }
 
 /**
- * FR-17: press-and-hold and tap-to-start both work, always, and neither is a
- * setting. The gesture is inferred from how long the press lasted.
- * FR-18 as amended by D-045: no live partial transcript, so the listening and
- * processing states carry the wait, and the transcript is editable before sending.
+ * Press-and-hold and tap-to-start both work, inferred from how long the press
+ * lasted. No live transcript: the listening and processing states carry the wait.
  */
 export function VoiceComposer({
   busy,
@@ -98,7 +96,7 @@ export function VoiceComposer({
   };
 
   const onPointerUp = (): void => {
-    // A tap leaves it recording; a hold stops when released. FR-17.
+    // A tap leaves it recording; a hold stops when released.
     if (isTap(Date.now() - pressedAt.current)) return;
     if (phase === "listening") void finish();
   };
@@ -111,9 +109,8 @@ export function VoiceComposer({
         ? "Writing down what you said"
         : "Hold to talk, or tap to start";
 
-  // Three states, three visual languages. Rings travel outward while the member
-  // speaks; bars rise and fall while the assistant does. They must not be
-  // confusable, or the member cannot tell whose turn it is.
+  // Rings outward while the member speaks, bars while the assistant does:
+  // confusable states leave nobody sure whose turn it is.
   const state = responding ? "responding" : phase;
 
   return (

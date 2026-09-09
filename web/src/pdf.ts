@@ -20,20 +20,12 @@ const STYLE: Record<BlockKind, { size: number; bold: boolean; before: number; in
   item: { size: 10.5, bold: false, before: 5, indent: 16 },
 };
 
-/**
- * The reading surface is 18px at 1.6 on screen, and this audience is why. The
- * body here is its equivalent in points rather than the 11pt a document would
- * normally set, and the leading follows.
- */
+/** The screen's 18px reading surface in points, not the 11pt a document sets. */
 const LEADING = 1.4;
 
 /**
- * Sets the document model as a PDF. FR-P3-70.
- *
- * Text only: an HTML-to-canvas rasteriser would produce a large file of
- * unselectable pixels, which a screen reader cannot read and a member cannot
- * copy an amount out of. Helvetica is one of the fourteen fonts every reader
- * carries, so nothing is embedded and Spanish accents still set correctly.
+ * Text only: a rasteriser would emit unselectable pixels no screen reader can
+ * read. Helvetica is a base-14 face, so nothing is embedded and accents still set.
  */
 export async function renderTranscript(blocks: readonly Block[], language: Speech): Promise<ArrayBuffer> {
   const { jsPDF } = await import("jspdf");

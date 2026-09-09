@@ -20,7 +20,7 @@ const SYSTEM = [
   'Reply with JSON only: {"sentences":[{"sentence":"...","supported":true|false,"reason":"..."}]}',
 ].join("\n");
 
-/** Sentence-level entailment against the cited chunks. NFR-QUAL-01. */
+/** Sentence-level entailment against the cited chunks. */
 export async function judgeFaithfulness(
   answer: string,
   sources: { id: string; content: string }[],

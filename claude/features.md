@@ -1847,3 +1847,51 @@ Unchanged. No migration.
 ### Verification
 
 The document model is asserted directly: content, order, source numbering, the prose fallback, the gaps, the plan and dates, the member notice in both languages, and the filename. Two render tests prove the bytes are a real multi-page PDF and that Spanish accents survive. Static tests assert the control no longer calls `window.print()`, that the renderer is dynamically imported, and that the print stylesheet is still there. Then the artifact itself: the built bundle served, the control pressed, the download captured, and the PDF read back in both languages.
+
+---
+
+## Feature: Comments that earn their place, and a documented corpus (P3 Stage 9)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-78 to FR-P3-83, NFR-P3-19. **Decision:** D-104.
+
+### What was already there
+
+`CLAUDE.md` §5 has said "Comments explain WHY, max 15 words, no spec or phase references" since the first commit. Roughly 2,500 comment lines had accumulated against it, 411 of them naming a requirement, a decision or a stage.
+
+### Interrogation summary
+
+Five forks went to the user.
+
+1. **Scope.** Asked whether `claude/` and `docs/` were in scope. First answer was everything; that contradicted the same request's instruction to add a stage entry to `plan-p3.md`, so it went back once with the contradiction named. Final answer: **code, SQL, CSS and config only.**
+2. **Length.** 15 words, with a two-line exemption where the code looks wrong but is right and the mistake has already been made once.
+3. **References.** **Drop both** requirement ids and decision ids. The reasoning goes into the comment or is dropped; nothing points at a document the reader may not have.
+4. **Also swept:** test files, SQL migration headers and CSS comments, all three.
+5. **Corpus documentation:** where the data came from, how it was fetched, which libraries, and how much reached the index.
+
+### UI
+
+None. No behaviour changed.
+
+### UX flow
+
+Not applicable.
+
+### Frontend and backend entities
+
+- `tests/unit/comments.test.ts`: extracts every comment from `src`, `web/src`, `tests`, `scripts`, `eval` and `migrations`, and fails on a requirement id, a decision id, a stage or phase, a build pass or a release. `--` opens a comment only in `.sql`, because in CSS it opens a custom property.
+- `docs/corpus.md`: ten sections covering scope, discovery, fetching, what was retrieved, conversion, chunking, embedding, reproduction, libraries, and what the corpus cannot answer.
+
+### DB schema
+
+Unchanged.
+
+### Tech specs
+
+- **Sweep method:** read and rewrite per file. A bulk regex was tried for the id-stripping half and produced 30 mangled sentences plus one corrupted numeric range; it was kept only as a first pass, with every changed line then reviewed in the diff.
+- **Enforcement:** a Vitest test in the existing suite. Rejected: a lint rule, which would add a dependency and a second runner for one assertion.
+- **Deployment target:** unchanged; comments do not ship.
+- **Data store:** none.
+
+### Verification
+
+The full suite is the behaviour proof: 857 tests pass, the same set as before the sweep plus the five the gate adds, and both typechecks and the web build are clean. Corpus figures were read from the snapshot manifest and the live database, which is what caught the two-snapshot chunk count.

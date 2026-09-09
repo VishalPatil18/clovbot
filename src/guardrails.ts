@@ -6,7 +6,7 @@ export type GuardrailKind = "refuse" | "emergency";
 export interface GuardrailHit {
   trigger: RefusalTrigger;
   kind: GuardrailKind;
-  /** Stated to the member. Names the boundary rather than stonewalling. FR-21. */
+  /** Stated to the member. Names the boundary rather than stonewalling. */
   explanation: string;
 }
 
@@ -19,27 +19,20 @@ interface Rule {
   explanation: string;
   /**
    * Authored, not translated at runtime. A guardrail that speaks the wrong
-   * language is a guardrail the member cannot act on. FR-P3-43, NFR-P3-12.
+   * language is a guardrail the member cannot act on.
    */
   explanationEs: string;
 }
 
 /**
- * The ten bucket C triggers from docs/call-drivers.md section 6, as rules rather
- * than a classifier. A guardrail that is non-deterministic is not a guardrail:
- * the same question must refuse on every run, and every refusal must be
- * explainable by pointing at the rule that fired.
- *
- * Order matters. Emergencies are checked first, because a member describing
- * acute symptoms needs care guidance before any other boundary applies.
+ * Ten triggers as rules, not a classifier: the same question must refuse on every
+ * run. Emergencies are checked first, before any other boundary applies.
  */
 const RULES: Rule[] = [
   {
     trigger: "C-06",
     kind: "emergency",
-    // "emergency" alone is also a benefit category ("emergency room copay"), so
-    // the bare word cannot fire this. Either an acute symptom, or the member
-    // saying they are in one right now.
+    // "emergency room copay" is a benefit question, so the bare word cannot fire.
     match:
       /\b(911|chest pain|can'?t breathe|cannot breathe|trouble breathing|shortness of breath|stroke|heart attack|unconscious|bleeding heavily|overdose|suicidal|kill myself|want to die)\b|\b(i am|i'?m|having|this is|it'?s)\b[^.?!]{0,24}\b(an? )?(medical )?emergency\b|\b(dolor en el pecho|no puedo respirar|dificultad para respirar|falta de aire|derrame cerebral|infarto|ataque al coraz[oó]n|inconsciente|sangrando mucho|sobredosis|quiero morir(me)?|suicid\\w*)\b|\bes una emergencia\b|\btengo una emergencia\b/i,
     explanation:
@@ -135,7 +128,7 @@ const RULES: Rule[] = [
 
 /**
  * Runs before retrieval. A bucket C question never reaches the model, so it
- * cannot leak a partial answer on the way to being refused. FR-21.
+ * cannot leak a partial answer on the way to being refused.
  */
 export function checkGuardrails(question: string, speech: Speech = "en"): GuardrailHit | null {
   const text = question.trim();

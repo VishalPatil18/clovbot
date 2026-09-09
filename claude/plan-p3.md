@@ -13,7 +13,7 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
-| Status | **Complete.** Eight stages done, shipping as v1.2.0 |
+| Status | **Complete.** Nine stages done, shipping as v1.2.0 |
 | Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
 | Last Updated | 2026-09-09 |
 | Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
@@ -214,6 +214,26 @@
 
 ---
 
+## Stage 9 - Comments that earn their place, and a documented corpus
+
+- **Goal:** Bring every comment in the code under the rule `CLAUDE.md` §5 already states, and answer in the README where the corpus came from.
+- **Context:** Added 2026-09-09. Roughly 2,500 comment lines had accumulated, 410 of them carrying requirement ids, decision ids or stage numbers. Those references were written when the plan was open on the next screen; a reader without it gets a dead pointer and a paragraph where a line would do.
+- **Scope in:** `src`, `web/src`, `tests`, `scripts`, `eval`, `migrations` and the stylesheets. A test that fails on any comment carrying an id or a stage, so the rule holds without anyone remembering it. A README section giving the corpus provenance in full, with figures measured on the day.
+- **Scope out:** `claude/` and `docs/`, whose subject is the plan itself; stripping stage headings from a build plan deletes the document. Behaviour of any kind: this stage changes no code path.
+- **Acceptance criteria:**
+  - [x] No comment carries a requirement id, a decision id, a stage or a release.
+  - [x] Comments run to 15 words, or two lines where the code looks wrong but is right.
+  - [x] No comment restates the line beneath it or describes code it does not sit on.
+  - [x] The suite and the typecheck pass with the same counts as before the sweep.
+  - [x] A gate fails on a reintroduced id.
+  - [x] The README states the source, the fetch, the conversion, the split and how much reached the index, measured.
+- **Test plan:** The existing suite is the behaviour proof, since nothing but comments changed. One new test enumerates every comment in the swept trees and fails on a reference. Corpus figures verified against the snapshot manifest and the live database.
+- **Effort:** M
+- **Exit signal:** A reader who has never seen the plan can read any file in the repository and learn only things that are true about the code in front of them.
+- **Status:** [x] done, 2026-09-09.
+
+---
+
 ## Completion Checklist
 
 - [x] Stage 1 - Row-level security
@@ -224,6 +244,7 @@
 - [x] Stage 6 - Caching
 - [x] Stage 7 - Feedback that goes somewhere
 - [x] Stage 8 - A transcript the member can keep
+- [x] Stage 9 - Comments that earn their place, and a documented corpus
 
 ---
 

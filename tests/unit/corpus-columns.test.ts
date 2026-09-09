@@ -81,7 +81,7 @@ describe("extractPlanColumn", () => {
     expect(text).toMatch(/language assistance services, free of charge, are available/);
   });
 
-  // D-031: a page that cannot be attributed must fail, never emit unattributed amounts.
+  // A page that cannot be attributed must fail, never emit unattributed amounts.
   it("throws when the document carries no plan header at all", () => {
     const headerless = FULL_DOCUMENT.replace(/\(Plan/g, "XXXXX");
     expect(() => extractPlanColumn(headerless, "004")).toThrow(/no plan header/i);
@@ -97,7 +97,7 @@ describe("extractPlanColumn", () => {
   });
 });
 
-// D-033: plan 007 is the right-hand column, and the benefit-label column sits on
+// Plan 007 is the right-hand column, and the benefit-label column sits on
 // the far side of plan 004's column rather than adjacent to it.
 describe("extractPlanColumn, right-hand column", () => {
   it("keeps only the right plan's amounts", () => {
@@ -108,7 +108,7 @@ describe("extractPlanColumn, right-hand column", () => {
 
   it("drops every amount belonging to the left plan", () => {
     const text = extractPlanColumn(BENEFITS_PAGE, "007");
-    // 004's distinct amounts on this page: $350 and $500 outpatient surgery,
+    // 004's distinct amounts on this page: $350 and $500 outpatient surgery
     // $275 ambulatory surgery, $10 and $20 specialist.
     expect(text).not.toContain("$275");
     expect(text).not.toContain("$500");
@@ -153,9 +153,8 @@ describe("extractPlanColumn, right-hand column", () => {
 describe("column geometry is per page, not inherited [D-057]", () => {
   const hmo = readFileSync("tests/fixtures/corpus/live/h8010-sob-pages10-11.bbox.xhtml", "utf8");
 
-  // Page 11 carries a two-column benefits table with no "(Plan NNN)" header row,
-  // and the document alternates recto and verso margins. Inheriting page 10's
-  // absolute gutter cuts a word in half on page 11.
+  // A headerless table on alternating margins: page 10's absolute gutter cuts
+  // a word in half on page 11.
   it("converts a headerless table page whose margins differ from the page above", () => {
     expect(() => extractPlanColumn(hmo, "002")).not.toThrow();
     expect(() => extractPlanColumn(hmo, "003")).not.toThrow();
@@ -172,7 +171,7 @@ describe("column geometry is per page, not inherited [D-057]", () => {
   });
 
   // A table before any header cannot be attributed to plans the document has not
-  // introduced. Inheriting forward would guess; failing loudly is D-031's rule.
+  // introduced. Inheriting forward would guess; failing loudly is the rule.
   it("refuses a two-column money table appearing before the first header page", () => {
     const money = (y: number): string =>
       `<word xMin="60" yMin="${y}" xMax="90" yMax="${y + 8}">$10</word>` +

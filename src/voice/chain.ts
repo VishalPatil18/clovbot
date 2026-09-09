@@ -1,10 +1,6 @@
 /**
- * The provider chain for speech. FR-20 requires it to terminate in a provider
- * that cannot be exhausted, and requires the member to be told when the voice
- * changes rather than left to wonder.
- *
- * The chain is generic over the work so text-to-speech and speech-to-text share
- * one fall-through rule and one set of tests.
+ * The speech provider chain. Terminates in a tier that cannot be exhausted, and
+ * a degrade is announced. Generic over the work, so both directions share it.
  */
 export type ProviderName = "elevenlabs" | "fishaudio" | "browser";
 
@@ -18,7 +14,7 @@ export interface ChainResult<T> {
   provider: ProviderName;
   /** Providers that failed before this one, in order, with why. */
   failures: { provider: ProviderName; reason: string }[];
-  /** True when the answer did not come from the first choice. FR-20. */
+  /** True when the answer did not come from the first choice. */
   degraded: boolean;
 }
 
@@ -61,7 +57,7 @@ const VOICE_NAME: Record<ProviderName, string> = {
   browser: "your device's own voice",
 };
 
-/** Told, not hidden. FR-20. */
+/** Told, not hidden. */
 export function degradeNotice(result: ChainResult<unknown>): string | null {
   if (!result.degraded) return null;
   return `The usual voice was unavailable, so this is being read by ${VOICE_NAME[result.provider]}.`;

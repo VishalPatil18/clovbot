@@ -36,7 +36,7 @@ describe("the writeup separates what exists from what does not [FR-P3-26]", () =
 });
 
 describe("no invented regulatory requirements [FR-P3-29]", () => {
-  // The failure mode this stage exists to avoid: a plausible citation nobody
+  // The failure mode to avoid: a plausible citation nobody
   // can trace. Every regulation named in the body must appear in Sources.
   it("lists every regulation it cites", () => {
     const cited = new Set([

@@ -77,11 +77,8 @@ interface PlanColumns {
 }
 
 /**
- * Header words read "(Plan" "004)", so the plan id is the token after it.
- *
- * The Spanish edition writes "(plan 004)" in lower case. One character, and the
- * only reason it was not read as a document with no columns at all is that
- * D-031 fails loudly rather than emitting amounts it cannot attribute.
+ * Header words read "(Plan" "004)", so the id is the token after it.
+ * The Spanish edition writes it lower case, which is why the match ignores case.
  */
 const PLAN_WORD = /^\(plan$/i;
 
@@ -99,11 +96,7 @@ function findPlanHeaders(page: BboxPage): PlanHeaders | null {
   return { leftPlanId: left.planId, rightPlanId: right.planId, leftX: left.x, rightX: right.x };
 }
 
-/**
- * Gutters are measured on the page being rendered. They are a function of which
- * words land where, so a page inheriting another page's absolute boundary cuts
- * text in half wherever the two pages differ - which recto and verso always do.
- */
+/** Measured per page: an inherited boundary cuts recto and verso in half. */
 function columnsFor(page: BboxPage, headers: PlanHeaders): PlanColumns {
   const pageLeftEdge = Math.min(...page.words.map((w) => w.x));
   return {
@@ -115,9 +108,8 @@ function columnsFor(page: BboxPage, headers: PlanHeaders): PlanColumns {
 }
 
 /**
- * The column break is the gutter between the two columns, not the midpoint between
- * the headers: headers are centred in their column, so their midpoint lands inside
- * the left column's text. The gutter is the x that the fewest words cross.
+ * The gutter, not the midpoint between headers: headers are centred, so their
+ * midpoint lands inside the left column's text.
  */
 function findGutter(words: BboxWord[], lo: number, hi: number): number {
   const midpoint = (lo + hi) / 2;
@@ -145,13 +137,8 @@ function findGutter(words: BboxWord[], lo: number, hi: number): number {
 }
 
 /**
- * Emits one plan's column from a side-by-side Summary of Benefits.
- *
- * Column geometry is learned from the pages that carry a "(Plan NNN)" header and
- * inherited by pages that do not, because the layout repeats but the header does
- * not. Splitting is decided per line, not per page: a page can mix a comparison
- * table with full-width prose, and cutting the prose at the column boundary would
- * silently drop half of every sentence.
+ * One plan's column from a side-by-side Summary of Benefits. Geometry is learned
+ * from headed pages, then split per line: a page can mix a table with full-width prose.
  */
 export function extractPlanColumn(xhtml: string, planId: string): string {
   const pages = parseBboxPages(xhtml);
@@ -177,11 +164,7 @@ export function extractPlanColumn(xhtml: string, planId: string): string {
     .join("\n\n");
 }
 
-/**
- * Nearest preceding page carrying a header. Searching forward too would attribute
- * a table that appears before any header to plans it has not introduced yet, and
- * a page that cannot be attributed must fail rather than guess. D-031.
- */
+/** Backwards only: searching forward would attribute a table to plans not yet introduced. */
 function nearestHeaders(headersPerPage: (PlanHeaders | null)[], index: number): PlanHeaders | null {
   for (let i = index; i >= 0; i -= 1) {
     const headers = headersPerPage[i];

@@ -1,6 +1,5 @@
 /**
- * plan-p1 Stage 8 acceptance, against the live database and model. A script
- * rather than tests because it needs both; the numbers are printed, not asserted.
+ * Guardrail and escalation checks. Needs the live database and model, so not a test.
  */
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";

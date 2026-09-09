@@ -10,9 +10,8 @@ export interface CorpusScope {
 }
 
 /**
- * What the corpus covers. One definition, imported by the corpus commands, ingest,
- * the API and the eval harness, which previously disagreed across module constants
- * and three CORPUS_* environment variables. Adding a plan is one record. D-053.
+ * One definition of what the corpus covers, shared by every command that needed it
+ * and previously disagreed. Adding a plan is one record.
  */
 export const CORPUS_SCOPE: CorpusScope = {
   countyId: "34017",
@@ -40,7 +39,7 @@ export const contractIds = (): string[] => [
   ...new Set(CORPUS_SCOPE.plans.map((ref) => ref.contractId)),
 ];
 
-/** Catalog names, so a member reads a plan name and never a contract number. D-055. */
+/** Catalog names, so a member reads a plan name and never a contract number. */
 const PLAN_NAMES: Record<string, string> = {
   "H5141-004": "Clover Health Choice (PPO)",
   "H5141-007": "Clover Health Choice Value (PPO)",
@@ -82,11 +81,7 @@ export const toPlanChoices = (refs: PlanRef[]): PlanChoice[] =>
     name: planDisplayName(ref),
   }));
 
-/**
- * Resolves a request's plan against what is indexed. Both halves must match: a
- * plan id repeats across contracts, and accepting one alone would scope a member
- * to another contract's amounts. D-049, D-055.
- */
+/** Both halves must match: a plan id alone would scope to another contract's amounts. */
 export function resolveIndexedPlan(
   plans: PlanChoice[],
   contractId: string | null,

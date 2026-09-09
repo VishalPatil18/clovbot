@@ -1,11 +1,8 @@
 import type { GateOutcome, RankedChunk } from "./types.ts";
 
 /**
- * Reciprocal rank fusion. Ties resolve deterministically by id. FR-02.
- *
- * Mirrors the Postgres function used in production so the ranking can be
- * reasoned about and tested without a database. Both use score = sum of
- * 1 / (k + rank), rank being 1-based.
+ * Reciprocal rank fusion, ties resolved by id. Mirrors the Postgres function so
+ * ranking can be tested without a database: score = sum of 1 / (k + rank).
  */
 export function fuseRrf(
   dense: readonly string[],
@@ -26,10 +23,8 @@ export function fuseRrf(
 }
 
 /**
- * Coarse relevance gate. FR-03, amended by D-038: the reranker score orders well
- * but its absolute value collapses on conversational phrasing, so this catches
- * only questions with nothing relevant at all. The answer contract is enforced by
- * the structured payload in src/answer.ts, not by this threshold.
+ * Coarse gate only: the reranker orders well but its absolute value collapses on
+ * conversational phrasing. The contract is enforced in src/answer.ts, not here.
  */
 export function applyConfidenceGate(topScore: number, floor: number): GateOutcome {
   if (!Number.isFinite(topScore) || topScore < floor) {

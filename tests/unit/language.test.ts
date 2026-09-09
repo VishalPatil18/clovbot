@@ -6,7 +6,7 @@ describe("detectLanguage [FR-24]", () => {
     expect(detectLanguage("what is my copay for a specialist visit")).toBe("en");
   });
 
-  // FR-P3-42 amends FR-24: Spanish is answered, every other language is not.
+  // Spanish is answered; every other language is not.
   it("identifies Spanish as Spanish", () => {
     expect(detectLanguage("cual es mi copago para una visita al especialista")).toBe("es");
     expect(detectLanguage("¿cuánto cuesta ver a un especialista?")).toBe("es");

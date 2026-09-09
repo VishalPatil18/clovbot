@@ -847,3 +847,23 @@ Two more were the same shape: `.assistant--page > .assistant__foot` out-specifie
 **Verified by looking at the artifact**, in both languages and end to end: the built bundle served, history seeded, the control pressed, the download captured and the PDF read back.
 
 **Next:** cut v1.2.0.
+
+## 2026-09-09 - P3 Stage 9: comments that earn their place, and a documented corpus
+
+**Did:** swept every comment in the code under the rule `CLAUDE.md` §5 already stated, added a test that keeps it, and documented where the corpus came from. 857 tests pass.
+
+**Files:** added `tests/unit/comments.test.ts` and `docs/corpus.md`. Rewrote comments across 116 files in `src`, `web/src`, `tests`, `scripts`, `eval`, `migrations` and the stylesheets. Regenerated `docs/corpus-report.md`. Changed README, architecture, the SRS to v1.5.0, plan-p3, D-104 and the changelog.
+
+**411 comment lines carried a requirement id, a decision id or a stage number.** They were written with the plan open on the next screen. A reader without it gets a dead pointer and a paragraph where a line would do, which is what `CLAUDE.md` §5 has said since the beginning.
+
+**The gate is the durable part.** A test enumerates every comment in the swept trees and fails on an id, a stage, a phase, a build pass or a release. Without it the sweep is a one-off that decays on the next commit.
+
+**A bulk regex was the wrong tool and the diff proved it.** Stripping the ids mechanically left 30 mangled sentences ("This is why exists", "failing loudly is's rule") and silently corrupted `0..1` into `0.1` in the reranker. Every one was repaired by hand after reading the diff. The lesson is not that regex is wrong; it is that a mechanical edit needs a mechanical check, and reading the diff was it.
+
+**Three tests were anchored on comment prose** and broke: a feedback test sliced the source from a comment string, and two responsive tests matched sentences in the stylesheet. Two were re-anchored on code; the third kept a comment assertion, because "the source says why" is the thing it exists to check.
+
+**Left alone deliberately:** `claude/` and `docs/`, whose subject is the plan; test names carrying `[FR-xx]`, which are traceability rather than comments; and `scripts/stageN-checks.ts` filenames, because renaming them would dangle references in `claude/context.md`, which this stage does not touch.
+
+**The corpus documentation is measured, not recalled.** Counting exposed that `chunks` holds 3,345 rows across two snapshots, of which 2,737 belong to the current one. Publishing the larger number would have overstated the corpus by 22%.
+
+**Next:** cut v1.2.0.

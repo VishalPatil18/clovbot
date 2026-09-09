@@ -9,10 +9,8 @@ import {
 import { MEMBER_SERVICES_DISPLAY } from "./Assistant.tsx";
 
 /**
- * Replica of cloverhealth.com for the case-study host page. Layout, copy, colour
- * and imagery follow the real site; contact numbers are placeholders per D-026,
- * and the CMS marketing identifier is omitted because reproducing it would
- * assert CMS approval of this page.
+ * Replica of cloverhealth.com as the case-study host page. Contact numbers are
+ * placeholders, and the CMS marketing identifier is omitted: it would assert approval.
  */
 
 const BENEFITS = [

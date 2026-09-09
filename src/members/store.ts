@@ -6,7 +6,6 @@ import { partDStage, type DrugThresholds } from "./stage.ts";
 /**
  * One column of one row, named so an audit record can say what was read
  * without holding what it said. Rendered as `member_claims.member_owes@CLM-0031`.
- * D-092, FR-P3-18.
  */
 export interface FieldRead {
   table: string;
@@ -24,11 +23,7 @@ export interface MemberFact {
   /** The field, written as a member would say it: "What you owe". */
   field: string;
   text: string;
-  /**
-   * The columns this fact was built from. The audit record is derived from
-   * these rather than compiled separately, so what is logged and what is
-   * answered cannot drift apart. FR-P3-22.
-   */
+  /** The audit record derives from these, so logged and answered cannot drift. */
   sources: FieldRead[];
 }
 
@@ -44,11 +39,8 @@ const money = (value: unknown): string => `$${Number(value).toFixed(2).replace(/
 const day = (value: unknown): string => new Date(String(value)).toISOString().slice(0, 10);
 
 /**
- * The columns each topic needs, and no others. FR-P3-14.
- *
- * `members` is read on every topic because a citation cannot be built without
- * the plan it belongs to. `display_name` is on no list: nothing in an answer
- * addresses the member by name, so nothing reads it. D-091.
+ * The columns each topic needs, and no others. `members` is on every list
+ * because a citation needs the plan; `display_name` is on none.
  */
 const IDENTITY_COLUMNS = ["id", "contract_id", "plan_id", "plan_year"] as const;
 
@@ -73,12 +65,8 @@ const sourcesFor = (table: string, columns: string, rowId: string): FieldRead[] 
   columns.split(",").map((column) => ({ table, column: column.trim(), rowId }));
 
 /**
- * Puts the member's identity on the connection for the length of one
- * transaction, which is what the row-level security policies filter by.
- *
- * Transaction-local rather than a session SET: the pooler hands this server
- * connection to whichever request comes next, and a lingering identity would
- * travel with it. D-090, FR-P3-05.
+ * The identity the row-level security policies filter by, set for one transaction.
+ * Never a session SET: the pooler hands this connection to the next request.
  */
 export async function withMemberIdentity<T>(
   client: pg.Client,
@@ -98,15 +86,8 @@ export async function withMemberIdentity<T>(
 }
 
 /**
- * The facts one topic needs from one member's record, and nothing else.
- *
- * Scoping lives here rather than in the prompt: a prompt cannot be relied on to
- * keep one member's data away from another. D-080. Since P3 the database
- * enforces it too, and these clauses are defence in depth rather than the
- * boundary. FR-P3-08.
- *
- * The topic comes from the same rule that decides whether a signed-out member
- * must sign in, so the gate and the read cannot disagree. D-091, FR-P3-16.
+ * One topic's facts, and nothing else. A prompt cannot keep members apart, so
+ * scoping is here and in the database; one rule drives both the gate and the read.
  */
 export async function loadMemberRecord(
   client: pg.Client,
@@ -174,7 +155,7 @@ async function readMemberRecord(
           item: "Accumulators",
           field: "Drug payment stage",
           // Derived, never stored: a stage beside a spend that disagrees with it
-          // is the contradiction D-081 exists to prevent.
+          // is the contradiction this exists to prevent.
           text:
             `Drug spending this year is ${money(spend)}, which is the ` +
             `${partDStage(spend, thresholds)} stage on this plan ` +
@@ -267,11 +248,8 @@ async function readMemberRecord(
 }
 
 /**
- * Which plan a member is on, and nothing else.
- *
- * Retrieval cannot be scoped without it, so it is read for every question a
- * member asks, including ones that touch no record field. It holds no protected
- * value: the contract and plan are printed on the member's own ID card.
+ * Read for every member question, because retrieval cannot be scoped without it.
+ * No protected value: the contract and plan are printed on their ID card.
  */
 export async function loadMemberPlan(
   client: pg.Client,
@@ -292,7 +270,7 @@ export async function loadMemberPlan(
   });
 }
 
-/** Every column the facts were built from, deduplicated and ordered. FR-P3-17. */
+/** Every column the facts were built from, deduplicated and ordered. */
 export function fieldsRead(record: MemberRecord | null): string[] {
   if (record === null) return [];
   const names = record.facts.flatMap((fact) => fact.sources.map(formatFieldRead));
@@ -302,11 +280,7 @@ export function fieldsRead(record: MemberRecord | null): string[] {
 /** An exact record field outranks anything the reranker can score. */
 const EXACT_MATCH_SCORE = 1;
 
-/**
- * A record fact rendered as a citable source, so a member answer travels the
- * same prompt, citation and cite-or-refuse path as a document answer, and a
- * combined answer carries both kinds. FR-P2-28, FR-P2-29, D-080.
- */
+/** Rendered citable, so a member answer travels the document answer's path. */
 export function memberFactAsChunk(record: MemberRecord, fact: MemberFact): RerankedChunk {
   return {
     id: `member-${String(record.id)}-${fact.item}-${fact.field}`.replace(/[^a-zA-Z0-9-]+/g, "-"),
@@ -326,17 +300,15 @@ export interface AccessRecord {
   memberId: number;
   sessionId: string | null;
   topic: MemberTopic | null;
-  /** Already redacted by the caller, exactly as the turn log is. FR-P3-23. */
+  /** Already redacted by the caller, exactly as the turn log is. */
   question: string;
   fieldsRead: string[];
   outcome: string;
 }
 
 /**
- * One row per authenticated turn, whatever the outcome. FR-P3-17, FR-P3-20.
- *
- * Insert only: the role holds no update or delete on this table, so a code path
- * that tried to rewrite history would be refused by the database. FR-P3-21.
+ * One row per authenticated turn, whatever the outcome. Insert only: the role
+ * holds no update or delete, so rewriting history is refused by the database.
  */
 export async function writeAccessLog(client: pg.Client, entry: AccessRecord): Promise<void> {
   await withMemberIdentity(client, entry.memberId, async () => {

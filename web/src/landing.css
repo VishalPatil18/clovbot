@@ -23,7 +23,7 @@
 }
 .cl-disclaimer p { margin: 0; font-size: 15px; text-align: center; }
 
-/* Collapsed form of the notice. FR-30 needs it present, not necessarily open. */
+/* Collapsed form of the notice. needs it present, not necessarily open. */
 .cl-notice-chip {
   display: flex; align-items: center; gap: 8px; width: 100%;
   min-height: 34px; padding: 6px 16px;
@@ -208,7 +208,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Phones. FR-P3-45. The floor is 393 CSS pixels.
+   Phones. The floor is 393 CSS pixels.
    --------------------------------------------------------------------------- */
 @media (max-width: 48rem) {
   .cl-head { padding: 12px 16px; gap: 12px; }
@@ -217,10 +217,8 @@
   .cl-head__actions > * { flex: 1 1 auto; justify-content: center; }
 
   /*
-   * A wrapping flex row with space-between produced ragged half-rows: two links
-   * here, one there, nothing aligned. One column, one tap target per row, and
-   * no hamburger: Nielsen Norman's senior guidance is explicit that hiding
-   * primary navigation is a known failure for this audience.
+   * A wrapping row produced ragged half-rows. One column, one target per row,
+   * and no hamburger: hiding primary navigation fails this audience.
    */
   /* Two separate lists, so the gap between them read as a missing row. */
   .cl-nav { padding: 0; gap: 0; }

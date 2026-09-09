@@ -45,23 +45,17 @@ import { speak, transcribe } from "./voice/providers.ts";
 const PORT = Number(process.env["PORT"] ?? "5174");
 const PLAN_YEAR = CORPUS_SCOPE.planYear;
 
-/**
- * Offered plans, built from the corpus scope so the picker cannot name a plan the
- * corpus does not cover. Names come from the catalog, not from the mock's invented
- * placeholders, and a plan without one raises here rather than showing a member a
- * contract number. D-055.
- */
-/** Populated at boot from the index, so the picker cannot outrun the corpus. */
+/** Loaded at boot from the index, so the picker cannot outrun the corpus. */
 export let PLANS: PlanChoice[] = [];
 
-/** FR-P2-16. Read at boot from the index, never from a disk the container lacks. */
+/** Read from the index, never from a disk the container may lack. */
 export let CORPUS: { documentsFetchedAt: string; ingestedAt: string; planYear: number } | null = null;
 
-/** A spoken answer carries its own warning; audio cannot be scrolled back to. */
+/** Audio cannot be scrolled back to, so the warning is spoken too. */
 const withStaleness = (spoken: string, warning: string | null): string =>
   warning === null ? spoken : `${spoken} ${warning}`;
 
-/** The plan answered when a question needs no plan context. Retrieval always scopes. */
+/** Used when a question needs no plan. Retrieval scopes regardless. */
 function firstIndexedPlan(): PlanRef {
   const first = PLANS[0];
   if (first === undefined) throw new Error("no plans are indexed");
@@ -72,17 +66,17 @@ function firstIndexedPlan(): PlanRef {
 const MAX_QUESTION = 500;
 const MAX_NOTE = 1_000;
 
-/** FR-30, NFR-SEC-02. Generous enough for a demo, low enough to bound cost. */
+/** Generous enough for a demo, low enough to bound cost. */
 const SESSION_LIMIT = 20;
 const SESSION_WINDOW = "1 hour";
 const IP_LIMIT = 60;
 const IP_WINDOW = "1 hour";
 
 const SESSION_COOKIE = "clovbot_sid";
-/* Separate from the anonymous session, and rotated on every sign-in. D-084. */
+/* Separate from the anonymous session, and rotated on every sign-in. */
 const MEMBER_COOKIE = "clovbot_member";
 
-/** Opaque and server-issued. Carries no member identity. NFR-SEC-01. */
+/** Opaque and server-issued. Carries no member identity. */
 function sessionId(req: IncomingMessage, res: ServerResponse): string {
   const existing = /clovbot_sid=([0-9a-f-]{36})/.exec(req.headers.cookie ?? "")?.[1];
   if (existing !== undefined) return existing;
@@ -120,20 +114,14 @@ const json = (res: ServerResponse, status: number, body: unknown): void => {
   res.end(JSON.stringify(body));
 };
 
-/**
- * FR-P2-32. Ten codes an hour per address and thirty per address family, counted
- * in the same Postgres mechanism the question limits already use.
- */
+/** Ten codes an hour per address, thirty per address family. */
 const CODE_LIMIT_PER_EMAIL = 10;
 const CODE_LIMIT_PER_IP = 30;
 
-/** FR-P2-35. The cookie outlives neither cap. */
+/** The cookie outlives neither cap. */
 const MEMBER_COOKIE_MAX_AGE = 8 * 60 * 60;
 
-/**
- * The same reply whether or not the address is enrolled, so the endpoint cannot
- * be used to discover which of the five exist.
- */
+/** Same reply either way, so this cannot enumerate enrolled addresses. */
 const CODE_SENT = { sent: true } as const;
 
 async function handleLoginRequest(body: string, res: ServerResponse, ip: string): Promise<void> {
@@ -204,16 +192,13 @@ async function handleLoginVerify(body: string, res: ServerResponse): Promise<voi
   }
 }
 
-/**
- * FR-P3-24. Said when a session ran out, rather than showing a sign-in form with
- * no explanation. Being signed in a minute ago and not now reads as a fault.
- */
+/** Signed in a minute ago and not now reads as a fault; say why. */
 const SESSION_ENDED: Record<"idle" | "expired", string> = {
   idle: "You were signed out after 30 minutes without activity. Sign in again to see your own details.",
   expired: "Your sign-in lasted its full 8 hours and has ended. Sign in again to see your own details.",
 };
 
-/** FR-P2-36. Plain language, and never a raw error. */
+/** Plain language, and never a raw error. */
 const SIGN_IN_MESSAGE: Record<string, string> = {
   wrong: "That code did not match. Check it and try again, or ask for a new one.",
   expired: "That code has expired. Ask for a new one and it will arrive in a moment.",
@@ -260,8 +245,7 @@ const server = createServer((req, res) => {
       await client.connect();
       try {
         const { session, ended } = await currentSession(client, memberCookie(req), new Date());
-        // FR-P3-24. A session that ran out is told apart from never having one,
-        // so the panel can say what happened rather than just showing a form.
+        // Expiry is told apart from never having signed in, so the panel can explain.
         json(res, 200, { signedInAs: session?.displayName ?? null, sessionEnded: ended });
       } finally {
         await client.end();
@@ -346,7 +330,7 @@ function collectBinary(
   );
 }
 
-/** FR-27. Responses are logged against the turn they answer. */
+/** Logged against the turn it answers. */
 async function handleFeedback(body: string, res: ServerResponse): Promise<void> {
   let turnId = "";
   let resolved: boolean | null = null;
@@ -359,8 +343,7 @@ async function handleFeedback(body: string, res: ServerResponse): Promise<void> 
     };
     turnId = typeof parsed.turnId === "string" ? parsed.turnId : "";
     resolved = typeof parsed.resolved === "boolean" ? parsed.resolved : null;
-    // Only one of four. Anything else is dropped rather than stored, so the
-    // endpoint cannot become a free-text channel into the database.
+    // Dropped rather than stored, so this cannot become a free-text channel.
     reason = FEEDBACK_REASONS.find((allowed) => allowed === parsed.reason) ?? null;
   } catch {
     res.writeHead(400, { "content-type": "application/json" });
@@ -387,7 +370,7 @@ async function handleFeedback(body: string, res: ServerResponse): Promise<void> 
   }
 }
 
-/** FR-19, FR-20. Synthesis runs here so the provider keys stay off the page. */
+/** Runs here so the provider keys stay off the page. */
 async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
   let text = "";
   let speech: Speech = "en";
@@ -406,11 +389,7 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
     return;
   }
 
-  // Cache before the chain: a repeated answer is never synthesised twice. FR-20.
-  // Every provider is checked, because a recording made while the chain was
-  // degraded is still a valid recording of the same words. In Postgres rather
-  // than on a container filesystem, so a recording survives a restart and is
-  // shared between instances. FR-P3-58, D-100.
+  // Every provider is checked: one recorded while degraded is still valid.
   const client = connect();
   await client.connect();
   try {
@@ -434,7 +413,7 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
     const notice = degradeNotice(result);
 
     if (result.value === null) {
-      // The browser tier: nothing to send, the page speaks it. FR-20.
+      // The browser tier: nothing to send, the page speaks it.
       res.writeHead(200, { "content-type": "application/json", "x-voice-provider": result.provider });
       res.end(JSON.stringify({ provider: result.provider, useBrowserVoice: true, notice }));
       return;
@@ -462,7 +441,7 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
   }
 }
 
-/** FR-18. Returns a transcript the member edits before it is sent. */
+/** Returns a transcript the member edits before it is sent. */
 async function handleTranscribe(
   audio: Uint8Array,
   mime: string,
@@ -494,7 +473,7 @@ async function handleTranscribe(
   }
 }
 
-/** FR-22. Stores the pre-filled request and confirms. Nothing is sent anywhere. */
+/** Stores the request and confirms. Nothing is sent anywhere. */
 async function handleCallback(
   body: string,
   res: ServerResponse,
@@ -520,7 +499,7 @@ async function handleCallback(
   try {
     await client.connect();
     const id = await writeCallback(client, {
-      // FR-31 applies here too: this text is persisted.
+      // Persisted, so it is redacted like everything else.
       question: redactIdentifiers(question),
       planContext: typeof parsed["planContext"] === "string" ? parsed["planContext"] : null,
       documentsSearched: Array.isArray(parsed["documentsSearched"])
@@ -550,7 +529,7 @@ async function handleAsk(
   res: ServerResponse,
   session: string,
   ip: string,
-  /** The member cookie as sent. Resolved to a session row, never trusted as an id. */
+  /** Resolved to a session row, never trusted as an id. */
   memberToken: string | null,
 ): Promise<void> {
   let question = "";
@@ -580,8 +559,7 @@ async function handleAsk(
     return;
   }
 
-  // An unindexed plan retrieves nothing and reads as a refusal. Say it is a bad
-  // request instead. Contract defaults only while the corpus covers one.
+  // An unindexed plan retrieves nothing and would read as a refusal.
   const planRef = planId === null ? null : resolveIndexedPlan(PLANS, contractId, planId);
   if (planId !== null && planRef === null) {
     res.writeHead(400, { "content-type": "application/json" });
@@ -595,8 +573,7 @@ async function handleAsk(
     connection: "keep-alive",
   });
 
-  // FR-10, D-022: ask for plan only when the answer depends on it, and only
-  // once per session. The member may ask anything before choosing.
+  // Asked only when the answer depends on it, and only once.
   if (planRef === null && needsPlanContext(question)) {
     send(res, { type: "needs_plan", plans: PLANS, question });
     res.end();
@@ -604,13 +581,12 @@ async function handleAsk(
   }
 
   const client = connect();
-  // Instrumentation runs after the answer is on screen. A failure there must not
-  // replace a delivered answer with an error the member cannot act on.
+  // A failure logging must not replace an answer already on screen.
   let delivered = false;
   try {
     await client.connect();
 
-    // FR-30, NFR-SEC-02. A clear message, never a hang or a stack trace.
+    // A clear message, never a hang or a stack trace.
     for (const [key, limit, window, scope] of [
       [`s:${session}`, SESSION_LIMIT, SESSION_WINDOW, "this session"],
       [`i:${ip}`, IP_LIMIT, IP_WINDOW, "this network"],
@@ -627,11 +603,7 @@ async function handleAsk(
       }
     }
 
-    /*
-     * FR-P2-45's structural half. The member id comes from a live session row
-     * and from nowhere else, so no classifier - Stage 7's or any later one -
-     * can cause member data to be retrieved for someone without a session.
-     */
+    // From a live session row and nowhere else, so no classifier can widen it.
     const { session: member, ended } = await currentSession(client, memberToken, new Date());
     if (ended !== null) send(res, { type: "session_ended", message: SESSION_ENDED[ended] });
 
@@ -648,7 +620,7 @@ async function handleAsk(
       },
     );
 
-    // FR-P2-17. Computed once so the written, spoken and printed copies agree.
+    // Computed once so the written, spoken and saved copies agree.
     const stale = stalenessWarning(CORPUS?.planYear ?? PLAN_YEAR, new Date());
 
     send(res, {
@@ -664,7 +636,7 @@ async function handleAsk(
       claims: turn.payload?.claims ?? [],
       unanswered: turn.payload?.unanswered ?? [],
       refusal: turn.payload?.refusal ?? null,
-      // Numbered in order of first appearance, so a claim marker maps to the list.
+      // Ordered by first appearance, so a claim marker maps to the list.
       citations:
         turn.payload === null
           ? []
@@ -674,8 +646,7 @@ async function handleAsk(
               label: citationLabel(entry.chunk, turn.language),
               documentId: entry.chunk.documentId,
             })),
-      // Every cited id, including ones merged onto a shared number, so a claim
-      // marker resolves even when two chunks render the same citation.
+      // Includes ids merged onto a shared number, so every marker resolves.
       claimCitationNumbers:
         turn.payload === null ? {} : Object.fromEntries(citationNumbers(turn.payload, turn.retrieved)),
       headline: turn.payload?.headline ?? null,
@@ -692,8 +663,7 @@ async function handleAsk(
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,
-      // FR-P3-64. A member's answer holds their record, and this table has no
-      // policy over it, so it is kept out rather than written and protected.
+      // A member's answer holds their record, and this table has no policy.
       answer: member === null ? turn.answer : null,
       provider: turn.provider,
       latencyMs: {
@@ -705,7 +675,7 @@ async function handleAsk(
       refusalTrigger: turn.refusalTrigger,
     });
 
-    // FR-23. After two consecutive refusals, stop offering to try again.
+    // After two consecutive refusals, stop offering to try again.
     send(res, { type: "turn", turnId });
 
     const refusals = await consecutiveRefusals(client, session);
@@ -722,8 +692,7 @@ async function handleAsk(
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    // FR-25: an upstream failure is an explicit error state with the human path,
-    // never a silent degrade into an uncited answer.
+    // An explicit error with the human path, never a silent uncited answer.
     if (delivered) console.error(`turn instrumentation failed: ${detail}`);
     else send(res, { type: "error", message: "Something went wrong reaching the plan documents.", detail });
   } finally {
@@ -733,10 +702,8 @@ async function handleAsk(
 }
 
 /**
- * A revision with a broken environment must fail to start, not answer /api/plans
- * and 503 every question. Constructing a client only checks the URL and the CA,
- * so the plan query is what actually proves the database is reachable and holds
- * an index. An empty result is a deploy with nothing to answer from. D-055.
+ * Constructing a client checks only the URL, so this query is the real probe.
+ * An empty result is a deploy with nothing to answer from.
  */
 async function boot(): Promise<void> {
   const client = connect();

@@ -50,11 +50,7 @@ const isTurn = (value: unknown): value is StoredTurn => {
   );
 };
 
-/**
- * FR-P2-18. History is a convenience, so every path here degrades to empty
- * rather than throwing: private browsing rejects access outright, and a device
- * that has been used for months can reject a write. FR-P2-19.
- */
+/** A convenience, so every path degrades to empty rather than throwing. */
 export function readHistory(): StoredTurn[] {
   try {
     const raw = storage().getItem(HISTORY_KEY);
@@ -82,9 +78,8 @@ export function writeHistory(turns: StoredTurn[]): void {
 }
 
 /**
- * Both labels, because `payload.ts` writes the citation in the answer's own
- * language. Matching only the English one left a Spanish member's claim data in
- * storage after they signed out.
+ * Both labels: the citation is written in the answer's language, and matching
+ * only English left a Spanish member's claim data in storage after sign-out.
  */
 const MEMBER_RECORD_LABELS = ["Your member record", "Su registro de miembro"];
 
@@ -95,7 +90,7 @@ export const isMemberTurn = (turn: { citations: { label: string }[] }): boolean 
   );
 
 /**
- * FR-P2-39. Signing out on a shared device removes anything sourced from the
+ * Signing out on a shared device removes anything sourced from the
  * member's own record; answers from public documents are theirs to keep.
  */
 export function clearMemberTurns(): StoredTurn[] {

@@ -22,7 +22,7 @@ export interface CorpusChunk {
   planYear: number;
   section: string;
   content: string;
-  /** D-006. Prepended before embedding and lexical indexing, not shown to members. */
+  /** Prepended before embedding and lexical indexing, not shown to members. */
   contextPrefix: string;
   embedText: string;
   language: Language;
@@ -32,11 +32,7 @@ export interface CorpusChunk {
 }
 
 const MAX_CHARS = 2_400;
-/**
- * Web pages carry dialog and button text ("Cancel", "Continue") that survives
- * extraction and reads as a heading. PDFs have real structure, so the floor
- * applies only where the furniture is.
- */
+/** Web pages leak button text that reads as a heading; PDFs have real structure. */
 const MIN_CORPORATE_CHARS = 80;
 const NO_SECTION = "Unlabelled";
 
@@ -50,9 +46,8 @@ const EOC_SECTION = /^\s*SECTION\s+\d+(?:\.\d+)?\s+(.+?)\s*$/;
 const EOC_SUBSECTION = /^\s*Section\s+\d+\.\d+\s+(.+?)\s*$/;
 
 /**
- * A therapeutic class heading. Mostly uppercase, but not entirely: "HMG-CoA" and
- * "(DMARDS)" are real headings, and requiring every character to be uppercase
- * silently indexed ten statins under the class above them. D-059.
+ * Mostly uppercase, not entirely: "HMG-CoA" is a real heading, and requiring
+ * every character silently indexed ten statins under the class above.
  */
 const FORMULARY_CLASS = /^(\s*)([A-Z][A-Za-z0-9 &,'/()-]{5,})\s*$/;
 
@@ -126,9 +121,7 @@ function splitIntoSections(text: string, kind: DocumentKind): Section[] {
   };
 
   const lines = text.split("\n");
-  // The Evidence of Coverage opens with a table of contents whose entries look
-  // exactly like headings. The body starts at the first bare "CHAPTER n:" line,
-  // so nothing before that is treated as a heading.
+  // The table of contents reads exactly like headings, so skip to "CHAPTER n:".
   const chaptered = kind === "evidence_of_coverage" || kind === "annual_notice_of_change";
   const bodyStart = chaptered ? lines.findIndex((line) => EOC_CHAPTER_BARE.test(line)) : 0;
 
@@ -186,11 +179,7 @@ const KIND_LABEL: Record<DocumentKind, string> = {
   corporate: "Clover Health public information",
 };
 
-/**
- * Header-aware chunking across every document kind. The contextual prefix is
- * derived from the heading path rather than generated, because the headings
- * already carry what D-006 wants; only chunks with no heading need the model.
- */
+/** The prefix comes from the heading path; only orphan chunks need the model. */
 export function chunkDocument(input: ChunkInput): CorpusChunk[] {
   const chunks: CorpusChunk[] = [];
   const used = new Map<string, number>();

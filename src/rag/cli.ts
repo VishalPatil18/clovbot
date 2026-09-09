@@ -27,7 +27,7 @@ const TOKENS_PER_MINUTE = Number(process.env["AZURE_EMBEDDING_TPM"] ?? "29000");
 const BATCH_TOKEN_BUDGET = 5_000;
 const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
 
-/** FR-P2-16. The manifest is on a disk the server does not have. D-066. */
+/** The manifest is on a disk the server does not have. */
 async function recordFreshness(snapshotId: string, documentsFetchedAt: string): Promise<void> {
   const client = connectAdmin();
   await client.connect();
@@ -40,12 +40,8 @@ async function recordFreshness(snapshotId: string, documentsFetchedAt: string): 
 }
 
 /**
- * One connection per unit of work, never one held across the loop.
- *
- * The embedding loop sleeps between batches to stay under the token budget, and
- * the pooler drops a connection left idle through those sleeps. `pg` raises that
- * as an unhandled error event, which killed a 40-minute ingest at chunk 235 with
- * no cleanup and no way to tell how far it had got.
+ * One connection per unit of work, never held across the loop: the pooler drops
+ * one left idle through the paced sleeps, which killed an ingest at chunk 235.
  */
 async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
   const client = connectAdmin();
@@ -59,7 +55,7 @@ async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T>
   }
 }
 
-/** D-007's typed half: the drug list as rows, not as prose. D-060. */
+/**'s typed half: the drug list as rows, not as prose. */
 async function ingestDrugs(snapshotId: string, snapshot: { entries: { documentId: string; kind: string }[] }): Promise<void> {
   const formulary = snapshot.entries.find((entry) => entry.kind === "formulary");
   if (formulary === undefined) return;
@@ -93,7 +89,7 @@ async function ingest(): Promise<void> {
   await ingestDrugs(snapshotId, snapshot);
   await recordFreshness(snapshotId, snapshot.createdAt);
 
-  // D-006: headings carry context for most chunks; only the orphans need the model,
+  // Headings carry context for most chunks; only the orphans need the model,
   // and their generated text is frozen so a second run does not churn.
   const orphans = chunks.filter((chunk) => chunk.needsGeneratedContext);
   const generated = readGeneratedContext(snapshotId);
@@ -118,14 +114,8 @@ async function ingest(): Promise<void> {
   console.log(`${chunks.length} chunks, ${changed.length} new or changed`);
 
   /*
-   * From here on the corpus is being rewritten, so the answers cached against
-   * this snapshot are suspect whatever happens next. Clearing runs in a finally
-   * rather than on the success path: a run that dies at chunk 235 leaves a
-   * half-written corpus, and that is precisely when a cached answer citing text
-   * that no longer exists is most likely and least expected.
-   *
-   * Last rather than first, so a question asked during the run cannot repopulate
-   * the cache from the corpus being replaced.
+   * In a finally, not on success: a half-written corpus is exactly when a stale
+   * cached answer is most likely. Last, so a question mid-run cannot repopulate it.
    */
   let done = 0;
   try {

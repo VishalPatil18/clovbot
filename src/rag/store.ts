@@ -6,7 +6,7 @@ import type { CitableKind, PlanRef } from "../types.ts";
 import type { PromptChunk } from "./prompt.ts";
 
 export interface RetrievedChunk extends PromptChunk {
-  /** Needed for citation rendering and EOC precedence. FR-06, FR-07. */
+  /** Needed for citation rendering and Evidence of Coverage precedence. */
   kind: CitableKind;
   distance: number;
 }
@@ -26,12 +26,8 @@ function client(variable: string): pg.Client {
 }
 
 /**
- * The running product's connection. Cannot bypass row-level security and holds
- * no DDL privilege, so a code path that forgets to scope a member query is
- * refused by the database rather than answered. D-090.
- *
- * No fallback to the admin URL. A missing variable must stop the process, not
- * quietly reconnect as the role that can read every member.
+ * The product's connection: no bypass, no DDL, so an unscoped member query is
+ * refused. No fallback to the admin URL, which would read every member.
  */
 export const connect = (): pg.Client => client("DATABASE_APP_URL");
 
@@ -41,10 +37,8 @@ export const connectAdmin = (): pg.Client => client("DATABASE_URL");
 const toVector = (values: number[]): string => `[${values.join(",")}]`;
 
 /**
- * The plans the index can actually answer for. Offering a plan whose documents
- * are missing produces a refusal that reads as a model failure, so the picker is
- * derived from the rows rather than from a list someone remembered to update.
- * Wildcard rows answer under every plan and name none. D-055.
+ * Derived from the rows, not a list: offering an unindexed plan produces a
+ * refusal that reads as a model failure. Wildcard rows name no plan.
  */
 export async function indexedPlans(client: pg.Client): Promise<PlanRef[]> {
   const { rows } = await client.query(
@@ -72,7 +66,7 @@ export async function existingChunkContent(
 
 /**
  * Upserts the snapshot's chunks and deletes any that no longer exist, so a second
- * run over unchanged sources changes nothing and duplicates nothing. NFR-OPS-01.
+ * run over unchanged sources changes nothing and duplicates nothing.
  */
 export async function upsertChunks(
   client: pg.Client,
@@ -126,9 +120,8 @@ export async function pruneChunks(
 export type RetrievalMode = "hybrid" | "dense" | "lexical";
 
 /**
- * Plan is filtered in SQL, before ranking, inside search_hybrid. Two plans share
- * near-identical prose with different amounts, so ranking first and filtering
- * after would let the wrong plan's copay win on similarity. D-033.
+ * Filtered in SQL before ranking: two plans share near-identical prose with
+ * different amounts, so ranking first lets the wrong copay win on similarity.
  */
 export async function searchHybrid(
   client: pg.Client,
@@ -138,7 +131,7 @@ export async function searchHybrid(
   limit: number,
   mode: RetrievalMode = "hybrid",
 ): Promise<RetrievedChunk[]> {
-  // FR-P3-32. Scoped in the query, beside the plan, so a Spanish question cannot
+  // Scoped beside the plan in the query, so a Spanish question cannot
   // retrieve an English chunk however well it scores.
   const { rows } = await client.query(
     "select * from search_hybrid($1,$2,$3,$4,$5,$6,$7,60,$8)",
@@ -171,7 +164,7 @@ export interface DrugLookup {
   planYear: number;
 }
 
-/** Every indexed drug name, for the router's deterministic selection. D-061. */
+/** Every indexed drug name, for the router's deterministic selection. */
 export async function loadDrugIndex(client: pg.Client, snapshotId: string): Promise<Set<string>> {
   const { rows } = await client.query(
     "select distinct normalized_name from drugs where snapshot_id = $1",
@@ -276,21 +269,18 @@ export interface TurnRecord {
   chunkIds: string[];
   corpusSnapshotId: string;
   outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
-  /**
-   * What the member actually read. Null for a turn carrying a member id: that
-   * answer holds their record, and this table has no policy over it. D-102.
-   */
+  /** Null for a member's turn: that answer holds their record, unpoliced here. */
   answer?: string | null;
   provider: string;
   latencyMs: Record<string, number>;
   sessionId?: string;
   refusalTrigger?: string | null;
-  /** FR-P2-09. Which retrieval paths ran, and why. D-063. */
+  /** Which retrieval paths ran, and why. */
   route?: string | null;
   routeReason?: string | null;
 }
 
-/** FR-26. The question written here is already redacted per FR-31. */
+/** The question written here is already redacted. */
 export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<string> {
   const { rows } = await client.query(
     `insert into turns
@@ -316,7 +306,7 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
   return String(rows[0]?.["id"]);
 }
 
-/** The four a member can pick after saying no. Never free text. D-102. */
+/** The four a member can pick after saying no. Never free text. */
 export const FEEDBACK_REASONS = [
   "wrong_plan",
   "not_what_i_asked",
@@ -326,7 +316,7 @@ export const FEEDBACK_REASONS = [
 
 export type FeedbackReason = (typeof FEEDBACK_REASONS)[number];
 
-/** FR-27, FR-P3-65. Recorded against the turn it answers, with why if given. */
+/** Recorded against the turn it answers, with why if given. */
 export async function recordFeedback(
   client: pg.Client,
   turnId: string,
@@ -353,7 +343,7 @@ export interface RetrievedTurn {
   planContext: string | null;
 }
 
-/** NFR-OPS-02. Every answer is reproducible from its logged chunk ids. */
+/** Every answer is reproducible from its logged chunk ids. */
 export async function readTurn(client: pg.Client, turnId: string): Promise<RetrievedTurn | null> {
   const { rows } = await client.query(
     `select id, question, chunk_ids, corpus_snapshot_id, outcome, plan_context
@@ -372,7 +362,7 @@ export async function readTurn(client: pg.Client, turnId: string): Promise<Retri
   };
 }
 
-/** The chunks exactly as they were retrieved, by id and snapshot. NFR-OPS-02. */
+/** The chunks exactly as they were retrieved, by id and snapshot. */
 export async function readChunksByIds(
   client: pg.Client,
   chunkIds: string[],
@@ -400,7 +390,7 @@ export async function readChunksByIds(
 
 /**
  * Consecutive refusals for a session, newest first. Read from the turn log so
- * the loop breaker survives a restart rather than living in server memory. FR-23.
+ * the loop breaker survives a restart rather than living in server memory.
  */
 export async function consecutiveRefusals(
   client: pg.Client,
@@ -424,7 +414,6 @@ export interface RateVerdict {
   remaining: number;
 }
 
-/** FR-30, NFR-SEC-02. */
 export async function checkRate(
   client: pg.Client,
   key: string,
@@ -453,7 +442,7 @@ export interface CallbackRequest {
   sessionId: string;
 }
 
-/** Validates, stores and confirms. Nothing is sent anywhere. D-026. */
+/** Validates, stores and confirms. Nothing is sent anywhere. */
 export async function writeCallback(
   client: pg.Client,
   request: CallbackRequest,

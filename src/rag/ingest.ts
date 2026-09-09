@@ -4,12 +4,12 @@ import type { DocumentKind, Snapshot } from "../corpus/types.ts";
 import { chunkDocument, type CorpusChunk } from "./chunk.ts";
 import { ALL_CONTRACTS, ALL_PLANS, isAllowedPlanYear } from "./provenance.ts";
 
-/** D-007 defers structured lookup to P2; as prose these are noise that swamps lexical search. */
+/** As prose these are noise that swamps lexical search. */
 export const EXCLUDED_KINDS: DocumentKind[] = ["pharmacy_directory"];
 
 /**
  * Documents belonging to no single plan or contract. Scoped by kind rather than by
- * what discover stamped, so an older manifest converges on the same scoping. D-056.
+ * what discover stamped, so an older manifest converges on the same scoping.
  */
 const CONTRACT_WIDE: DocumentKind[] = ["formulary", "corporate"];
 
@@ -25,7 +25,7 @@ export interface PlannedIngest {
 
 /**
  * Decides what gets indexed, and rejects out-of-year documents at ingest rather
- * than filtering them at query time. FR-01.
+ * than filtering them at query time.
  */
 export function planIngest(
   snapshot: Snapshot,

@@ -31,7 +31,7 @@ describe("migration 011 [FR-P3-03, FR-P3-07]", () => {
     expect(up.match(/current_member_id\(\)/g)?.length).toBeGreaterThanOrEqual(MEMBER_SCOPED.length);
   });
 
-  // FR-P3-06: current_setting with the missing_ok flag yields NULL, and
+  // current_setting with the missing_ok flag yields NULL, and
   // `member_id = NULL` is never true, so no identity means no rows.
   it("reads the identity in a form that yields nothing when unset", () => {
     expect(up).toContain("current_setting('clovbot.member_id', true)");

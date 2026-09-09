@@ -50,8 +50,8 @@ describe("the reason is one of four, never free text [FR-P3-65]", () => {
 
   // A reason is an offer, not a toll on saying the answer failed.
   it("sends the no before asking why", () => {
-    const yesNo = assistant.slice(assistant.indexOf("Recorded, not just shown"));
-    expect(yesNo.slice(0, 600)).toMatch(/sendFeedback\(\s*turn\.turnId,\s*value === "yes",\s*\)/);
+    // Anchored on the call, not on a comment beside it.
+    expect(assistant).toMatch(/sendFeedback\(\s*turn\.turnId,\s*value === "yes",\s*\)/);
   });
 
   it("asks only after a no, and only once", () => {
@@ -60,9 +60,8 @@ describe("the reason is one of four, never free text [FR-P3-65]", () => {
 });
 
 describe("analysis is blind to the session [FR-P3-66]", () => {
-  // The store is pseudonymous, not anonymous, and the documentation says so.
-  // What the view does is keep a report about answers from carrying a link
-  // between every question in one visit.
+  // Pseudonymous, not anonymous: the view keeps a report about answers from
+  // linking every question in one visit.
   it("excludes the session id from the view analysis reads", () => {
     const view = up.slice(up.indexOf("create or replace view feedback_report"));
     expect(view).not.toMatch(/session_id/);

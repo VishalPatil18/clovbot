@@ -3882,6 +3882,50 @@ Between the library and the hand-rolled writer: the writer is genuinely feasible
 
 ---
 
+## Decision D-104 - Comments carry no identifiers, and a gate keeps it that way
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 9 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`CLAUDE.md` §5 requires comments to explain why in at most 15 words and to carry no spec or phase references. 411 comment lines across 116 files did the opposite, naming requirement ids, decision ids and stage numbers.
+
+### Options considered
+
+Three forks, decided together.
+
+**Scope.** Everything including `claude/` and `docs/`; or code, SQL, CSS and config only.
+
+**Length.** A hard 15 words; 15 with a two-line exemption for traps; or 15 inline with module headers spared.
+
+**References.** Drop requirement ids and keep decision ids as pointers; drop both; or keep both.
+
+### Decision
+
+Code, SQL, CSS and config only. 15 words, with two lines allowed where the code looks wrong but is right and the mistake has already been made once. **Both** requirement ids and decision ids removed. A test fails the build on any reintroduction.
+
+### Why
+
+The scope question came back to the user once, because "everything" contradicted the same request's instruction to add a stage entry to `plan-p3.md`: a build plan made of stage headings cannot have its stage headings removed and a stage added. The user chose to leave the planning documents alone.
+
+Dropping decision ids as well as requirement ids is the stricter reading and the right one here. A `D-102` pointer is only useful to a reader holding this repository's `claude/` directory; for anyone else it is a dead reference where the reasoning used to be. The rule is therefore that the reason goes **into** the comment or is not worth keeping.
+
+The two-line exemption exists because several comments mark traps that have already cost time: the flex `min-width: auto` width floor, the `normaliseQuestion` trim order, `language::regconfig` being only stable and so rejected by a generated column. Deleting those invites the bug back, and no test covers the ones about CSS specificity.
+
+### Consequences
+
+- Tracing a comment to its requirement now means searching `claude/` for the file name. That is a real loss, taken deliberately.
+- A mechanical strip is not safe on prose: the first pass left 30 broken sentences and turned `0..1` into `0.1`. Every changed line was reviewed in the diff afterwards.
+- Three tests were anchored on comment text and broke. Two are now anchored on code; the third still asserts a sentence, because "the source says why" is what it checks.
+- Test names keeping `[FR-xx]` and `scripts/stageN-checks.ts` filenames are out of scope: neither is a comment, and renaming the scripts would dangle references in `claude/` that this stage does not touch.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

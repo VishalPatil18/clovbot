@@ -58,7 +58,7 @@ export interface ManifestEntry {
   kind: DocumentKind;
   contractId: string;
   planId: string;
-  /** Which edition of the document this is. Retrieval scopes by it. FR-P3-31. */
+  /** Which edition of the document this is. Retrieval scopes by it. */
   language: Language;
   status: FetchStatus;
   url: string;
@@ -76,7 +76,7 @@ export interface Snapshot {
   createdAt: string;
   countyId: string;
   planYear: number;
-  /** Every plan the snapshot covers, across however many contracts. D-053. */
+  /** Every plan the snapshot covers, across however many contracts. */
   plans: PlanRef[];
   entries: ManifestEntry[];
 }

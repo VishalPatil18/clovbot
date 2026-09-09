@@ -1,6 +1,5 @@
 /**
- * The named edges in plan-p1 Stage 6. These need a real model, so they are a
- * script rather than unit tests, and the numbers are printed rather than asserted.
+ * Answer-quality edges. A script rather than tests because it needs a real model.
  */
 import { validateAnswerPayload } from "../src/answer.ts";
 import { answerTurn } from "../src/rag/answer-turn.ts";
@@ -18,8 +17,7 @@ const check = (label: string, ok: boolean, detail = ""): void => {
   if (detail.length > 0) console.log(`        ${detail}`);
 };
 
-// 1. Datastore unreachable. The plan calls this the most important test in the
-//    stage: it is the only failure that looks like success.
+// 1. Datastore unreachable: the only failure that looks like success.
 console.log("\n1. Datastore unreachable [FR-09, FR-25]");
 {
   const broken = { query: async () => { throw new Error("ECONNREFUSED"); } } as never;
@@ -57,7 +55,7 @@ try {
   }
 
   // 4. EOC precedence on a genuine conflict, using controlled chunks so the
-  //    conflict is real rather than inferred. D-039 removed the heuristic detector.
+  // conflict is real rather than inferred. The heuristic detector was removed.
   console.log("\n4. Evidence of Coverage precedence [FR-07, D-020]");
   {
     const conflicting = [
@@ -87,7 +85,7 @@ try {
     check("states the conflict rather than hiding it", rendered.includes("$40"), "both amounts named");
   }
 
-  // 5. A citation that cannot state its plan year is not a citation. FR-06.
+  // 5. A citation that cannot state its plan year is not a citation.
   console.log("\n5. Citation without provenance [FR-06]");
   {
     const bad = {
@@ -100,7 +98,7 @@ try {
     check("rendering refuses rather than emitting an uncited amount", threw);
   }
 
-  // 6. Streaming. FR-08.
+  // 6. Streaming.
   console.log("\n6. Token streaming [FR-08]");
   {
     let tokens = 0;

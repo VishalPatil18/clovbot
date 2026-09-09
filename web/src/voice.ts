@@ -4,7 +4,7 @@ export type VoiceMode = "text" | "voice";
 
 const MODE_KEY = "clovbot_mode";
 
-/** FR-16. The choice persists across sessions. */
+/** The choice persists across sessions. */
 export function readMode(): VoiceMode {
   try {
     return window.localStorage.getItem(MODE_KEY) === "voice" ? "voice" : "text";
@@ -23,9 +23,8 @@ export function writeMode(mode: VoiceMode): void {
 }
 
 /**
- * A press shorter than this is a tap, which starts recording and leaves it
- * running. A longer press is a hold, which stops when released. FR-17 requires
- * both paths to work at all times, so the gesture is inferred rather than set.
+ * Shorter is a tap, which leaves recording running; longer is a hold, which stops
+ * on release. Both work always, so the gesture is inferred rather than set.
  */
 export const TAP_THRESHOLD_MS = 400;
 
@@ -33,7 +32,7 @@ export const isTap = (heldMs: number): boolean => heldMs < TAP_THRESHOLD_MS;
 
 export interface Recording {
   stop: () => Promise<Blob>;
-  /** 0 to 1, for the level meter that stands in for a live transcript. D-045. */
+  /** 0 to 1, for the level meter that stands in for a live transcript. */
   level: () => number;
 }
 
@@ -99,8 +98,8 @@ export interface Spoken {
 }
 
 /**
- * FR-19. Audio never replaces the written answer; it accompanies it. The browser
- * tier speaks the text locally when the remote chain is exhausted. FR-20.
+ * Audio never replaces the written answer; it accompanies it. The browser
+ * tier speaks locally when the remote chain is exhausted.
  */
 export async function speak(text: string): Promise<Spoken> {
   const response = await fetch("/api/speak", {
@@ -179,7 +178,7 @@ export async function speak(text: string): Promise<Spoken> {
 
 const LANGUAGE_KEY = "clovbot_language";
 
-/** FR-P3-34. Detection seeds it on the first Spanish question; this remembers it. */
+/** Detection seeds this on the first Spanish question; this remembers it. */
 export function readLanguage(): Speech {
   try {
     return window.localStorage.getItem(LANGUAGE_KEY) === "es" ? "es" : "en";

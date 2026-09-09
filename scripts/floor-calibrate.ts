@@ -1,8 +1,6 @@
 /**
- * Calibrates the confidence floor. FR-03 and D-016 make the top reranked score
- * the sole answer-or-refuse signal, so its value must come from measured
- * separation between questions the corpus can answer and questions it cannot,
- * not from a round number.
+ * Calibrates the confidence floor. The top reranked score is the sole
+ * answer-or-refuse signal, so its value comes from measured separation.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { embed } from "../src/rag/providers.ts";

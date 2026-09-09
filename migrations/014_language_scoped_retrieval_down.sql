@@ -1,8 +1,7 @@
 -- Reverses 014_language_scoped_retrieval.sql.
 --
--- Spanish chunks are left in place and become unreachable rather than deleted:
--- the English signature has no language parameter, so nothing selects them.
--- Removing them is a separate, deliberate act.
+-- Spanish chunks are left unreachable rather than deleted: the English signature
+-- has no language parameter. Removing them is a separate, deliberate act.
 
 drop function if exists
   search_hybrid(vector, text, text, text, integer, text, integer, integer, text);

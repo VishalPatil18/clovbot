@@ -41,11 +41,7 @@ const azureUrl = (deployment: string, path: string): string =>
   `${required("AZURE_OPENAI_ENDPOINT").replace(/\/$/, "")}/openai/deployments/` +
   `${deployment}/${path}?api-version=${required("AZURE_OPENAI_API_VERSION")}`;
 
-/**
- * Embeddings have no fallback on purpose. A second provider embeds into a
- * different vector space, so retrieval would return numerically valid and
- * semantically meaningless chunks rather than failing. D-034.
- */
+/** No fallback: another provider's vector space returns valid, meaningless chunks. */
 export async function embed(texts: string[]): Promise<number[][]> {
   const response = await fetchWithRetry(
     azureUrl(required("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"), "embeddings"),
@@ -71,7 +67,7 @@ export async function embed(texts: string[]): Promise<number[][]> {
     });
 }
 
-/** FR-08. Streams tokens as they arrive; the caller sees first token immediately. */
+/** Streams tokens as they arrive; the caller sees first token immediately. */
 export async function generateStream(
   prompt: Prompt,
   onToken: (token: string) => void,
@@ -150,7 +146,7 @@ async function azureChat(prompt: Prompt): Promise<string> {
 
 /**
  * Fallback only. Google may train on free-tier input, so the question reaching
- * here has already been redacted. D-034.
+ * here has already been redacted.
  */
 async function geminiChat(prompt: Prompt): Promise<string> {
   const model = process.env["GEMINI_MODEL"] ?? "gemini-2.5-flash";

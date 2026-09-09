@@ -120,9 +120,8 @@ export function selectPlanDocuments(
   }
 
   const documents: SourceDocument[] = [];
-  // Spanish is optional: Clover publishes the EOC, SB and ANOC in Spanish and no
-  // formulary or directory, so a missing key is a fact about the source rather
-  // than a failure. The English set is required and still raises when absent.
+  // Optional: no Spanish formulary or directory is published, so a missing key
+  // is a fact about the source. The English set still raises when absent.
   for (const language of ["english", "spanish"] as const) {
     const set = language === "english" ? english : plan.documents["spanish"];
     if (!isRecord(set)) continue;

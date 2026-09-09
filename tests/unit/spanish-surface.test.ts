@@ -20,8 +20,8 @@ const chunk = {
 };
 
 describe("the Spanish instruction leaves the English prompt alone [D-069]", () => {
-  // D-069 measured that touching the system prompt moves faithfulness. So it is
-  // not touched: the instruction rides on the user message instead.
+  // Touching the system prompt was measured to move faithfulness, so the
+  // instruction rides on the user message instead.
   it("sends a byte-identical system prompt in both languages", () => {
     expect(buildStructuredPrompt("q", [chunk], "es").system).toBe(
       buildStructuredPrompt("q", [chunk], "en").system,

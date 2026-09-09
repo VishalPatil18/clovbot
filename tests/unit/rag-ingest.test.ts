@@ -95,7 +95,7 @@ describe("planIngest [FR-01]", () => {
     expect(rejected[0]?.reason).toMatch(/no converted markdown/);
   });
 
-  // D-007: as prose these are hundreds of near-identical address rows.
+  // As prose these are hundreds of near-identical address rows.
   it("excludes the pharmacy directory, with the reason recorded", () => {
     const { chunks, rejected } = planIngest(
       snapshot([entry("H5141-2026-pharmacy_directory", "pharmacy_directory")]),

@@ -29,7 +29,7 @@ import {
 import { latestSnapshotId } from "../corpus/snapshot.ts";
 import type pg from "pg";
 
-/** Calibrated, not chosen. eval/results/floor-calibration.json. D-038. */
+/** Calibrated, not chosen. See eval/results/floor-calibration.json. */
 export const CONFIDENCE_FLOOR = Number(process.env["CONFIDENCE_FLOOR"] ?? "0.001");
 export const CANDIDATE_POOL = 10;
 export const TOP_K = 5;
@@ -47,7 +47,7 @@ export interface TurnResult {
   provider: string;
   latencyMs: Record<string, number>;
   route: RouteDecision;
-  /** What the answer is written in, so the interface can follow it. FR-P3-34. */
+  /** What the answer is written in, so the interface can follow. */
   language: Speech;
 }
 
@@ -70,10 +70,7 @@ async function drugIndexFor(client: pg.Client, snapshotId: string): Promise<Set<
   return index;
 }
 
-/**
- * A typed row rendered as a citable source, so a structured answer travels the
- * same prompt, citation and validation path as a retrieved one. FR-P2-11.
- */
+/** Rendered citable, so a structured answer travels the same validation path. */
 export function drugAsChunk(row: DrugLookup, snapshotId: string): RerankedChunk {
   const requirements = row.requirements.length > 0 ? row.requirements : "none";
   return {
@@ -97,18 +94,14 @@ export interface TurnOptions {
   memberId?: number;
   /** The session the member id came from, named in the access log. */
   sessionId?: string;
-  /** The member's chosen language. A Spanish question overrides it. FR-P3-34. */
+  /** A Spanish question overrides this. */
   language?: Speech;
 }
 
 /**
- * One turn, end to end. Shared by the CLI and the eval harness so the thing
- * measured is the thing shipped.
+ * One turn, end to end. Shared by the CLI and the eval harness.
  *
- * An authenticated turn writes exactly one access-log row before returning,
- * whatever the outcome. A failure to write one fails the turn: no answer has
- * reached the member at this point, so nothing is disclosed without a record
- * of it. FR-P3-17.
+ * A failed access-log write fails the turn: nothing is disclosed unrecorded.
  */
 export async function answerTurn(
   client: pg.Client,
@@ -116,10 +109,9 @@ export async function answerTurn(
   scope: { contractId: string; planId: string; planYear: number },
   options: TurnOptions = {},
 ): Promise<TurnResult> {
-  // FR-31, and D-034: redact before the model call, not only before the log write.
+  // Redact before the model call, not only before the log write.
   const question = redactIdentifiers(rawQuestion);
-  // The rule that decides whether a signed-out member must sign in is the rule
-  // that decides what gets read, so the two cannot disagree. D-091.
+  // One rule decides both the gate and the read, so they cannot disagree.
   const identityNeeded = needsMemberData(question);
   const read = { fields: [] as string[] };
   const result = await runTurn(client, question, scope, options, identityNeeded, read);
@@ -147,8 +139,7 @@ async function runTurn(
 ): Promise<TurnResult> {
   const started = Date.now();
   const detected = detectLanguage(question);
-  // A Spanish question overrides the setting; anything the detector is unsure
-  // about falls back to it. D-091's sibling rule, for language. FR-P3-34.
+  // A Spanish question overrides the setting; an unsure detector falls back.
   const speech: Speech = detected === "es" ? "es" : (options.language ?? "en");
 
   const base = {
@@ -162,7 +153,7 @@ async function runTurn(
     language: speech,
   };
 
-  // FR-24. Answered in English, with the human path, and no partial attempt.
+  // Answered in English, with the human path, and no partial attempt.
   if (detected === "other") {
     return {
       ...base,
@@ -174,8 +165,7 @@ async function runTurn(
     };
   }
 
-  // FR-21. Bucket C is decided before retrieval, so a guarded question never
-  // reaches the model and cannot leak a partial answer on its way to refusal.
+  // Decided before retrieval, so a guarded question never reaches the model.
   const guard = checkGuardrails(question, speech);
   if (guard !== null) {
     return {
@@ -191,11 +181,7 @@ async function runTurn(
     };
   }
 
-  /*
-   * FR-P2-43. Decided before retrieval, like a guardrail, so a question that
-   * needs identity never reaches the model and cannot leak a partial answer on
-   * its way to asking for a login. Never a refusal, and never a guess.
-   */
+  // Decided before retrieval, so a gated question never reaches the model.
   if (identityNeeded !== null && options.memberId === undefined) {
     return {
       ...base,
@@ -209,12 +195,8 @@ async function runTurn(
   }
 
   /*
-   * FR-P3-54. After the gates, before any provider call, and never for a member.
-   *
-   * A turn carrying a member id is neither read from nor written to the cache.
-   * It would be the only way one member's record could reach another, and a
-   * cached answer would also make the access log claim a read that never
-   * happened. The authenticated tier gives up the speed-up. D-100.
+   * Never for a member: it is the one way one record could reach another,
+   * and a hit would make the access log claim a read that never happened.
    */
   const cacheable = options.memberId === undefined;
   const key = answerKey(question, scope, speech, latestSnapshotId());
@@ -224,8 +206,7 @@ async function runTurn(
     if (hit !== null) {
       return {
         ...(hit as unknown as TurnResult),
-        // The turn log has to say where the answer came from, or a cache hit
-        // would overstate how often the model was actually called.
+        // Or a cache hit would overstate how often the model was called.
         provider: "cache",
         latencyMs: { total: Date.now() - started },
       };
@@ -236,16 +217,15 @@ async function runTurn(
   let retrievedAt = started;
   let route: RouteDecision = RAG_ONLY;
   try {
-    // FR-P2-09, D-061. Selection is a lookup against indexed drug names, so a
-    // tier question about a drug we hold cannot degrade to prose search.
+    // A lookup against indexed names, so a tier question cannot degrade to prose.
     const snapshotId = latestSnapshotId();
     const memberId = options.memberId;
     const topic = identityNeeded?.topic ?? null;
-    // Being signed in is not a reason to read. The question has to need it. D-091.
+    // Being signed in is not a reason to read. The question must need it.
     const needsRecord = memberId !== undefined && topic !== null;
     route = chooseRoute(question, await drugIndexFor(client, snapshotId), needsRecord);
 
-    // Scoped by member id in the query and by policy in the database. D-080, FR-P3-08.
+    // Scoped by the query and by database policy, both.
     const record =
       memberId === undefined || topic === null
         ? null
@@ -255,10 +235,8 @@ async function runTurn(
       record === null ? [] : record.facts.map((fact) => memberFactAsChunk(record, fact));
 
     /*
-     * FR-P3-36, D-093. The drug list is published in English only, so it is the
-     * one source a Spanish answer may cite across languages. The mismatch is
-     * stated in the chunk rather than hidden, and it is written as an exception
-     * here rather than by loosening the language scope in retrieval.
+     * The drug list is English-only, so it is the one cross-language citation.
+     * An exception here rather than a looser language scope in retrieval.
      */
     const structured = route.paths.includes("structured")
       ? (await lookupDrugs(client, snapshotId, route.drugs)).map((row) => {
@@ -269,8 +247,7 @@ async function runTurn(
         })
       : [];
 
-    // D-062: paths are additive, so a question that is both a lookup and a rules
-    // question keeps both halves and neither can be dropped.
+    // Additive, so a question that is both a lookup and a rules question keeps both.
     let prose: RerankedChunk[] = [];
     if (route.paths.includes("rag")) {
       const model = process.env["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"] ?? "unknown";
@@ -297,7 +274,7 @@ async function runTurn(
     retrieved = [...memberSources, ...structured, ...prose];
     retrievedAt = Date.now();
   } catch (error) {
-    // FR-09 and FR-25: an upstream failure never produces a factual claim.
+    // An upstream failure never produces a factual claim.
     return {
       ...base,
       answer: refusalText(t("upstream", speech), speech),
@@ -326,10 +303,8 @@ async function runTurn(
     };
   }
 
-  // FR-07 is carried by the standing prompt rule that the Evidence of Coverage
-  // controls. An automated amount-diff detector was removed: it compared amounts
-  // from unrelated benefits, and telling the model a conflict existed made it
-  // invent one and call a correct document wrong.
+  // An amount-diff detector was removed: it compared unrelated benefits, and
+  // telling the model a conflict existed made it invent one.
   const prompt = buildStructuredPrompt(question, retrieved, speech);
 
   let raw: string;
@@ -379,8 +354,7 @@ async function runTurn(
   const validated = validateAnswerPayload(json === undefined ? raw : JSON.parse(json));
 
   if (!validated.ok) {
-    // An uncited claim cannot be rendered, so a payload that fails validation
-    // refuses rather than degrading to prose. FR-32.
+    // An uncited claim cannot be rendered, so this refuses instead.
     return {
       ...base,
       retrieved,
@@ -430,10 +404,8 @@ async function runTurn(
   };
 
   /*
-   * Only an answered turn, and only when the model was actually called. A
-   * refusal costs no generation, and a failure must never be served twice.
-   * A write that fails is not a reason to withhold an answer that is already
-   * correct, so it is logged and swallowed rather than thrown.
+   * A refusal costs no generation, and a failure must never be served twice.
+   * A failed write is logged, not thrown: the answer is already correct.
    */
   if (cacheable && answered) {
     await writeAnswer(client, {

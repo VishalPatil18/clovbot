@@ -4,11 +4,8 @@ import type { Speech } from "./api.ts";
 export const MEMBER_SERVICES_DISPLAY = "1-555-0100";
 
 /**
- * Panel chrome in both languages. FR-P3-43.
- *
- * Authored, never machine-translated at runtime. A Spanish answer surrounded by
- * English buttons is the half-measure this exists to avoid: the reading is the
- * easy half, and the tapping is the half this audience struggles with.
+ * Panel chrome in both languages, authored rather than machine-translated.
+ * Reading is the easy half; tapping is the half this audience struggles with.
  */
 const STRINGS = {
   talkToPerson: ["Talk to a person", "Hablar con una persona"],
@@ -24,9 +21,7 @@ const STRINGS = {
   askPlaceholderShort: ["Ask about your plan", "Pregunte sobre su plan"],
   copy: ["Copy", "Copiar"],
   sourcesTitle: ["Where this comes from", "De dónde viene esto"],
-  // Was "it holds no member data", which stopped being true when sign-in
-  // shipped. What is true, and what NFR-SEC-01 wants stated, is that every
-  // record here is invented.
+  // Said "no member data" until sign-in made that false. Every record is invented.
   syntheticNotice: [
     "Every member record here is demonstration data. No real member data is held.",
     "Todo registro de miembro aquí son datos de demostración. No se guardan datos reales de ningún miembro.",
@@ -98,11 +93,7 @@ const STRINGS = {
   pageOf: ["Page $1 of $2", "Página $1 de $2"],
 } as const satisfies Record<string, readonly [string, string]>;
 
-/**
- * The help panel's prose. Lists rather than single strings, because splitting a
- * bulleted list into numbered keys makes it impossible to see the whole thing
- * in one language while translating it.
- */
+/** Lists, not numbered keys: a translator needs to see the whole list at once. */
 const HELP = {
   canAsk: [
     [

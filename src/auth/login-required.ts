@@ -2,7 +2,7 @@ export type MemberTopic = "claim" | "prior_authorization" | "balance" | "appoint
 
 export interface LoginRequired {
   topic: MemberTopic;
-  /** Said to the member. Names why, and offers the way forward. FR-P2-43. */
+  /** Said to the member. Names why, and offers the way forward. */
   explanation: string;
 }
 
@@ -14,16 +14,8 @@ interface Rule {
 }
 
 /**
- * Whether answering needs a value stored against this member. FR-P2-42.
- *
- * The test is where the answer lives, not how the question is worded: "what is
- * my specialist copay" is a plan-document question however possessive it
- * sounds, and "what did my last claim cost" is not.
- *
- * Rules rather than a classifier, for the reason D-043 gives about bucket C and
- * D-061 gives about the router: a zero-tolerance gate cannot rest on something
- * probabilistic, and every decision has to be explainable by pointing at the
- * rule that fired.
+ * Whether answering needs a stored value: the test is where the answer lives,
+ * not how possessive the wording sounds. Rules, never a classifier.
  */
 const RULES: Rule[] = [
   {
@@ -34,9 +26,8 @@ const RULES: Rule[] = [
   },
   {
     topic: "prior_authorization",
-    // The possessive must sit directly on the noun. "my prior auth" is theirs;
-    // "does my plan need prior authorization" is the rule in general, and a
-    // proximity match could not tell those apart.
+    // The possessive must sit on the noun: "my prior auth" is theirs, "my plan
+    // needs prior authorization" is the rule in general.
     match: /\b(my|our)\s+(prior[- ]?auth\w*|pre-?auth\w*|authorization|authorisation)\b/i,
   },
   {

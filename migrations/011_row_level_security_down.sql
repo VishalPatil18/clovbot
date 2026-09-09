@@ -1,8 +1,5 @@
--- Reverses 011_row_level_security.sql. FR-P3-09.
---
--- A reversible migration nobody reversed is untested, so this runs once against
--- a real database and the result is recorded. Order matters: drop the policies
--- before the function they call, and revoke last so the role can be dropped.
+-- Reverses 011_row_level_security.sql. Order matters: drop the policies before
+-- the function they call, and revoke last so the role can be dropped.
 
 drop policy if exists members_own_row on members;
 drop policy if exists member_accumulators_own_row on member_accumulators;

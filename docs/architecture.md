@@ -88,6 +88,12 @@ Selection is a longest-prefix match against the set of indexed drug names, not a
 
 ## The corpus pipeline
 
+Discovery reads Clover's own catalog endpoints, fetching honours `robots.txt` at
+one request every 1,500 ms, and conversion shells out to poppler. 29 documents
+attempted, 26 fetched, 3 provider directories generated as labelled demo data;
+2,737 chunks reached the index, 1,913 English and 824 Spanish. Full provenance,
+with every figure measured: **[docs/corpus.md](./corpus.md)**.
+
 ### Why the Summary of Benefits needs coordinates
 
 One PDF describes **two plans in two columns**. Extracted as text, the columns interleave and a member gets the other plan's copay. So it is parsed from word coordinates: the `(Plan 004)` / `(Plan 007)` header row gives each column's x position, and gutters are measured on **each page** rather than inherited, because the document alternates recto and verso margins.

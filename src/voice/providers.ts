@@ -2,10 +2,8 @@ import type { Speech } from "../i18n.ts";
 import { runChain, type Attempt, type ChainResult } from "./chain.ts";
 
 /**
- * Request shapes verified against the live specs on 2026-09-08:
- * api.elevenlabs.io/openapi.json and api.fish.audio/openapi.json. Both were read
- * rather than recalled, because this project has already been bitten once by a
- * provider tier that had changed since it was last looked at.
+ * Request shapes read from the live specs on 2026-09-08, not recalled: a
+ * provider tier here had already changed since it was last looked at.
  */
 
 const optional = (name: string): string | null => {
@@ -32,9 +30,8 @@ async function post(url: string, init: RequestInit): Promise<Response> {
 // --- Text to speech ---------------------------------------------------------
 
 /**
- * A Spanish answer read in an English voice is not an answer this audience can
- * use, so each provider gets its own Spanish voice. Falls back to the English
- * one when none is configured, rather than failing the whole chain. FR-P3-35.
+ * A Spanish answer in an English voice is unusable, so each provider has one.
+ * Falls back to English rather than failing the whole chain.
  */
 const voiceFor = (base: string, speech: Speech): string =>
   (speech === "es" ? optional(`${base}_SPANISH`) : null) ?? required(base);
@@ -78,9 +75,8 @@ async function fishAudioSpeak(text: string, speech: Speech): Promise<Uint8Array>
 export type SpeechResult = ChainResult<Uint8Array | null>;
 
 /**
- * FR-20. Falls through to the browser synthesiser, which is returned as a null
- * body: there is nothing to send, and the page speaks the text itself. That tier
- * cannot run out of credits, which is the point of it.
+ * A null body means the browser tier: nothing to send, the page speaks it.
+ * That tier cannot run out of credits, which is the point of it.
  */
 export function speak(text: string, speech: Speech = "en"): Promise<SpeechResult> {
   const attempts: Attempt<Uint8Array | null>[] = [];
@@ -130,11 +126,7 @@ async function fishAudioTranscribe(audio: Uint8Array, mime: string): Promise<str
   return text;
 }
 
-/**
- * No browser tier here. The page's own SpeechRecognition sends audio to a third
- * party, which is the objection D-034 raised about free-tier training, so a
- * failed transcription asks the member to type instead.
- */
+/** No browser tier: SpeechRecognition sends audio to a third party. */
 export function transcribe(audio: Uint8Array, mime: string): Promise<ChainResult<string>> {
   const attempts: Attempt<string>[] = [];
 

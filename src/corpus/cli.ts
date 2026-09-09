@@ -29,7 +29,7 @@ const DELAY_MS = 1_500;
 const { countyId: COUNTY_ID, zipcode: ZIPCODE, planYear: PLAN_YEAR } = CORPUS_SCOPE;
 const { stateAbbrev: STATE, countyName: COUNTY_NAME } = CORPUS_SCOPE;
 
-/** Public prose pages. FR-01 includes corporate and investor-relations content. */
+/** Public prose pages. includes corporate and investor-relations content. */
 const CORPORATE_PAGES = [
   "/about-us/about-clover",
   // /about-us/investors redirects off-domain to an external IR host that does not
@@ -177,7 +177,7 @@ function convertAll(): void {
     try {
       const retried: ManifestEntry = { ...entry, status: "ok", failureReason: null };
       // One Summary of Benefits PDF serves both plans, and each plan has its own
-      // entry, so each converts to its own column. D-031.
+      // entry, so each converts to its own column.
       const text = isHtml
         ? extractHtmlText(readFileSync(source, "utf8"))
         : entry.kind === "summary_of_benefits"

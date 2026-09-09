@@ -1,6 +1,5 @@
--- Reverses 016_feedback.sql. Dropping these loses the feedback already given,
--- which is not recoverable, so this is a deliberate act rather than a rollback
--- anyone should run casually.
+-- Reverses 016_feedback.sql. This loses the feedback already given, which is not
+-- recoverable, so it is a deliberate act rather than a casual rollback.
 
 drop view if exists feedback_report;
 drop index if exists turns_feedback;

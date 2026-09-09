@@ -1,21 +1,14 @@
--- Three caches, one store. FR-P3-53 to FR-P3-60.
+-- Three caches, one store.
 --
--- Postgres rather than memory or disk because the service runs on Cloud Run:
--- an in-process cache dies with the instance and is not shared between them,
--- and the audio cache's disk directory has the same two problems. A cache whose
--- hit rate collapses on every deploy is a benchmark, not a feature.
+-- Postgres, not memory or disk: on Cloud Run an in-process cache dies with the
+-- instance and is shared with nothing. A hit rate that collapses on every deploy
+-- is a benchmark, not a feature.
 --
--- None of these tables holds member data. A turn carrying a member id is never
--- cached, so there is nothing here to put behind a policy, and the schema check
--- is satisfied because no table carries a member_id column.
+-- No table here holds member data, because a member's turn is never cached.
 
 -- ---------------------------------------------------------------------------
--- Answers. Keyed on the exact normalised question inside its scope.
---
--- Not on similarity. Two questions can be one word apart and have different
--- amounts: "what is my specialist copay" is $10 and the out-of-network form is
--- $20. `docs/ideas.md` P4-01 names that collision as the reason the threshold
--- would have to be high; keying on the question itself removes the question.
+-- Answers, keyed on the exact normalised question inside its scope, never on
+-- similarity: "specialist copay" is $10 and the out-of-network form is $20.
 -- ---------------------------------------------------------------------------
 
 create table if not exists answer_cache (
@@ -52,10 +45,8 @@ create table if not exists embedding_cache (
 );
 
 -- ---------------------------------------------------------------------------
--- Synthesised audio. Moved off the container filesystem for the reason above.
--- The provider and voice stay in the key: the same words in another voice are a
--- different recording, and serving yesterday's voice after the chain degraded
--- would be a silent inconsistency.
+-- Synthesised audio, off the container filesystem for the reason above. Provider
+-- and voice stay in the key: the same words in another voice are another recording.
 -- ---------------------------------------------------------------------------
 
 create table if not exists audio_cache (

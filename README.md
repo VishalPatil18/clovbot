@@ -217,9 +217,51 @@ flowchart LR
     BBOX --> PGD[("drugs")]
 ```
 
-The Summary of Benefits is one PDF describing **two plans in two columns**. Reading it as text merges them, and a member gets the other plan's copay. It is parsed from word coordinates instead, and a page whose columns cannot be attributed to a plan **fails the build** rather than emitting an amount that might belong to either.
+Everything the assistant answers from was fetched by this repository from
+`cloverhealth.com`. Nothing was hand-copied and no dataset was downloaded from
+anywhere else.
 
-Long-form: **[docs/architecture.md](./docs/architecture.md)**.
+**Where the URLs come from.** Clover's own two JSON endpoints, read directly:
+`/api/zipcode/counties` resolves the zipcode to a county, and
+`/api/plans/document-search?county_id=34017&year=2026` returns the plan catalog,
+which carries every Evidence of Coverage, Summary of Benefits and Annual Notice of
+Change URL in both languages. The drug list and pharmacy directory are matched by
+filename; seven corporate prose pages are listed explicitly. No link-graph
+scraping, no guessed paths.
+
+**How they are fetched.** `robots.txt` honoured, one request at a time, 1,500 ms
+apart, identified as `clovbot-casestudy/0.1`, SHA-256 recorded per document so a
+re-fetch that changes nothing re-embeds nothing.
+
+**What came back.** 29 documents attempted: **26 fetched, 3 synthetic, 0 failed, 0
+blocked.** 29.0 MB raw across 1,726 PDF pages, converting to 4.25 MB of text. The
+three synthetic ones are provider directories, which Clover publishes as a search
+interface rather than a document; inventing doctors is the one failure this product
+must not have, so they carry a `DEMO DATA` label and the assistant refuses to say
+whether a named doctor is in network.
+
+**Libraries: almost none.** Node's own `fetch`, poppler's `pdftotext` and `pdfinfo`
+as the only external binaries, and hand-written parsers for `robots.txt`, HTML,
+column geometry, the drug list and chunking. No scraping framework, no PDF library,
+no HTML parser, no chunking library.
+
+**What reached the index.** 2,737 chunks across 28 documents (the pharmacy
+directory is fetched and deliberately not indexed: as prose it is hundreds of
+near-identical address rows that swamp lexical search). **1,913 English, 824
+Spanish**, averaging 1,450 characters, embedded with `text-embedding-3-small` at
+1,536 dimensions in token-budgeted batches. The drug list is parsed to **4,932
+typed rows** instead, because a fact that lives in a table wants a table query.
+
+The Summary of Benefits is one PDF describing **two plans in two columns**. Reading
+it as text merges them, and a member gets the other plan's copay. It is parsed from
+word coordinates instead: the split is the gutter that the fewest words cross,
+measured per page because recto and verso have different margins, and applied per
+line because a page can mix a comparison table with full-width prose. A page whose
+columns cannot be attributed to a plan **fails the build** rather than emitting an
+amount that might belong to either.
+
+Full provenance, every figure measured: **[docs/corpus.md](./docs/corpus.md)**.
+Architecture long-form: **[docs/architecture.md](./docs/architecture.md)**.
 
 ---
 
@@ -239,7 +281,7 @@ Long-form: **[docs/architecture.md](./docs/architecture.md)**.
 | Voice | **ElevenLabs, Fish Audio, then the browser synthesiser** | The last tier cannot run out of credits, which is the point of having it. |
 | Email | **Resend** free tier | Sign-in codes only. |
 | Caching | **Postgres, exact-keyed** | Answers, query embeddings and synthesised audio in the store the app already has. Rejected: semantic caching on similarity, which can return a confidently wrong amount; and in-process or on-disk caches, which die with a Cloud Run instance. |
-| Tests | **Vitest 5** | 756 tests, no DOM library, offline, about a second. |
+| Tests | **Vitest 5** | 857 tests, no DOM library, offline, about a second. |
 
 ---
 
@@ -383,6 +425,7 @@ Before opening a PR, read **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
 | Document | What is in it |
 | --- | --- |
 | [Architecture](./docs/architecture.md) | The long-form walk through retrieval, the answer contract and the data model |
+| [Where the data came from](./docs/corpus.md) | Scope, discovery, fetching, conversion, chunking and what reached the index, measured |
 | [Deployment](./docs/deployment.md) | Migrations, secrets, Cloud Run and Vercel, in order |
 | [Guardrails and evaluation](./docs/guardrails-and-evaluation.md) | Every refusal category, the golden set, the gates |
 | [Future work](./docs/future-work.md) | What is next, and what it would cost |
@@ -391,7 +434,7 @@ Before opening a PR, read **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
 | [Research briefing](./docs/research-init.md) | The sources behind every regulatory and audience claim |
 | [Call drivers](./docs/call-drivers.md) | The question buckets the golden set is built from |
 | [Build journal](./docs/build-journal.md) | What went wrong, in order |
-| [Design decisions](./claude/design-decisions.md) | 94 ADRs |
+| [Design decisions](./claude/design-decisions.md) | 103 ADRs |
 | [Learnings](./claude/learnings.md) | What each stage taught |
 
 ---

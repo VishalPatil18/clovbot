@@ -1,17 +1,10 @@
--- Member scoping moves from the application into the database. FR-P3-01 to FR-P3-12.
+-- Member scoping moves from the application into the database. Until now one
+-- `where member_id = $1` was the only thing keeping members apart.
 --
--- Until now the only thing keeping one member's record away from another was a
--- `where member_id = $1` in one function. A new code path that forgets it, or a
--- bug inside it, discloses a record and no layer objects.
---
--- Two halves. A role that cannot bypass the policies, and the policies.
---
--- The role must already exist. It is created by hand with a password that never
--- enters this repository:
+-- The role must already exist, created by hand with a password that never enters
+-- this repository. Run this file as the owning role.
 --
 --   create role clovbot_app login password '<operator chooses>' nobypassrls;
---
--- Run this file as the owning role. D-090.
 
 -- ---------------------------------------------------------------------------
 -- Privileges. Only what the running product actually executes.
@@ -32,9 +25,8 @@ grant select, insert, update on turns to clovbot_app;
 grant insert on callbacks to clovbot_app;
 grant select, insert, update on login_codes, member_sessions to clovbot_app;
 
--- rate_check prunes rows older than a day as the calling role, so the delete
--- belongs to the function rather than to a data path. Rate events hold no
--- member data, which is why granting it here costs nothing.
+-- The delete belongs to rate_check, not to a data path, and rate events hold
+-- no member data.
 grant select, insert, delete on rate_events to clovbot_app;
 
 grant usage, select on sequence login_codes_id_seq, rate_events_id_seq to clovbot_app;
@@ -44,14 +36,11 @@ grant execute on function
 grant execute on function rate_check(text, integer, interval) to clovbot_app;
 
 -- ---------------------------------------------------------------------------
--- Policies. FORCE as well as ENABLE: without it the owning role reads every row
--- and a policy that the owner silently bypasses is not a control.
+-- Policies. FORCE as well as ENABLE, or the owning role reads every row.
 --
--- The identity is read from a setting carried on the connection, which the
--- application sets transaction-locally from the session row and from nowhere
--- else. `current_setting(..., true)` yields NULL when nothing set it, and
--- `member_id = NULL` is never true, so an unidentified connection reads zero
--- rows rather than every row. FR-P3-06.
+-- The identity comes from a connection setting the application writes
+-- transaction-locally. current_setting(..., true) yields NULL when nothing set
+-- it, and member_id = NULL is never true, so an unidentified connection sees none.
 -- ---------------------------------------------------------------------------
 
 create or replace function current_member_id() returns integer
@@ -97,13 +86,9 @@ create policy member_appointments_own_row on member_appointments
 
 -- ---------------------------------------------------------------------------
 -- login_codes and member_sessions carry a member_id and deliberately get no
--- policy. The sign-in path reads them to discover who the member is, before any
--- identity exists to filter by, so a policy keyed on that identity would lock
--- out the only path that can establish it.
---
--- They are protected by privilege instead: the grants above are the only ones,
--- so no role but the application and the admin can read them at all. The schema
--- check asserts this exemption by name, so it stays a decision. FR-P3-07.
+-- policy: sign-in reads them before any identity exists to filter by. Privilege
+-- protects them instead, and the schema check names the exemption so it stays
+-- a decision rather than an oversight.
 -- ---------------------------------------------------------------------------
 
 comment on table login_codes is

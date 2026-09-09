@@ -1,19 +1,13 @@
 /**
- * Proves row-level security exists, with no application code in the path.
- *
- * Every earlier member-scoping check called `loadMemberRecord`, so it tested the
- * `where` clause inside it. That clause was already passing. This connects as
- * the application role, sets one member's identity on the connection the way the
- * product does, and issues raw selects for another member's rows. FR-P3-11.
+ * Proves row-level security with no application code in the path. Earlier checks
+ * called `loadMemberRecord` and so tested its `where` clause, which already passed.
  *
  *   npm run check:rls
- *
- * Exits non-zero on the first row that should not have been visible.
  */
 import { connect, connectAdmin } from "../src/rag/store.ts";
 import type pg from "pg";
 
-/** Every table whose rows belong to one member. FR-P3-03. */
+/** Every table whose rows belong to one member. */
 const MEMBER_SCOPED = [
   { table: "members", column: "id" },
   { table: "member_accumulators", column: "member_id" },
@@ -22,18 +16,10 @@ const MEMBER_SCOPED = [
   { table: "member_appointments", column: "member_id" },
 ] as const;
 
-/**
- * Member-scoped tables that hold no seeded fixture, so the leak assertions
- * above cannot run against them. They still must be enabled, forced and
- * policied, which is what the coverage check below asserts.
- */
+/** No seeded fixture to leak, so only the coverage check below reaches these. */
 const ALSO_POLICIED = ["member_access_log"] as const;
 
-/**
- * Tables carrying a member_id that deliberately have no policy, and why. The
- * schema check reads this, so an exemption is a decision on the record rather
- * than a table someone forgot. FR-P3-07.
- */
+/** Deliberate exemptions, read by the schema check so each stays a decision. */
 const EXEMPT: Record<string, string> = {
   login_codes: "read during sign-in, before an identity exists to filter by",
   member_sessions: "this table is what establishes the identity policies filter by",
@@ -82,7 +68,7 @@ try {
   if (ownedCount > 0) fail(`${role.name} owns ${String(ownedCount)} tables and would bypass FORCE`);
   else pass(`${role.name} owns no table`);
 
-  // The seed has to hold both members, or "zero rows" proves nothing. FR-P3-11.
+  // The seed must hold both members, or "zero rows" proves nothing.
   console.log("\nfixture");
   for (const id of [SELF, OTHER]) {
     const n = await rows(admin, "select 1 from members where id = $1", [id]);
@@ -108,7 +94,7 @@ try {
   }
   await app.query("commit");
 
-  // FR-P3-06. Absence of an identity is not a wildcard.
+  // Absence of an identity is not a wildcard.
   console.log("\nreading with no identity set");
   for (const { table } of MEMBER_SCOPED) {
     const n = await rows(app, `select 1 from ${table}`);
@@ -116,7 +102,7 @@ try {
     else pass(`${table}: zero rows`);
   }
 
-  // FR-P3-05. The pooler reuses server connections, so an identity must not
+  // The pooler reuses server connections, so an identity must not
   // outlive the transaction that set it.
   console.log("\nidentity does not outlive its transaction");
   await identify(app, SELF);
@@ -125,7 +111,7 @@ try {
   if (lingering > 0) fail(`${String(lingering)} claims readable after the transaction committed`);
   else pass("the identity is gone once the transaction ends");
 
-  // FR-P3-10. Enumerated from the catalog, not from this file's list, so a table
+  // Enumerated from the catalog, not from this file's list, so a table
   // added later without a policy fails here rather than shipping unprotected.
   console.log("\nevery member-scoped table is covered");
   const { rows: candidates } = await admin.query(`
@@ -169,14 +155,10 @@ try {
     else pass(`${row.table}: enabled, forced, ${String(row.policies)} policy`);
   }
 
-  // A check that reads an empty table passes for the wrong reason. The same
-  // query, on the same table, run as the member who owns those rows: if it
-  // returns rows here and none above, the difference is the policy.
-  //
-  // This deliberately does not disable row-level security to watch a leak
-  // appear. That needs an ACCESS EXCLUSIVE lock the reading connection then
-  // waits on, and a check that turns off security on a live table is a hazard
-  // the first time its rollback does not run.
+  // An empty table passes for the wrong reason, so run the same query as the
+  // owner: rows here and none above means the difference is the policy.
+  // Disabling security to watch a leak needs a lock, and is a hazard if its
+  // rollback ever fails to run.
   console.log("\nthe empty result above is the policy, not an empty table");
   await identify(app, OTHER);
   for (const { table, column } of MEMBER_SCOPED) {

@@ -16,6 +16,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Changed
 
+- The README now documents where every plan document came from, how it was fetched and how much of it reached the index, with a full write-up in `docs/corpus.md`. Nothing about the assistant changed.
 - **Print became Save as PDF.** The old button opened your browser's print dialog and left you to find the "Save as PDF" destination in it. Printing still works from the browser's own menu, and the printed page is unchanged.
 - **Re-indexing the plan documents clears the saved answers for them**, so a change to a document is never answered from before the change.
 - **Repeated questions come back immediately.** An answer already given for the same question, on the same plan and in the same language, is served without asking the model again, and a spoken answer is only ever recorded once. Asking a *different* question never reuses another one's answer, however similar it sounds.

@@ -1,9 +1,7 @@
--- Five synthetic members, so the two call drivers that need identity - a claim
--- and a prior authorisation - become answerable. FR-P2-24 to FR-P2-29.
+-- Five synthetic members, so a claim and a prior authorisation become answerable.
 --
--- D-047: no real member data enters this system at any version. The synthetic
--- column is a constraint, not a comment: a row that claims to be real cannot be
--- inserted. Row-level security is P3; scoping here is enforced in the query.
+-- No real member data enters this system at any version. The synthetic column is
+-- a constraint, not a comment: a row claiming to be real cannot be inserted.
 
 create table if not exists members (
   id               integer primary key,
@@ -17,7 +15,7 @@ create table if not exists members (
   assigned_provider     text not null,
   assigned_specialty    text not null,
   -- Part D thresholds differ by plan, read from that plan's Evidence of
-  -- Coverage, so the stage is derived per member rather than per system. D-081.
+  -- Coverage, so it is derived per member rather than per system.
   drug_deductible       numeric(10,2) not null,
   out_of_pocket_limit   numeric(10,2) not null
 );

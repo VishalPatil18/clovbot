@@ -5,7 +5,7 @@ import { MEMBER_SERVICES_DISPLAY, s } from "./strings.ts";
 export interface TranscriptTurn {
   question: string;
   answer: string;
-  /** The single amount, when the answer is one. Cited in its own right. D-065. */
+  /** The single amount, when the answer is one. Cited in its own right. */
   headline?: { label: string; amount: string } | null;
   claims: Claim[];
   citations: Citation[];
@@ -43,12 +43,8 @@ export interface TranscriptContext {
 const day = (date: Date): string => date.toISOString().slice(0, 10);
 
 /**
- * The conversation as a flat document, ready to set in type. FR-P3-70 to FR-P3-75.
- *
- * Pure data, so what the file says is asserted directly rather than by parsing a
- * PDF, and so the renderer holds nothing but layout. The numbers beside the
- * sources are the numbers the member saw beside the claims: renumbering here
- * would send a reader who followed a marker to the wrong row.
+ * The conversation as flat data, so the file's content is asserted without
+ * parsing a PDF. Source numbers are the member's: renumbering misdirects a marker.
  */
 export function transcriptBlocks(
   turns: readonly TranscriptTurn[],

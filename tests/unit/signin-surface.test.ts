@@ -9,7 +9,7 @@ const rule = (selector: string): string =>
   new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`, "s").exec(css)?.[1] ?? "";
 
 describe("inline sign-in [FR-P2-33, FR-P2-34]", () => {
-  // FR-P2-34: no navigation, so the conversation survives the detour.
+  // No navigation, so the conversation survives the detour.
   it("signs in inside the panel with no link away", () => {
     expect(signin).not.toMatch(/window\.location|<a href|history\.push/);
     expect(assistant).toContain("<SignIn");
@@ -71,7 +71,7 @@ describe("session visibility [FR-P2-37, FR-P2-38, FR-P2-39]", () => {
     expect(assistant).toContain('say("signOut")');
   });
 
-  // FR-P2-39: a shared device must not keep the previous member's record data.
+  // A shared device must not keep the previous member's record data.
   it("clears record-sourced turns when signing out", () => {
     expect(assistant).toMatch(/const leave[\s\S]*?clearMemberTurns\(\)/);
   });

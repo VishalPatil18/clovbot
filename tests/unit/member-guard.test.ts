@@ -5,11 +5,8 @@ const server = readFileSync("src/server.ts", "utf8");
 const authStore = readFileSync("src/auth/store.ts", "utf8");
 
 describe("member data needs a live session [FR-P2-45 structural half]", () => {
-  /*
-   * The member id reaches answerTurn from a session row and from nowhere else.
-   * Stage 7 adds a classifier that decides which questions need one; a
-   * classifier can be wrong, and this is what makes being wrong harmless.
-   */
+  // The member id comes from a session row and nowhere else, which is what
+  // makes a wrong classifier harmless.
   it("takes the member id from a resolved session, never from the request", () => {
     expect(server).toMatch(/\{ session: member, ended \} = await currentSession\(client, memberToken, new Date\(\)\)/);
     expect(server).toMatch(/member === null\s*\?\s*\{\}\s*:\s*\{ memberId: member\.memberId, sessionId: member\.sessionId \}/);

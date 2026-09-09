@@ -11,21 +11,19 @@ interface Props {
   /** Cited chunk id to display number. Falls back to list position if absent. */
   citationNumbers?: Record<string, number>;
   unanswered: string[];
-  /** Present only when the answer is a single amount. Absent is the prose path. D-065. */
+  /** Present only when the answer is a single amount. Absent is the prose path. */
   headline?: Headline | null;
-  /** Plain-language notice that the calendar has passed the plan year. FR-P2-17. */
+  /** Plain-language notice that the calendar has passed the plan year. */
   staleness?: string | null;
   /** Used when there is no structured payload: refusals and upstream failures. */
   fallback: string;
-  /** FR-P3-37. The heading over the source list follows the answer's language. */
+  /** The heading over the source list follows the answer's language. */
   sourcesTitle?: string;
 }
 
 /**
- * Renders claims from the structured payload rather than the joined prose, so a
- * claim carries a short marker instead of a hundred characters of provenance.
- * Choosing a marker highlights its source below for five seconds, because a
- * numbered reference is only useful if the eye can find the target.
+ * Claims from the payload, so each carries a marker rather than its provenance
+ * inline. Choosing one highlights its source: a reference the eye cannot find is none.
  */
 export function AnswerBody({
   turnId,

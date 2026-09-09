@@ -16,7 +16,7 @@ export async function memberByEmail(
   email: string,
 ): Promise<{ id: number; email: string } | null> {
   // Through a definer function: `members` is behind a policy and a sign-in has
-  // no identity yet to satisfy it. FR-P3-07, migration 013.
+  // no identity yet to satisfy it. See migration 013.
   const { rows } = await client.query("select id, email from member_for_login($1)", [email]);
   const row = rows[0] as Record<string, unknown> | undefined;
   return row === undefined ? null : { id: Number(row["id"]), email: String(row["email"]) };
@@ -37,11 +37,8 @@ export async function issueCode(
 }
 
 /**
- * Checks a submitted code against the newest live one for that address.
- *
- * A wrong code costs an attempt whether or not the address exists, and an
- * unknown address returns the same shape as a wrong code, so the response
- * cannot be used to discover which addresses are enrolled.
+ * Checks a code against the newest live one. An unknown address returns the same
+ * shape as a wrong code, so this cannot enumerate enrolled addresses.
  */
 export async function redeemCode(
   client: pg.Client,
@@ -99,11 +96,7 @@ export async function endSession(client: pg.Client, sessionId: string): Promise<
   );
 }
 
-/**
- * The only way member data becomes reachable. FR-P2-45's structural half: a
- * classifier can be wrong, so nothing downstream takes a member id that did not
- * come from here.
- */
+/** The only way member data becomes reachable: no classifier can widen it. */
 export interface SessionLookup {
   session: MemberSession | null;
   /** Why there is no session, when the reason is that one ran out. */
@@ -118,9 +111,7 @@ export async function currentSession(
   if (sessionId === null || !/^[0-9a-f-]{36}$/.test(sessionId)) {
     return { session: null, ended: null };
   }
-  // member_sessions is exempt from the policies, which is what lets this run
-  // before an identity exists. The row then names the member, and that is the
-  // identity every later read is filtered by. FR-P3-07.
+  // Exempt from the policies, so it runs before an identity exists and supplies one.
   const { rows } = await client.query(
     `select id, member_id, created_at, last_seen_at from member_sessions
       where id = $1 and ended_at is null`,
@@ -138,7 +129,7 @@ export async function currentSession(
   );
   if (state !== "live") {
     await endSession(client, sessionId);
-    // FR-P3-24. Told apart from never having signed in, so the member can be
+    // Told apart from never having signed in, so the member can be
     // told their session ended rather than left to wonder.
     return { session: null, ended: state };
   }

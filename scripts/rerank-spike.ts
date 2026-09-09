@@ -1,8 +1,6 @@
 /**
- * D-037 requires the reranker model be chosen by measurement. Compares candidates
- * on whether the chunk holding the answer ranks first, on how well answerable and
- * unanswerable questions separate (which is what a confidence floor needs), and
- * on latency inside the NFR-PERF-02 budget.
+ * Chooses the reranker by measurement: whether the answering chunk ranks first,
+ * how far answerable and unanswerable questions separate, and latency.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { embed } from "../src/rag/providers.ts";

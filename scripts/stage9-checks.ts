@@ -1,7 +1,5 @@
 /**
- * Stage 9 acceptance and the voice latency numbers. NFR-PERF-03 and 04 were
- * never measured, because Stage 2 was skipped; this is where the real values
- * come from. Numbers are printed and written, not asserted against a guess.
+ * Voice latency, measured. Numbers are printed and written, never asserted against a guess.
  */
 import { writeFileSync } from "node:fs";
 import { answerTurn } from "../src/rag/answer-turn.ts";

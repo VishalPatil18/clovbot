@@ -1,14 +1,10 @@
--- Spanish documents alongside the English ones, scoped by language before
--- ranking rather than filtered after it. FR-P3-31, FR-P3-32, FR-P3-33.
+-- Spanish documents scoped by language before ranking, not filtered after.
 --
--- Two changes that have to happen together. Chunks gain a language, and the
--- lexical half stems in that language: running Spanish text through the English
--- configuration strips English stopwords, stems nothing, and quietly makes the
--- lexical half of hybrid retrieval useless on half the corpus.
+-- Chunks gain a language and the lexical half stems in it: Spanish through the
+-- English configuration stems nothing and makes half the corpus unsearchable.
 --
--- The configuration is chosen per row by a case over constants. Casting the
--- column itself, `language::regconfig`, is a catalog lookup and therefore only
--- stable, which a generated column will not accept.
+-- The configuration is a case over constants. `language::regconfig` is a catalog
+-- lookup and therefore only stable, which a generated column will not accept.
 
 alter table chunks add column if not exists language text not null default 'english';
 
@@ -58,7 +54,7 @@ as $$
      where (c.contract_id = p_contract_id or c.contract_id = '*')
        and c.plan_year   = p_plan_year
        and (c.plan_id = p_plan_id or c.plan_id = '*')
-       -- FR-P3-33. Before ranking, like the plan scope, so a Spanish question
+       -- Before ranking, like the plan scope, so a Spanish question
        -- cannot retrieve an English chunk however well it scores.
        and c.language = p_language
   ),

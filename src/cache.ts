@@ -4,21 +4,15 @@ import type { PlanRef } from "./types.ts";
 import type { Speech } from "./i18n.ts";
 
 /**
- * Three caches over one store. FR-P3-53 to FR-P3-60.
- *
- * Every one of them is a pure optimisation: emptying all three changes no
- * answer, only the time it takes to produce one. That property is what makes
- * them safe in a product whose whole claim is that an answer is grounded in a
- * document, and it is asserted by test rather than assumed.
+ * Three caches over one store. Emptying all three changes no answer, only the
+ * time taken to produce one, and that property is asserted by test.
  */
 
 const sha = (value: string): string => createHash("sha256").update(value).digest("hex");
 
 /**
- * Case, spacing and trailing punctuation do not change an answer, so they do not
- * change a key. Nothing beyond that: "in-network" and "out-of-network" differ by
- * one word and by ten dollars, and a normaliser that reached further would be
- * the collision this design exists to avoid. D-100.
+ * Case, spacing and trailing punctuation only. "in-network" and "out-of-network"
+ * differ by one word and ten dollars, so reaching further is the collision itself.
  */
 export const normaliseQuestion = (question: string): string =>
   // Trim before stripping punctuation: with a trailing space the end anchor
@@ -110,11 +104,7 @@ export async function writeEmbedding(
   );
 }
 
-/**
- * The same words in a different voice are a different recording, and serving
- * yesterday's voice after the chain degraded would be a silent inconsistency,
- * so both stay in the key.
- */
+/** Voice and provider stay in the key: the same words elsewhere are another recording. */
 export const audioKey = (text: string, voice: string, provider: string): string =>
   sha(`${provider} ${voice} ${text}`);
 
@@ -153,18 +143,8 @@ export async function writeAudio(
 }
 
 /**
- * Clears the answers held against one corpus snapshot. FR-P3-62.
- *
- * Re-ingesting under a new snapshot id needs no help: the id is part of the key,
- * so an old entry cannot be hit. This exists for the case that does need help,
- * which is re-running ingest into the **same** snapshot after fixing a parser
- * or re-fetching a document. The chunks change, the key does not, and every
- * cached answer for that corpus is now a claim about text that no longer exists.
- *
- * Embeddings and audio are deliberately untouched. A question's vector does not
- * depend on the corpus, and audio is keyed on the answer text, so a changed
- * answer gets a new key rather than a wrong recording. Clearing either would
- * re-pay a provider bill to invalidate something that was never stale. D-101.
+ * Clears one snapshot's answers. For re-ingesting into the same id, where chunks
+ * change and keys do not. Embeddings and audio cannot go stale, so they stay.
  */
 export async function clearAnswers(client: pg.Client, snapshotId: string): Promise<number> {
   const { rowCount } = await client.query("delete from answer_cache where snapshot_id = $1", [

@@ -48,7 +48,7 @@ describe("parseCatalog", () => {
     });
   });
 
-  // D-030: zipcode= is accepted and silently ignored, so a wrong parameter
+  // zipcode= is accepted and silently ignored, so a wrong parameter
   // returns every state with no error. This is the guard for that.
   it("rejects a catalog carrying plans outside the requested state", () => {
     expect(() => parseCatalog(UNFILTERED, SCOPE)).toThrow(/not county-scoped/i);
@@ -58,7 +58,7 @@ describe("parseCatalog", () => {
     expect(() => parseCatalog(UNFILTERED, SCOPE)).toThrow(/tx|ga|pa|sc/i);
   });
 
-  // FR-01: out-of-year documents are rejected at ingest, not filtered at query time.
+  // Out-of-year documents are rejected at ingest, not filtered at query time.
   it("rejects a plan from a different plan year", () => {
     const stale = { results: [{ ...(COUNTY_SCOPED as never as CatalogShape).results[0], year: "2025" }] };
     expect(() => parseCatalog(stale, SCOPE)).toThrow(/2025/);
@@ -87,7 +87,7 @@ describe("selectPlanDocuments", () => {
     ]);
   });
 
-  // FR-P3-31. Clover publishes these three in Spanish and no formulary.
+  // Clover publishes these three in Spanish and no formulary.
   it("returns the Spanish set alongside it", () => {
     const spanish = selectPlanDocuments(plans, PLAN).filter((d) => d.language === "spanish");
     expect(spanish.map((d) => d.kind).sort()).toEqual([

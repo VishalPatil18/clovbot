@@ -12,10 +12,8 @@ interface Props {
 }
 
 /**
- * Dictation from the text composer, so voice is available without changing mode.
- * The result lands in the input box: FR-18 requires the member to be able to fix
- * a mis-heard word before the question is asked, and that protection matters more
- * here than the saved tap.
+ * Dictation without changing mode. The result lands in the input box, because a
+ * mis-heard word must be fixable before the question is asked.
  */
 export function DictateButton({ disabled, onTranscript, onError }: Props): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>("idle");

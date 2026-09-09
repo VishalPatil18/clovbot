@@ -1,29 +1,19 @@
--- Makes "Did this answer your question?" worth asking. FR-P3-63 to FR-P3-69.
---
--- The control already recorded a yes or a no against the turn. What was missing
--- is everything that makes a no actionable: what the assistant actually said,
--- and why the member thought it was wrong.
+-- Makes "Did this answer your question?" worth asking. The rating was already
+-- recorded; what a no needs is the answer it rated and the reason behind it.
 
 -- ---------------------------------------------------------------------------
 -- The answer, for public turns only.
 --
--- A signed-in member's answer contains their own record: a claim amount, a
--- prior-authorisation status, a provider's name. Storing it here would be a
--- durable copy of member data in a table with no row-level security, which is
--- what P3 Stage 2 spent its time removing. The writer leaves this null for any
--- turn carrying a member id, and the check below makes that a rule rather than
--- a habit. D-102.
+-- A member's answer holds their record, and this table has no row-level security,
+-- so storing it would be a durable unprotected copy. The writer leaves it null
+-- for any turn carrying a member id.
 -- ---------------------------------------------------------------------------
 
 alter table turns add column if not exists answer text;
 
 -- ---------------------------------------------------------------------------
--- Why the member said no. Four fixed reasons, never free text.
---
--- Free text is the one surface that could put a diagnosis into this database.
--- Identifier redaction catches a member id or a date of birth; it does not
--- catch "my doctor said I have diabetes". Fixed reasons are also faster to
--- answer than a text box for an audience that finds typing hard.
+-- Why the member said no. Four fixed reasons, never free text: redaction catches
+-- a member id, not "my doctor said I have diabetes".
 -- ---------------------------------------------------------------------------
 
 alter table turns add column if not exists feedback_reason text;
@@ -42,13 +32,9 @@ create index if not exists turns_feedback on turns (member_feedback, feedback_at
   where member_feedback is not null;
 
 -- ---------------------------------------------------------------------------
--- What analysis reads.
---
--- The session id stays on the turn because the loop breaker counts consecutive
--- refusals within one, but it links every question in a visit and nothing in a
--- feedback report needs it. Reading through this view is what lets the
--- documentation call the analysis surface blind to it without claiming the
--- store itself is anonymous, which it is not: it is pseudonymous. D-102.
+-- What analysis reads. The session id stays on the turn for the loop breaker but
+-- is excluded here, which makes the surface blind to it without calling the
+-- store anonymous: it is pseudonymous.
 -- ---------------------------------------------------------------------------
 
 create or replace view feedback_report as

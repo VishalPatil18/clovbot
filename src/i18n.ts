@@ -1,9 +1,4 @@
-/**
- * Member-facing copy in both languages. FR-P3-43.
- *
- * Authored, never machine-translated at runtime: a translated refusal is still
- * a claim, and NFR-P3-12 keeps every string a person wrote.
- */
+/** Authored, never machine-translated: a translated refusal is still a claim. */
 export type Speech = "en" | "es";
 
 /** The corpus tags documents with the full word; the interface uses the code. */
@@ -36,7 +31,7 @@ export const COPY = {
     "I could not produce an answer right now.",
     "No pude generar una respuesta en este momento.",
   ),
-  /** FR-24 as amended: every language except these two still hands over. */
+  /** Every language except these two still hands over to a person. */
   unsupportedLanguage: say(
     "I can only answer in English and Spanish today. A person at the plan can help you in your language.",
     "Solo puedo responder en inglés y español hoy. Una persona del plan puede ayudarle en su idioma.",
@@ -47,8 +42,7 @@ export const COPY = {
   ),
   sources: say("Where this comes from", "De dónde viene esto"),
   /**
-   * FR-P3-36. The drug list is published in English only, so a Spanish answer
-   * that cites it says so rather than leaving the mismatch unexplained. D-093.
+   * The drug list is English only, so a Spanish answer citing it says so.
    */
   englishDrugList: say(
     "",

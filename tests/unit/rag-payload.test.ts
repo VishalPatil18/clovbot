@@ -23,7 +23,7 @@ describe("citationLabel [FR-06]", () => {
     expect(label).toContain("Doctor’s Office");
   });
 
-  // FR-06: a citation without a plan year is not a valid citation.
+  // A citation without a plan year is not a valid citation.
   it("refuses to render a citation with no plan year", () => {
     expect(() => citationLabel(chunk({ planYear: Number.NaN }))).toThrow(/plan year/i);
   });
@@ -78,7 +78,7 @@ describe("renderAnswer", () => {
     expect(rendered).toContain("2026");
   });
 
-  // FR-05: the unsupported part is named explicitly, never silently dropped.
+  // The unsupported part is named explicitly, never silently dropped.
   it("names what it could not answer", () => {
     const payload: AnswerPayload = {
       claims: [{ text: "Your specialist copay is $10.", citationIds: ["sob-01"] }],
@@ -112,7 +112,7 @@ describe("renderAnswer", () => {
       unanswered: [],
       refusal: { trigger: "C-10", explanation: "Not found.", humanPathOffered: true }, headline: null,
     };
-    // D-026: the number must be obviously fake on an unaffiliated deploy.
+    // The number must be obviously fake on an unaffiliated deploy.
     expect(renderAnswer(payload, [])).toMatch(/1-555-0100/);
     expect(renderAnswer(payload, [])).not.toMatch(/1-888-778-1478/);
   });

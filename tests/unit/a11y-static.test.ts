@@ -3,11 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Static half of the accessibility floor. axe, Playwright and Lighthouse were
- * approved but deferred to P3, so these assert what can be checked without a
- * browser: type scale, target size, focus visibility, and the two interaction
- * rules NFR-A11Y-05 names. They do not replace a browser scan, and the criteria
- * needing one are recorded as unverified in claude/features.md.
+ * What the accessibility floor can assert without a browser: type scale,
+ * target size, focus visibility and two interaction rules. Not a browser scan.
  */
 const css = ["web/src/tokens.css", "web/src/app.css"]
   .map((path) => readFileSync(path, "utf8"))
@@ -32,11 +29,7 @@ const markup = tsx.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
 const MIN_TEXT_PX = 18;
 const MIN_TARGET_PX = 44;
 
-/**
- * D-042 narrowed NFR-A11Y-03's 18px floor to the reading surface: the member's
- * question and the assistant's answer. Interface chrome uses the DESIGN.md scale.
- * These assertions check that split holds rather than that everything is 18px.
- */
+/** The 18px floor covers the reading surface; chrome uses the design scale. */
 const token = (name: string): number =>
   Number(new RegExp(`--${name}:\\s*(\\d+(?:\\.\\d+)?)px`).exec(css)?.[1]);
 
@@ -54,14 +47,12 @@ describe("reading surface type scale [NFR-A11Y-03, D-042]", () => {
     }
   });
 
-  // The question moved from the button itself onto its title element when the
-  // starters became cards; the 18px floor follows the question. D-042.
+  // The floor follows the question, which now sits on the card's title.
   it("applies it to the starter questions, which are questions about to be asked", () => {
     expect(rule(".starter__title")).toMatch(/font-size:\s*var\(--text-message\)/);
   });
 
-  // A card that sends something other than what it shows would be a small lie
-  // on a product whose whole claim is that it does not state what it cannot support.
+  // A card that sends something other than what it shows is a small lie.
   it("asks exactly the question the card displays", () => {
     expect(markup).toContain("{starter.question}");
     expect(markup).toMatch(/submit\(starter\.question, plan\)/);
@@ -73,8 +64,7 @@ describe("reading surface type scale [NFR-A11Y-03, D-042]", () => {
     expect(rule(".composer__input")).toMatch(/font-size:\s*var\(--text-input\)/);
   });
 
-  // The mock set this at 11px: the smallest type on the screen, on the surface
-  // the product's trustworthiness rests on. It sits at UI body size instead.
+  // The mock set the trust surface at 11px, the smallest type on screen.
   it("keeps the citation above the mock's 11px chip", () => {
     expect(token("text-cite")).toBeGreaterThanOrEqual(14);
   });
@@ -146,9 +136,7 @@ describe("interaction rules [NFR-A11Y-05]", () => {
 });
 
 describe("required surfaces", () => {
-  // FR-13: a route to a human visible in every state, including mid-stream. The
-  // assistant carries the named control; the host page replicates Clover's own
-  // call affordances, which serve the same purpose under different wording.
+  // A route to a human in every state. The host page uses Clover's own wording.
   it("keeps the named control in the assistant, where mid-stream visibility matters", () => {
     const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
     expect(assistant).toMatch(/Talk to a person/);
@@ -173,9 +161,7 @@ describe("required surfaces", () => {
     expect(tsx).toMatch(/Unaffiliated case study/i);
   });
 
-  // Said "no member data is held" until sign-in shipped, which made it false.
-  // What holds now is that every record is invented, and it is said in both
-  // languages because a Spanish reader needs it as much as an English one.
+  // Said "no member data is held" until sign-in made that false. Both languages.
   it("states that every member record is demonstration data [NFR-SEC-01]", () => {
     const strings = readFileSync("web/src/strings.ts", "utf8");
     expect(strings).toMatch(/No real member data is held/);
@@ -189,16 +175,15 @@ describe("required surfaces", () => {
     expect(starters.length).toBeLessThanOrEqual(6);
   });
 
-  // D-026: an unaffiliated deploy must not publish a routable support line.
+  // An unaffiliated deploy must not publish a routable support line.
   it("never shows the real Clover number", () => {
     const strings = readFileSync("web/src/strings.ts", "utf8");
     expect(tsx + strings).not.toMatch(/1-888-778-1478/);
-    // The placeholder lives in strings.ts, where the PDF export can reach it
-    // without importing a React component.
+    // In strings.ts, so the PDF export reaches it without importing React.
     expect(strings).toMatch(/1-555-0100/);
   });
 
-  // FR-30: the notice collapses rather than disappearing, so the page always
+  // The notice collapses rather than disappearing, so the page always
   // discloses that it is unaffiliated.
   it("keeps the case-study notice reachable after it is collapsed", () => {
     const landing = readFileSync("web/src/components/Landing.tsx", "utf8");
@@ -254,7 +239,7 @@ describe("required surfaces", () => {
     expect(css).toMatch(/prefers-reduced-motion[\s\S]*\.mic-ring \{ animation: none/);
   });
 
-  // FR-18: a mis-heard word must be fixable before the question is asked.
+  // A mis-heard word must be fixable before the question is asked.
   it("places a dictated transcript in the composer rather than sending it", () => {
     const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
     expect(assistant).toMatch(/onTranscript=\{\(text\) =>/);
@@ -263,8 +248,7 @@ describe("required surfaces", () => {
     expect(dictate).not.toMatch(/onSend|submit\(/);
   });
 
-  // Two different actors, two different visual languages: rings travel outward
-  // while the member speaks, bars rise and fall while the assistant does.
+  // Two actors, two visual languages: rings outward, bars rising and falling.
   it("distinguishes the assistant speaking from the member speaking", () => {
     const css = readFileSync("web/src/app.css", "utf8");
     expect(css).toMatch(/@keyframes mic-ripple/);
@@ -283,8 +267,7 @@ describe("required surfaces", () => {
     expect(assistant.replace(/\s+/g, " ")).toMatch(/Reading this answer aloud/);
   });
 
-  // Colour and motion alone would leave the state unreadable to anyone who
-  // cannot see it, or who has motion turned off.
+  // Colour and motion alone fail anyone who cannot see them.
   it("states in words which answer is being read", () => {
     const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
     expect(assistant).toMatch(/className="turn__reading" role="status"/);
@@ -330,11 +313,7 @@ describe("plan identity is never shown raw [D-055]", () => {
     expect(matches).toEqual([]);
   });
 
-  /*
-   * WCAG 2.2 excepts a target inline in a block of text from the target-size
-   * criteria. Change sits inside the plan chip's own sentence, the same
-   * exception .cite-marker relies on, and forcing 44px inflated the chip.
-   */
+  // WCAG 2.2 excepts inline targets; forcing 44px inflated the chip.
   it("keeps the inline plan change control from inflating its chip", () => {
     expect(rule(".assistant__plan-change")).toContain("min-height: 0");
     const chip = rule(".meta-chip");
@@ -354,8 +333,7 @@ describe("plan identity is never shown raw [D-055]", () => {
 });
 
 describe("answer card [FR-P2-13, NFR-P2-06, D-068]", () => {
-  // The amount is the dominant element, so it must outrank the reading surface
-  // rather than merely differ from it.
+  // The dominant element must outrank the reading surface, not merely differ.
   it("sets the amount above the 18px reading surface", () => {
     const amount = rule(".headline__amount");
     expect(amount).toContain("var(--text-heading)");
@@ -397,8 +375,7 @@ describe("session surfaces [FR-P2-20 to FR-P2-23, D-071, D-073]", () => {
     expect(markup).toMatch(/Show help|Hide help/);
   });
 
-  // Help is a region, not a dialog: a dialog traps focus, which FR-P2-23 forbids.
-  // The surrounding panel is separately a non-modal dialog, which is unrelated.
+  // A region, not a dialog: a dialog would trap focus.
   it("exposes help as an expandable region rather than a dialog", () => {
     expect(markup).toContain('aria-expanded={helpOpen}');
     expect(markup).toContain('aria-controls="assistant-help"');
@@ -414,13 +391,8 @@ describe("session surfaces [FR-P2-20 to FR-P2-23, D-071, D-073]", () => {
     expect(rule(".assistant--panel > .assistant__scroll")).toContain("overflow-y: auto");
   });
 
-  // FR-13 needs the human path present in every state, not in a particular
-  // region. It lives in the pinned foot, which never scrolls away.
-  /*
-   * The tools render into the pinned foot in the panel and into the rail on the
-   * full page, through a portal. Either way they never scroll away, which is
-   * what FR-13 requires of the human path.
-   */
+  // Present in every state. Pinned foot in the panel, rail on the full page,
+  // and neither scrolls away.
   it("keeps the human path in a pinned region, reachable at any scroll position", () => {
     expect(markup).toContain("chip--human");
     const foot = markup.slice(markup.indexOf('className="assistant__foot"'));
@@ -460,19 +432,14 @@ const strings = readFileSync("web/src/strings.ts", "utf8");
 describe("overlay and interface pass [D-074 to D-078]", () => {
   const app = readFileSync("web/src/App.tsx", "utf8");
 
-  // A dialog that covers the page visually must cover it for the keyboard too,
-  // or tabbing lands on controls hidden behind the backdrop. D-075.
+  // A dialog covering the page visually must cover it for the keyboard too.
   it("holds focus inside the panel while it is open", () => {
     expect(app).toContain('aria-modal="true"');
     expect(app).toMatch(/event\.key !== "Tab"/);
     expect(app).toMatch(/preventDefault\(\)/);
   });
 
-  /*
-   * `html, body { overflow-x: hidden }` makes the other axis compute to auto,
-   * so the document element owns the scroll. Locking body alone left the page
-   * scrolling behind the backdrop.
-   */
+  // overflow-x hidden makes the other axis auto, so the document owns the scroll.
   it("locks both scroll owners behind the overlay and releases them again", () => {
     expect(app).toMatch(/root\.style\.overflow = "hidden"/);
     expect(app).toMatch(/document\.body\.style\.overflow = "hidden"/);
@@ -491,7 +458,7 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
     expect(app).toMatch(/onClose=\{closePanel\}/);
   });
 
-  // D-076: a stray click must not discard a half-typed question.
+  // A stray click must not discard a half-typed question.
   it("keeps the draft above the panel so closing does not lose it", () => {
     expect(app).toMatch(/const \[draft, setDraft\] = useState\(""\)/);
     expect(app).toContain("draft={draft}");
@@ -517,8 +484,7 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
     expect(dictate).toMatch(/border-radius: 999px/);
   });
 
-  // The indicator is drawn inside the radius rather than 2px outside it, and is
-  // never removed - a text field matches :focus-visible on click by design. D-078.
+  // Drawn inside the radius, and never removed: a field matches on click.
   it("draws composer focus inside the field", () => {
     const focus = rule(".composer__input:focus-visible");
     expect(focus).toContain("outline-offset: -2px");
@@ -538,13 +504,8 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
     expect(css).toMatch(/:hover::-webkit-scrollbar-thumb/);
   });
 
-  // Voice filled the pinned foot and squeezed the thread to a sliver, so an
-  // answer could be heard but not read.
-  /*
-   * Voice used to fill the pinned foot and squeeze the thread to a sliver, so an
-   * answer could be heard but not read. A height cap was the first fix; the
-   * horizontal stage is the real one, and it holds without capping anything.
-   */
+  // Voice filled the foot and squeezed the thread, so an answer could be
+  // heard but not read. The horizontal stage fixes it without a height cap.
   it("keeps the voice stage short enough that the transcript stays readable", () => {
     const stage = rule(".voice__stage");
     expect(stage).toContain("display: flex");
@@ -552,12 +513,7 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
     expect(rule(".mic-well")).toMatch(/height: 128px/);
   });
 
-  // Icon-only is right for close, expand and help; switching how you speak to
-  // the assistant is the one header control worth naming.
-  // Beside the close control it is an icon; in the rail it sits with the named
-  // tools and carries its own label.
-  // Labelled where there is room for words, an icon where there is not: the
-  // panel header, and a phone's top bar beside Back.
+  // Labelled where there is room for words, an icon where there is not.
   it("labels the help control in the rail and leaves it an icon elsewhere", () => {
     expect(markup).toContain('railId === undefined || isPhone ? "assistant__icon-button" : "assistant__mode"');
     expect(markup).toMatch(/\{helpOpen \? "Hide help" : "Show help"\}/);
@@ -578,14 +534,9 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
     expect(mode).toContain("white-space: nowrap");
   });
 
-  /*
-   * Help and the voice toggle render once each: in the panel's header, or in the
-   * full page's rail. The condition is the same for both, so they cannot appear
-   * twice or vanish from one variant.
-   */
+  // One condition for both, so neither doubles nor vanishes from a variant.
   it("renders help and the voice toggle exactly once, in one place per variant", () => {
-    // Three homes now: the panel header, the rail, and a phone's top bar. Each
-    // control is written once and placed by where the fragment is rendered.
+    // Written once, placed by where the fragment is rendered.
     expect(markup.match(/railId === undefined && helpControl/g)).toHaveLength(1);
     expect(markup.match(/railId === undefined && modeControl/g)).toHaveLength(1);
     expect(markup.match(/const controls = \(/g)).toHaveLength(1);
@@ -594,7 +545,7 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
     expect(header).not.toContain("chip--human");
   });
 
-  // The rail carries the human path as a card, so the tools must not repeat it.
+  // The rail carries the human path as a card; the tools must not repeat it.
   it("shows the human path once on the full page", () => {
     expect(rule(".rail .chip--human")).toContain("display: none");
     const app = readFileSync("web/src/App.tsx", "utf8");
@@ -621,8 +572,7 @@ describe("brand surfaces [DESIGN.md]", () => {
     expect(shell).toMatch(/rel="icon"[^>]*href="\/favicon\.png"/);
   });
 
-  // DESIGN.md names both faces. Neither is a serif, and a Garamond substitute
-  // is what made the assistant title read wrong.
+  // Neither face is a serif; a Garamond substitute read wrong.
   it("uses the two faces DESIGN.md names, with its own fallbacks", () => {
     expect(tokens).toContain('"Faire Octave"');
     expect(tokens).toContain('"Suisse Intl"');
@@ -652,14 +602,11 @@ describe("brand surfaces [DESIGN.md]", () => {
     expect(app).toMatch(/IoChatbubbleEllipses[\s\S]*Ask the assistant/);
   });
 
-  // The full page had no row structure at all, so the composer drifted down the
-  // page and the rail was a tall empty block.
+  // Without row structure the composer drifted and the rail was empty.
   it("gives the full page the same pinned rows as the panel", () => {
     expect(rule(".assistant--page")).toContain("grid-template-rows: auto 1fr auto");
     expect(rule(".assistant--page > .assistant__scroll")).toContain("min-height: 0");
-    // The banner is above the workspace, so the column owns the viewport height
-    // and the workspace takes what is left. 100vh on the workspace made the
-    // document taller than the screen and the whole page scrolled.
+    // The column owns the viewport height; 100vh on the workspace scrolled the page.
     expect(rule(".fullscreen")).toContain("height: 100dvh");
     expect(rule(".fullscreen")).toContain("overflow: hidden");
     expect(rule(".workspace")).toContain("min-height: 0");
@@ -667,19 +614,14 @@ describe("brand surfaces [DESIGN.md]", () => {
 });
 
 describe("empty state and conversation alignment", () => {
-  // The heading and chips sit at the column's left edge; a centred conversation
-  // floated away from them.
+  // A centred conversation floated away from the heading's left edge.
   it("aligns the conversation and composer with the header on the full page", () => {
-    // rule() builds a regex from the selector and these end in "*", so match the
-    // stylesheet directly rather than through it.
+    // These selectors end in "*", which rule() cannot build a regex from.
     expect(css).toMatch(/\.assistant--page > \.assistant__scroll > \*\s*\{[^}]*margin-inline: 0/);
     expect(css).toMatch(/\.assistant--page > \.assistant__foot > \*\s*\{[^}]*margin-inline: 0/);
   });
 
-  // Only while it is the only thing on screen: a real conversation pushes it out
-  // and the thread flows from the top again.
-  // No conversation to align to yet, so the opening screen sits in the middle;
-  // the first answer moves it left and it stays there.
+  // Centred only while it is the only thing on screen.
   it("centres the opening screen horizontally until a question is asked", () => {
     expect(markup).toContain('assistant--empty');
     expect(markup).toContain("turns.length === 0 && planPrompt === null");
@@ -695,8 +637,7 @@ describe("empty state and conversation alignment", () => {
 });
 
 describe("waiting state [D-077]", () => {
-  // It used to render below the composer while the thread showed a static
-  // fallback, so the staged messages were never the thing anyone saw.
+  // Below the composer it was never the thing anyone saw.
   it("shows the rotating message where the answer will appear", () => {
     const pending = markup.slice(markup.indexOf('className="turn__pending"'));
     expect(pending.slice(0, 800)).toContain("{progress ||");
@@ -709,8 +650,7 @@ describe("waiting state [D-077]", () => {
     expect(foot.slice(0, 200)).not.toContain("progress");
   });
 
-  // Anchored to the top-level rule: the reduced-motion override for the same
-  // selector appears earlier in the file and rule() returns the first match.
+  // rule() returns the first match, and reduced motion overrides this earlier.
   it("sweeps the text rather than adding a spinner beside it", () => {
     expect(css).toMatch(/^\.turn__pending-text \{[^}]*animation: pending-sweep/m);
     expect(css).toContain("@keyframes pending-sweep");
@@ -727,8 +667,7 @@ describe("waiting state [D-077]", () => {
 describe("long answers [FR-32]", () => {
   const answerBody = readFileSync("web/src/components/AnswerBody.tsx", "utf8");
 
-  // FR-32: prose is rendered by the application, never by the model. Grouping is
-  // presentation over the typed claims, not markup the model emitted.
+  // Grouping is presentation over typed claims, not markup the model emitted.
   it("groups claims in the renderer rather than asking the model for markup", () => {
     expect(answerBody).toContain("groupClaims(claims, citations)");
     expect(answerBody).not.toMatch(/dangerouslySetInnerHTML|marked|remark|markdown/i);
@@ -749,8 +688,7 @@ describe("long answers [FR-32]", () => {
 describe("voice stage layout [D-045]", () => {
   const voice = readFileSync("web/src/components/VoiceComposer.tsx", "utf8");
 
-  // The stage filled the panel because the text sat in a column under the
-  // control. Beside it, the same content is a fraction of the height.
+  // Text under the control filled the panel; beside it, a fraction of the height.
   it("puts the text beside the control rather than under it", () => {
     expect(rule(".voice__stage")).toContain("display: flex");
     expect(rule(".voice__stage")).toContain("align-items: center");
@@ -773,14 +711,11 @@ describe("voice stage layout [D-045]", () => {
     expect(rule(".voice__actions, .voice__playback")).toContain("justify-content: flex-start");
   });
 
-  // Stop with nothing playing is a control that does nothing.
-  // Stop became Pause: its only extra was resetting the position, which the
-  // button beside it already does. Paused audio still has a place to return to,
-  // so the control stays available while paused.
+  // Stop only reset the position, which the button beside it already does.
+  // Paused audio has a place to return to, so Pause stays available.
   it("disables the transport only when there is nothing to pause or resume", () => {
     expect(markup).toContain("disabled={speakingTurn === null && !paused}");
-    // The mic keeps its own stop icon for ending a recording; the playback
-    // controls no longer have one.
+    // The mic keeps a stop icon for recording; playback no longer has one.
     const playback = markup.slice(markup.indexOf('className="voice__playback"'));
     expect(playback.slice(0, 1600)).not.toContain("IoStop");
     expect(playback.slice(0, 1600)).toContain("IoPause");
@@ -791,8 +726,7 @@ describe("voice stage layout [D-045]", () => {
     expect(css).toMatch(/\.button:disabled[\s\S]{0,120}cursor: not-allowed;/);
   });
 
-  // The composer owns its listening and review phases, so clearing the thread
-  // has to remount it or voice stays on whatever screen it was left on.
+  // Clearing the thread must remount it, or voice stays on the old screen.
   it("resets the voice surface when the conversation is cleared", () => {
     expect(markup).toContain("key={voiceReset}");
     expect(markup).toMatch(/const resetVoice[\s\S]*?setVoiceReset/);
@@ -810,9 +744,7 @@ describe("voice stage layout [D-045]", () => {
 });
 
 describe("voice stage overflow", () => {
-  // The rings pulse to roughly 1.8x their 112px base and overflow the 128px
-  // well by design. A scrolling ancestor turned that decoration into a
-  // scrollbar that tracked the animation.
+  // Rings overflow the well by design; a scrolling ancestor made that a scrollbar.
   it("does not make the voice region scrollable", () => {
     expect(css).not.toMatch(/\.assistant--panel \.voice \{[^}]*overflow-y: auto/);
   });

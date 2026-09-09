@@ -24,7 +24,7 @@ for (let i = 3; i < process.argv.length; i += 1) {
   words.push(argument);
 }
 
-/** D-047: every row is invented, and the schema refuses anything else. */
+/**: every row is invented, and the schema refuses anything else. */
 async function seed(): Promise<void> {
   const client = connectAdmin();
   await client.connect();
@@ -120,7 +120,7 @@ async function ask(): Promise<void> {
   await client.connect();
   try {
     // Only the plan, which scoping needs. What the question needs from the
-    // record is read inside the turn, and only if the question needs it. D-091.
+    // record is read inside the turn, and only if the question needs it.
     const plan = await loadMemberPlan(client, id);
     if (plan === null) {
       throw new Error(`no member ${String(id)}. Run npm run seed:members first.`);

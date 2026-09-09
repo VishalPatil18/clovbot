@@ -17,9 +17,8 @@ export const ALL_PLANS = "*";
 export const ALL_CONTRACTS = "*";
 
 /**
- * Whether a retrieved row belongs to the session's plan. Contract-wide rows carry
- * the wildcard and answer under every plan by design; anything else is leakage,
- * and leakage reads as a confidently wrong copay rather than as an error. D-056.
+ * Whether a row belongs to the session's plan. Wildcards answer everywhere by
+ * design; anything else leaks as a confidently wrong copay, not as an error.
  */
 export function isInPlanScope(
   scope: { contractId: string; planId: string; planYear: number },
@@ -34,8 +33,7 @@ export function isInPlanScope(
 /**
  * Raises rather than defaulting. A citation missing plan year or plan is not a
  * citation, so a chunk that cannot state its provenance must never be indexed.
- * FR-04, FR-06, D-033.
- */
+  */
 export function buildProvenance(raw: Record<string, unknown>): Provenance {
   const document = raw["document"];
   if (typeof document !== "string" || !DOCUMENT_KINDS.includes(document as DocumentKind)) {
@@ -65,7 +63,7 @@ export function buildProvenance(raw: Record<string, unknown>): Provenance {
   return { document: document as DocumentKind, planYear, contractId, planId, section };
 }
 
-/** Out-of-year documents are rejected at ingest, never filtered at query time. FR-01. */
+/** Out-of-year documents are rejected at ingest, never filtered at query time. */
 export function isAllowedPlanYear(year: unknown, configured: number): boolean {
   return typeof year === "number" && Number.isInteger(year) && year === configured;
 }

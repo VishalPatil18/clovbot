@@ -60,11 +60,7 @@ export function parseCitations(answer: string): string[] {
   );
 }
 
-/**
- * Citation containment: every id the answer cites must have been retrieved this
- * turn. Catches a confident answer wearing a valid-looking citation to a chunk
- * that was never in context.
- */
+/** Every cited id must have been retrieved this turn, or the citation is invented. */
 export function findUncitedIds(answer: string, retrievedIds: string[]): string[] {
   const retrieved = new Set(retrievedIds);
   return parseCitations(answer).filter((id) => !retrieved.has(id));

@@ -14,11 +14,7 @@ export function App(): React.JSX.Element {
   const [panelOpen, setPanelOpen] = useState(false);
   const isPhone = useIsPhone();
 
-  /*
-   * On a phone the assistant is the full page and nothing else. Opening the
-   * panel navigates instead, and a panel left open when the window narrows
-   * becomes the page rather than a clipped overlay. D-097.
-   */
+  // On a phone the panel navigates instead, so it never becomes a clipped overlay.
   useEffect(() => {
     if (isPhone && panelOpen) {
       setPanelOpen(false);
@@ -27,7 +23,7 @@ export function App(): React.JSX.Element {
   }, [isPhone, panelOpen]);
   const launcher = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
-  // Held above the panel so a close never discards a half-typed question. D-076.
+  // Held above the panel, so a close never discards a half-typed question.
   const [draft, setDraft] = useState("");
   const reduceMotion = useReducedMotion();
 
@@ -47,13 +43,8 @@ export function App(): React.JSX.Element {
     setRoute(next);
   };
 
-  // Escape closes the panel and returns focus to the control that opened it,
-  // so keyboard users are never stranded. NFR-A11Y-04.
-  /*
-   * The panel dims and covers the page, so it holds focus while it is open.
-   * A dialog that blocks the page visually must block it for the keyboard too,
-   * or it is only a dialog for people using a mouse. D-075.
-   */
+  // Escape returns focus to the control that opened it, so nobody is stranded.
+  // A dialog that blocks the page visually must block it for the keyboard too.
   useEffect(() => {
     if (!panelOpen) return;
     const onKey = (event: KeyboardEvent): void => {
@@ -82,16 +73,10 @@ export function App(): React.JSX.Element {
   }, [panelOpen, closePanel]);
 
   /*
-   * Both elements, not just body. `html, body { overflow-x: hidden }` makes the
-   * other axis compute to auto, so the document element owns the scroll and
-   * locking body alone leaves the page scrolling behind the backdrop.
-   * Released on unmount, or the page stays frozen after a close.
+   * Both elements: overflow-x hidden makes the other axis auto, so the document
+   * owns the scroll and locking body alone leaves the page scrolling behind.
    */
-  /*
-   * The full-page route is a fixed-height flex shell, so nothing should scroll
-   * outside it. On a phone `100vh` counts the browser chrome that `100dvh` does
-   * not, and the difference showed up as a screen of white below the composer.
-   */
+  // 100vh counts browser chrome that 100dvh does not: a screen of white below.
   useEffect(() => {
     if (!panelOpen && route !== "assistant") return;
     const root = document.documentElement;
@@ -209,7 +194,7 @@ export function App(): React.JSX.Element {
   );
 }
 
-/** FR-30. Persistent, on every route. */
+/** Persistent, on every route. */
 function Disclaimer(): React.JSX.Element {
   return (
     <p className="disclaimer" role="note">

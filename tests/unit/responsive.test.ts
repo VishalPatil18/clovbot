@@ -13,26 +13,22 @@ const phoneRules = [...app.matchAll(/@media \(max-width: 48rem\) \{([\s\S]*?)\n\
   .join("\n");
 
 describe("the width floor that clipped every viewport [FR-P3-45]", () => {
-  // A flex item's default min-width is auto, so it refuses to shrink below its
-  // content. `.assistant__bar` was nowrap, making its min-content width a floor
-  // for the whole panel: 726px of content inside a 576px frame at 1440, and
-  // inside a 393px one on a phone.
+  // A flex item's default min-width is auto, so a nowrap bar becomes a floor:
+  // 726px of content inside a 576px frame at 1440, and inside 393px on a phone.
   it("clears the min-width floor at every width, not only on phones", () => {
-    // The rule must sit outside every media query, so strip them all and look
-    // in what is left rather than trusting where it appears in the file.
+    // Must sit outside every media query, so strip them and look at what is left.
     const unconditional = app.replace(/@media [^{]+\{[\s\S]*?\n\}/g, "");
     expect(unconditional).toMatch(/\.assistant__bar,/);
     expect(unconditional).toMatch(/\.assistant__scroll,/);
     expect(unconditional).toMatch(/min-width: 0;/);
-    // The bar holds one line and lets the title truncate, which is what keeps
-    // the controls hard against the right edge instead of under the heading.
+    // The title truncates, which keeps the controls against the right edge.
     expect(unconditional).toMatch(/\.assistant__bar \{[^}]*flex-wrap: nowrap;/);
     expect(unconditional).toMatch(/\.assistant__title \{[^}]*text-overflow: ellipsis;/);
     expect(unconditional).toMatch(/\.assistant__corner \{ margin-left: auto; \}/);
   });
 
   it("says why in the source, because the symptom looked like a phone bug", () => {
-    expect(app).toMatch(/not a phone bug/i);
+    expect(app).toMatch(/not only on a phone/i);
   });
 });
 
@@ -52,8 +48,7 @@ describe("the assistant is the whole page on a phone [FR-P3-45]", () => {
     expect(shell).toMatch(/if \(isPhone && panelOpen\)[\s\S]{0,120}go\("assistant"\)/);
   });
 
-  // The bar beside Back, not the assistant header: it is where a member looks
-  // for them, and it keeps the header to a title and the plan context.
+  // The bar beside Back, so the header keeps only a title and the plan.
   it("puts the controls in the top bar and leaves the actions above the composer", () => {
     expect(assistant).toMatch(/isPhone \? controls : railTools/);
     expect(assistant).toMatch(/railId !== undefined && isPhone && chips/);
@@ -72,7 +67,7 @@ describe("the phone layout [FR-P3-45]", () => {
   // The human path must stay on screen without a tap, which the chips row does.
   it("drops the rail's human card rather than repeating the chip", () => {
     expect(phoneRules).toContain(".rail__human { display: none; }");
-    expect(phoneRules).toMatch(/Talk to a person/);
+    expect(phoneRules).toMatch(/the chip above the composer is always on screen/);
   });
 
   it("turns the rail into a bar holding the way back", () => {
@@ -145,8 +140,7 @@ describe("the ten fixes from the device pass [FR-P3-45]", () => {
   it("shrinks the two chips whose icon carries the meaning, not the two that matter", () => {
     expect(assistant).toMatch(/chip chip--compact" onClick=\{\(\) => void saveTranscript\(\)\}/);
     expect(assistant).toMatch(/chip chip--compact" onClick=\{forgetHistory\}/);
-    // Has to out-specify `.chips .chip`, or the width lands and the font-size
-    // does not: a 44px button holding the whole label.
+    // Must out-specify `.chips .chip`, or the width lands and the font-size does not.
     expect(phoneRules2).toMatch(/\.chips \.chip--compact \{/);
     expect(phoneRules2).toMatch(/\.chips \.chip--compact svg \{/);
     // "Talk to a person" and "Start over" keep their words.
@@ -162,8 +156,7 @@ describe("the ten fixes from the device pass [FR-P3-45]", () => {
     expect(phoneRules2).toMatch(/\.starter \{[\s\S]*?grid-template-columns: auto 1fr;/);
   });
 
-  // 100vh counts browser chrome that 100dvh does not, and the difference showed
-  // up as a screen of white below the composer.
+  // 100vh counts browser chrome that 100dvh does not: a screen of white.
   it("locks the page scroll on the full-page route, not only under the panel", () => {
     expect(shell).toMatch(/if \(!panelOpen && route !== "assistant"\) return;/);
     expect(shell).toMatch(/\}, \[panelOpen, route\]\);/);
@@ -194,22 +187,19 @@ describe("the second device pass [FR-P3-45]", () => {
     expect(phone).toMatch(/\.rail \.assistant__icon-button svg \{/);
   });
 
-  // The labelled chips wrapped to two lines each, costing the height the single
-  // row was meant to save.
+  // Wrapped to two lines each, costing the height the single row saved.
   it("keeps each action on one line and the row on one row at the floor", () => {
     expect(phone).toMatch(/\.chips \.chip \{[\s\S]*?white-space: nowrap;/);
     expect(app).toMatch(/@media \(max-width: 24\.5rem\) \{\s*\n\s*\.chips \{ flex-wrap: wrap; \}/);
   });
 
-  // `.assistant--page > .assistant__foot` sets gap 16 and out-specifies a bare
-  // `.assistant__foot`, so the override has to match it.
+  // The child selector out-specifies a bare `.assistant__foot`; the override must match.
   it("tightens the foot with matching specificity", () => {
     expect(phone).toMatch(/\.assistant--page > \.assistant__foot,\s*\n\s*\.assistant--panel > \.assistant__foot \{ gap:/);
   });
 
-  // The radius lives in the sweep's own mask, and `.mic-halo` is inset:0, so
-  // sizing the wrapper does nothing. Desktop tunes the band to a 112px mic;
-  // this one is 72px and every number has to scale with it.
+  // The radius lives in the sweep's mask and `.mic-halo` is inset:0, so sizing
+  // the wrapper does nothing. Desktop tunes to 112px; this mic is 72px.
   it("scales the halo's mask to the smaller mic, not just its wrapper", () => {
     expect(phone).toMatch(/\.mic-halo__sweep \{[\s\S]*?width: 96px;/);
     expect(phone).toMatch(/mask: radial-gradient\(circle, transparent 38px, #000 40px, #000 46px, transparent 48px\)/);
@@ -232,8 +222,7 @@ describe("playback is pause and resume, not stop [D-045]", () => {
     expect(voice).toMatch(/pause: \(\) => \{\s*\n\s*audio\.pause\(\);/);
   });
 
-  // The listener could not tell a member pausing from playback ending, which
-  // with a resume path are different states.
+  // Pausing and ending were indistinguishable, and a resume path needs both.
   it("no longer treats a pause as the end of playback", () => {
     expect(voice).not.toMatch(/addEventListener\("pause"/);
   });
@@ -263,8 +252,7 @@ describe("the rail is one set of tools [FR-P3-48]", () => {
     expect(app).toMatch(/\.rail__tools > \* \{[\s\S]*?background: var\(--color-cream-paper\);/);
   });
 
-  // A tool that stays highlighted after a click looks selected, and none of
-  // these is a selection: they act and finish.
+  // None of these is a selection: they act and finish.
   it("changes ground on hover only, not on pressed or expanded", () => {
     expect(app).toMatch(/\.rail__tools > \*\[aria-pressed="true"\],\s*\n\s*\.rail__tools > \*\[aria-expanded="true"\] \{\s*\n\s*background: var\(--color-cream-paper\);/);
     expect(app).toMatch(/\.rail__tools > \*:hover \{ background: var\(--color-keylime-wash\); \}/);
@@ -282,17 +270,14 @@ describe("the rail is one set of tools [FR-P3-48]", () => {
 });
 
 describe("a disabled control reads as disabled [NFR-A11Y-04]", () => {
-  // Fading a filled button takes the label down with the fill. Forcing a text
-  // colour on every variant gave this one dark text on a dark ground at half
-  // opacity, which is unreadable rather than merely quiet.
+  // Fading a filled button takes the label down with the fill: dark on dark.
   it("gives the filled button an inert ground instead of dimming it", () => {
     expect(app).toMatch(/\.button\.button--primary:disabled,[\s\S]*?opacity: 1;/);
     expect(app).toMatch(/\.button\.button--primary:disabled,[\s\S]*?background: var\(--color-border-mist\);/);
     expect(app).toMatch(/\.button\.button--primary:disabled,[\s\S]*?color: var\(--color-charcoal\);/);
   });
 
-  // The generic rule sits later in the file, so the override has to out-specify
-  // it rather than rely on order. This stylesheet has caught that three times.
+  // Out-specify rather than rely on order; this stylesheet has caught that three times.
   it("wins on specificity rather than on file order", () => {
     expect(app).toContain(".button.button--primary:disabled");
     expect(app).not.toMatch(/\n\.button--primary:disabled \{/);

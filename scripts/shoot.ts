@@ -1,10 +1,8 @@
 /**
- * Renders the app at a set of viewports and writes a PNG for each.
+ * A PNG per viewport, because "responsive" cannot be reviewed from CSS.
+ * The floor is an iPhone 14 Pro: 393x852 at devicePixelRatio 3.
  *
  *   npm run shoot
- *
- * Exists because "responsive" cannot be reviewed from CSS. iPhone 14 Pro is the
- * floor the layout is held to: 393x852 CSS pixels at devicePixelRatio 3.
  */
 import { chromium, devices } from "playwright";
 import { mkdirSync } from "node:fs";
@@ -74,9 +72,8 @@ for (const viewport of VIEWPORTS) {
       const file = `${OUT}/${viewport.name}-${shot.id}.png`;
       await page.screenshot({ path: file, fullPage: false });
 
-      // The one measurement worth taking every time: a page that scrolls
-      // sideways on a phone is broken however good it looks in a screenshot.
-      // The root tsconfig has no DOM lib, so this runs as a string in the page.
+      // Sideways scroll is broken however good the screenshot looks.
+      // A string, because the root tsconfig has no DOM lib.
       const overflow = (await page.evaluate(
         "({ scrollWidth: document.documentElement.scrollWidth," +
           " clientWidth: document.documentElement.clientWidth })",

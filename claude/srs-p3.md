@@ -9,13 +9,13 @@
 | Field | Value |
 | --- | --- |
 | Project | Clover Member Assistant |
-| Version | 1.4.0 |
+| Version | 1.5.0 |
 | Status | Frozen |
 | Last Updated | 2026-09-09 |
-| Covers | `claude/plan-p3.md` stages 1-8, shipping as v1.2.0 |
+| Covers | `claude/plan-p3.md` stages 1-9, shipping as v1.2.0 |
 | Sources | `docs/ideas.md` §7 P3-01 and P3-02, `claude/plan-p3.md`, `claude/srs.md` v1.1.0, `claude/srs-p2.md` v1.0.1, `docs/research-init.md`, D-047, D-080, D-085 |
 | Predecessor | `claude/srs-p2.md` v1.0.1 (P2, frozen) |
-| Amendments | 1.4.0 - Stage 8 added 2026-09-09 with FR-P3-70 to FR-P3-77 and NFR-P3-18. 1.3.0 - Stage 7 added 2026-09-09 with FR-P3-63 to FR-P3-69 and NFR-P3-17. 1.2.1 - FR-P3-62 added 2026-09-09. 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14. 1.2.0 - Stage 6 added 2026-09-09 with FR-P3-53 to FR-P3-61 and NFR-P3-15, NFR-P3-16, promoting P4-01 |
+| Amendments | 1.5.0 - Stage 9 added 2026-09-09 with FR-P3-78 to FR-P3-83 and NFR-P3-19. 1.4.0 - Stage 8 added 2026-09-09 with FR-P3-70 to FR-P3-77 and NFR-P3-18. 1.3.0 - Stage 7 added 2026-09-09 with FR-P3-63 to FR-P3-69 and NFR-P3-17. 1.2.1 - FR-P3-62 added 2026-09-09. 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14. 1.2.0 - Stage 6 added 2026-09-09 with FR-P3-53 to FR-P3-61 and NFR-P3-15, NFR-P3-16, promoting P4-01 |
 
 ---
 
@@ -192,6 +192,19 @@ No existing job is removed. One is narrowed on purpose: a signed-in member askin
 | FR-P3-75 | The file's chrome is in the language the conversation was held in, on the same authored-copy rule as the panel. FR-P3-43. |
 | FR-P3-76 | The PDF library is fetched only when the control is pressed. A member who never exports pays none of its bytes on a slow connection. |
 | FR-P3-77 | The print stylesheet stays and remains the fallback. If the file cannot be built, the member is told in a sentence and the print view opens instead of nothing happening. |
+
+### 4.10 Comments that earn their place, and a documented corpus (Stage 9)
+
+> Two jobs under one heading. The first enforces `CLAUDE.md` §5 across code written before it was enforced; the second answers the question a reader of this repository asks first, which is where the documents came from.
+
+| ID | Requirement |
+| --- | --- |
+| FR-P3-78 | A comment says **why**, in at most 15 words. Two lines are allowed only where the code looks wrong but is right and the mistake has already been made once. |
+| FR-P3-79 | No comment carries a requirement id, a decision id, a stage number or a release. Code outlives the plan that produced it, and a reader who cannot open the plan is left with a dead reference. |
+| FR-P3-80 | No comment restates the line beneath it, and none describes code it does not sit on. |
+| FR-P3-81 | The sweep changes no behaviour. The full suite and the typecheck are the proof, and they run before and after. |
+| FR-P3-82 | The README states where every corpus document came from, how it was fetched, what converted it, how it was split, and how much of it reached the index. |
+| FR-P3-83 | Every corpus figure published is measured from the snapshot and the database on the day it is written, never estimated. |
 
 ---
 
@@ -487,12 +500,36 @@ Scenario: [FR-P3-77] the export fails without failing the member
   And the print view opens
 ```
 
+### Comments and corpus documentation
+
+```gherkin
+Scenario: [FR-P3-79] a comment cannot carry a dead reference
+  Given any comment in the code, tests, migrations or stylesheets
+  When the comment gate runs
+  Then it contains no requirement id, decision id, stage or phase
+```
+
+```gherkin
+Scenario: [FR-P3-81] the sweep is behaviour-preserving
+  Given the suite passing before the sweep
+  When every comment has been rewritten or removed
+  Then the same suite passes with the same count, and the typecheck is clean
+```
+
+```gherkin
+Scenario: [FR-P3-83] a published corpus figure is a measured one
+  Given the README states a chunk count
+  When the database is queried on the day it is written
+  Then the two agree
+```
+
 ---
 
 ## 6. Non-Functional Requirements
 
 | ID | Requirement | Gate |
 | --- | --- | --- |
+| NFR-P3-19 | The comment rule is a test, not a habit. A comment carrying a requirement id, a decision id or a stage fails CI. | CI |
 | NFR-P3-18 | The export adds nothing to the bundle a member downloads to ask a question. Verified from the build output: the PDF library is its own chunk. | Build |
 | NFR-P3-17 | No feedback surface accepts free text. Asserted by test over the markup as well as the endpoint. | CI |
 | NFR-P3-15 | Emptying every cache changes no answer. The caches are measured on latency only, never on correctness. | Asserted by test |
