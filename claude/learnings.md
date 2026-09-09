@@ -265,3 +265,9 @@ _<How this concept will apply to future work in this project.>_
 **A failure after the answer is a different failure.** The answer had already streamed when the insert threw, and the catch sent an error event over the top of it. The member watched a correct, cited answer turn into "something went wrong". Once output is delivered, an error in what follows is an operator's problem, not the reader's.
 
 **Manual testing finds placement bugs that a static test cannot see.** Every assertion about the sign-in form passed while it was rendering above the fold of a scrolled conversation. "Is it in the document" and "can the member see it" are different questions, and only one of them was being asked.
+
+## Cutting v1.1.0 - what the deploy taught
+
+**A config file read by two parsers has to satisfy the stricter one.** `.env` is read by Node's `--env-file` when the app runs and by bash `source` when the deploy runs. Node accepts an unquoted `Clovbot <bot@domain>`; bash reads it as two redirections and dies. Every test exercised the tolerant reader, so the file was wrong for weeks and only the deploy noticed.
+
+**A template that ships broken breaks every copy of it.** The fault was in `.env.example`, so it was not one machine misconfigured. Anyone following the setup instructions would reproduce it exactly. `bash -n` on the template is a one-line test for the whole class.

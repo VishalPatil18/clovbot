@@ -96,6 +96,16 @@ describe("the server refuses to start on a broken environment", () => {
   });
 });
 
+// The deploy sources .env, so a value bash cannot parse kills the script before
+// it runs a line of its own. Copying the template is how that value gets there.
+describe("the env template is safe to source", () => {
+  it("parses as shell", () => {
+    const result = spawnSync("bash", ["-n", ".env.example"], { encoding: "utf8" });
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+  });
+});
+
 describe("Stage 6 secrets reach the deployed service", () => {
   const script = readFileSync("scripts/deploy-api.sh", "utf8");
 

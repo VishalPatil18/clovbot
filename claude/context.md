@@ -587,3 +587,17 @@ Two faults, not one. The constraint is the cause; migration 010 widens it. But t
 **Open:** FR-P2-53 stays unverified until the production migrations and the deploy run. Migration 010 is required and is new since the manual test pass.
 
 **Next:** deploy the API, merge development to main for the frontend.
+
+## 2026-09-09 - The deploy died on its own template
+
+**Did:** `npm run deploy:api` failed before running a line of its own script:
+
+```
+.env: line 55: syntax error near unexpected token `newline'
+```
+
+`deploy-api.sh` reads configuration with `set -a; source .env`, and `.env.example` shipped `OTP_FROM_ADDRESS=Clovbot <clovbot@v-ai.org>` unquoted. Bash reads `<` as input redirection and `>` as an output redirection with no target. Copying the template into `.env` copied the fault. Quoting the value fixes both, and Node's `--env-file` and bash strip the quotes identically, so the From header is unchanged.
+
+**Why nothing caught it.** Every test of the login path reads the value through Node, which parses the unquoted form without complaint. Only the deploy script sources the file as shell, and no test parsed the template. `bash -n .env.example` now runs as a test, which is the whole check in one line.
+
+**Files:** `.env.example`, `tests/unit/deploy-config.test.ts`. 676 tests pass.
