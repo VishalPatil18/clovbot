@@ -13,7 +13,7 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
-| Status | **Complete.** Six stages done, shipping as v1.2.0 |
+| Status | **Complete.** Seven stages done, shipping as v1.2.0 |
 | Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
 | Last Updated | 2026-09-09 |
 | Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
@@ -172,6 +172,27 @@
 
 ---
 
+## Stage 7 - Feedback that goes somewhere
+
+- **Goal:** Make "Did this answer your question?" worth asking.
+- **Context:** Added 2026-09-09. The control already recorded a yes or a no against the turn, and `npm run insights` already printed the split. What was missing is everything that makes a no actionable: what the assistant actually said, and why the member thought it was wrong.
+- **Scope in:** The rendered answer stored with the turn for public turns; four fixed reasons after a no; a report view that excludes the session id; an operator report listing rated-wrong answers as golden-set candidates.
+- **Scope out:** Free text, which is the one surface that could put a condition into the store. Fine-tuning, which has no pipeline here and would be speculative scaffolding; the answers come from retrieval and a prompt, not from weights.
+- **Acceptance criteria:**
+  - [x] A rating is stored with the answer it rates and the time it was given.
+  - [x] A turn that carried a member id stores no answer text.
+  - [x] The reason is one of four, enforced by a database constraint as well as the form, and the endpoint drops anything else.
+  - [x] The no is recorded before the reason is asked.
+  - [x] No feedback surface accepts free text.
+  - [x] Analysis reads a view with no session id; the turn keeps the column the loop breaker needs.
+  - [x] The operator report lists rated-wrong answers with their reason and route.
+- **Test plan:** Static assertions over the constraint, the endpoint filter and the absence of any text input. Live verification of the view's columns and of a member turn storing no answer.
+- **Effort:** M
+- **Exit signal:** A thumbs-down produces a row an operator can turn into a golden-set case without asking the member anything else.
+- **Status:** [x] done, 2026-09-09. Migration 016 is the operator's to apply.
+
+---
+
 ## Completion Checklist
 
 - [x] Stage 1 - Row-level security
@@ -180,6 +201,7 @@
 - [x] Stage 4 - Spanish
 - [x] Stage 5 - Mobile layout
 - [x] Stage 6 - Caching
+- [x] Stage 7 - Feedback that goes somewhere
 
 ---
 

@@ -1344,3 +1344,20 @@
 @media (max-width: 24.5rem) {
   .chips { flex-wrap: wrap; }
 }
+
+
+/* FR-P3-65. Offered after a no, never before, and never as a text box. */
+.feedback__why {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-8);
+  margin-top: var(--spacing-8);
+}
+
+.feedback__why > span { font-size: var(--text-body); color: var(--color-charcoal); }
+.feedback__why [role="group"] { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
+.feedback__why .chip { font-size: var(--text-body); }
+
+.feedback__thanks {
+  margin: var(--spacing-8) 0 0;
+  font-size: var(--text-body); color: var(--color-forest-ink);
+  font-weight: var(--font-weight-semibold);
+}

@@ -9,13 +9,13 @@
 | Field | Value |
 | --- | --- |
 | Project | Clover Member Assistant |
-| Version | 1.2.1 |
+| Version | 1.3.0 |
 | Status | Frozen |
 | Last Updated | 2026-09-09 |
-| Covers | `claude/plan-p3.md` stages 1-6, shipping as v1.2.0 |
+| Covers | `claude/plan-p3.md` stages 1-7, shipping as v1.2.0 |
 | Sources | `docs/ideas.md` §7 P3-01 and P3-02, `claude/plan-p3.md`, `claude/srs.md` v1.1.0, `claude/srs-p2.md` v1.0.1, `docs/research-init.md`, D-047, D-080, D-085 |
 | Predecessor | `claude/srs-p2.md` v1.0.1 (P2, frozen) |
-| Amendments | 1.2.1 - FR-P3-62 added 2026-09-09. 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14. 1.2.0 - Stage 6 added 2026-09-09 with FR-P3-53 to FR-P3-61 and NFR-P3-15, NFR-P3-16, promoting P4-01 |
+| Amendments | 1.3.0 - Stage 7 added 2026-09-09 with FR-P3-63 to FR-P3-69 and NFR-P3-17. 1.2.1 - FR-P3-62 added 2026-09-09. 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14. 1.2.0 - Stage 6 added 2026-09-09 with FR-P3-53 to FR-P3-61 and NFR-P3-15, NFR-P3-16, promoting P4-01 |
 
 ---
 
@@ -165,6 +165,18 @@ No existing job is removed. One is narrowed on purpose: a signed-in member askin
 | FR-P3-60 | Re-indexing invalidates the answer cache by construction: the snapshot id is part of the key, so a new corpus cannot hit an old entry. |
 | FR-P3-61 | A cache read or write that fails never fails a turn. A cache that cannot be reached is a slower product, not a broken one. |
 | FR-P3-62 | Ingest clears the answers cached against the snapshot it writes, whether the run succeeds or fails. FR-P3-60 covers a re-ingest under a **new** id; this covers re-running into the **same** id, where the chunks change and the key does not. Embeddings and audio are not cleared: neither can go stale, and clearing them would re-pay a provider call for nothing. |
+
+### 4.8 Feedback that goes somewhere (Stage 7)
+
+| ID | Requirement |
+| --- | --- |
+| FR-P3-63 | A yes or a no is recorded against the turn it rates, with the time it was given. |
+| FR-P3-64 | The answer the member read is stored with the turn, **except** when the turn carried a member id. That answer holds their record and this table has no policy over it, so it is kept out rather than written and protected. |
+| FR-P3-65 | After a no, the member is offered four fixed reasons: not about my plan, not what I asked, hard to understand, I think this is covered. **Never a free-text box.** Identifier redaction catches a member id; it does not catch a condition someone types. The reason set is enforced by a database constraint, not only by the form. |
+| FR-P3-66 | The no is recorded before the reason is asked. A reason is an offer, not a toll on saying the answer failed. |
+| FR-P3-67 | Feedback analysis reads a view that excludes the session id. The turn keeps it, because the loop breaker counts consecutive refusals within a session, but nothing in a report about answers needs to know what else that visit asked. |
+| FR-P3-68 | The store is **pseudonymous, not anonymous**, and is described that way. A session id links the questions in one visit. Claiming otherwise would be the kind of overstatement `docs/real-phi.md` exists to avoid. |
+| FR-P3-69 | The operator report lists answers a member rated wrong, with the reason and the route, as candidate golden-set cases. That is the mechanism this project already uses to improve answers and gate regressions; there is no fine-tuning pipeline and none is implied. |
 
 ---
 
@@ -417,10 +429,31 @@ Scenario: [FR-P3-60] re-indexing invalidates the answers
 
 ---
 
+### Feedback
+
+```gherkin
+Scenario: [FR-P3-64] a signed-in member's answer is not stored
+  Given a signed-in member whose answer names a claim amount
+  When the turn is written to the log
+  Then the answer column is null
+  And the rating can still be given and recorded
+```
+
+```gherkin
+Scenario: [FR-P3-65] the endpoint accepts no reason it was not offered
+  Given a feedback request carrying free text as its reason
+  When it is handled
+  Then the reason is dropped rather than stored
+  And the database would reject it in any case
+```
+
+---
+
 ## 6. Non-Functional Requirements
 
 | ID | Requirement | Gate |
 | --- | --- | --- |
+| NFR-P3-17 | No feedback surface accepts free text. Asserted by test over the markup as well as the endpoint. | CI |
 | NFR-P3-15 | Emptying every cache changes no answer. The caches are measured on latency only, never on correctness. | Asserted by test |
 | NFR-P3-16 | Cache hit and miss counts are recorded per entry, so the hit rate is measured rather than assumed. | Recorded |
 | NFR-P3-13 | The floor is an iPhone 14 Pro, 393x852. Layout is verified by rendering at that size and looking, not by reading the stylesheet. | Screenshot run, recorded |

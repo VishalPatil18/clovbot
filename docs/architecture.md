@@ -156,6 +156,20 @@ Three caches, one store, and one property that makes them safe: **emptying all o
 
 Everything lives in Postgres rather than memory or a container filesystem. On Cloud Run an in-process cache dies with the instance and is shared with nothing; the audio cache previously had both problems.
 
+## Feedback
+
+The yes/no control under each answer writes to the turn it rates: the rating, the answer the member read, one of four fixed reasons after a no, and the time.
+
+Three boundaries make it safe to keep.
+
+**No free text.** Identifier redaction removes a member id or a date of birth before anything is stored. It does not remove "my doctor said I have diabetes". Four fixed reasons are countable, are enforced by a check constraint as well as by the form, and are quicker to answer than typing.
+
+**No answer text from a signed-in turn.** That answer holds a claim amount or a prior-authorisation status, and `turns` has no policy over it. Keeping it out is cheaper than writing it and protecting it, and it keeps `docs/real-phi.md` from owing an account of a second store of record data.
+
+**Analysis is blind to the session.** The turn keeps its session id because the loop breaker counts consecutive refusals within one, but the `feedback_report` view excludes it. The store is pseudonymous, not anonymous, and is described that way.
+
+The point of collecting it is `npm run insights`, which lists answers a member rated wrong with their reason and route. Those are candidate golden-set cases, which is the mechanism this project already uses to improve answers and gate regressions. There is no fine-tuning pipeline and none is implied: answers here come from retrieval and a prompt, not from weights.
+
 ## Voice
 
 A three-tier chain with a circuit breaker: ElevenLabs, then Fish Audio, then the browser's own synthesiser. The last tier cannot run out of credits, which is the reason it is there. A degrade is announced rather than silent, because an unexplained change of voice reads as a fault to an audience with low trust in the technology.

@@ -276,6 +276,11 @@ export interface TurnRecord {
   chunkIds: string[];
   corpusSnapshotId: string;
   outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
+  /**
+   * What the member actually read. Null for a turn carrying a member id: that
+   * answer holds their record, and this table has no policy over it. D-102.
+   */
+  answer?: string | null;
   provider: string;
   latencyMs: Record<string, number>;
   sessionId?: string;
@@ -290,8 +295,8 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
   const { rows } = await client.query(
     `insert into turns
        (question, plan_context, chunk_ids, corpus_snapshot_id, outcome, provider,
-        latency_ms, session_id, refusal_trigger, route, route_reason)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        latency_ms, session_id, refusal_trigger, route, route_reason, answer)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      returning id`,
     [
       turn.question,
@@ -305,20 +310,36 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
       turn.refusalTrigger ?? null,
       turn.route ?? null,
       turn.routeReason ?? null,
+      turn.answer ?? null,
     ],
   );
   return String(rows[0]?.["id"]);
 }
 
-/** FR-27. Recorded against the turn it answers. */
+/** The four a member can pick after saying no. Never free text. D-102. */
+export const FEEDBACK_REASONS = [
+  "wrong_plan",
+  "not_what_i_asked",
+  "hard_to_understand",
+  "think_it_is_covered",
+] as const;
+
+export type FeedbackReason = (typeof FEEDBACK_REASONS)[number];
+
+/** FR-27, FR-P3-65. Recorded against the turn it answers, with why if given. */
 export async function recordFeedback(
   client: pg.Client,
   turnId: string,
   resolved: boolean,
+  reason: FeedbackReason | null = null,
 ): Promise<boolean> {
   const { rowCount } = await client.query(
-    "update turns set member_feedback = $2 where id = $1",
-    [turnId, resolved ? "resolved" : "not_resolved"],
+    `update turns
+        set member_feedback = $2,
+            feedback_reason = $3,
+            feedback_at = now()
+      where id = $1`,
+    [turnId, resolved ? "resolved" : "not_resolved", resolved ? null : reason],
   );
   return (rowCount ?? 0) > 0;
 }

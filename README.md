@@ -278,6 +278,12 @@ Long-form: **[docs/architecture.md](./docs/architecture.md)**.
 - Query embeddings cached on the text and the model
 - Spoken answers synthesised once and served from the database, so a recording survives a restart and is shared between instances
 
+**Learning from members**
+- "Did this answer your question?" records the rating, the answer that was rated and, after a no, one of four fixed reasons
+- No free-text box anywhere in it: identifier redaction catches a member id, not a condition someone types
+- A signed-in member's answer text is never stored, only the rating
+- `npm run insights` lists rated-wrong answers with their reason and route, as candidate golden-set cases
+
 **Operations**
 - One eval run reports four gates
 - Turn log with route, reason, latency and outcome; answer reproduction from a turn id
@@ -300,6 +306,7 @@ Ninety-four decisions are recorded in [claude/design-decisions.md](./claude/desi
 | **The same rule gates a question and scopes the read** | Whether you must sign in and what gets read from your record are one call, so they cannot disagree. |
 | **The Spanish instruction rides on the user message** | Measurement showed that touching the system prompt moves faithfulness and flips cases, so the English prompt stays byte-identical and Spanish costs English nothing. |
 | **The answer cache is keyed on the question, not its meaning** | "What is my specialist copay" and "what is my out-of-network specialist copay" are one word and ten dollars apart. Semantic caching is the documented design in `docs/ideas.md`, and its own warning is why this one keys on the exact question inside its plan, language and corpus scope. A signed-in member's turn is never cached at all. |
+| **Feedback is four fixed reasons, never a text box** | A thumbs-down needs a reason to be actionable, and free text is the one surface in this product that could put a diagnosis into the database. The four reasons are enforced by a database constraint, not just the form, and a rated-wrong answer becomes a candidate golden-set case rather than training data for a pipeline that does not exist. |
 | **A regression gate one case below the measured baseline** | Set from a measurement, with the measurement written beside it, rather than a round number that would drift upward every time it failed. |
 
 ---

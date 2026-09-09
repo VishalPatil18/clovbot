@@ -811,3 +811,21 @@ Two more were the same shape: `.assistant--page > .assistant__foot` out-specifie
 **Verified against the live table**: two entries under different snapshot ids, delete one, the other survives.
 
 **Next:** cut v1.2.0.
+
+## 2026-09-09 - P3 Stage 7: feedback that goes somewhere
+
+**Did:** made the yes/no control useful. The rating now carries the answer it rated and, after a no, one of four fixed reasons; the operator report turns rated-wrong answers into golden-set candidates. 827 tests pass.
+
+**Files:** added `migrations/016_feedback.sql` and its down script, `tests/unit/feedback.test.ts`. Changed `src/rag/store.ts`, `src/server.ts`, `src/ops.ts`, the web panel, `web/src/api.ts`, `web/src/history.ts`, `web/src/strings.ts`, `web/src/app.css`, the SRS to v1.3.0, plan-p3, README, architecture, real-phi, the runbook and the changelog.
+
+**The feature was half-built already.** Feedback has been recorded since v1.0.0 and the split has been in `insights` just as long. The gap was that the turn holds the question and not the answer, so a thumbs-down named a failure without naming what failed.
+
+**Three requests I did not implement as asked, and why.** Free text was asked for implicitly by "collect the data on what the user answers": it is the one surface in this product that could put a condition into the database, so it is four fixed reasons enforced by a check constraint instead. "Anonymised" is not achievable here and is not claimed: a session id links a visit and the loop breaker needs it, so analysis reads a view without it and the documentation says pseudonymous. "Fine-tune the model" has no pipeline here and the answers come from retrieval and a prompt, so the data feeds the golden set, which is what actually moves faithfulness. D-102.
+
+**The one that mattered most:** a signed-in member's answer is never stored. Writing it into `turns` would have rebuilt exactly the durable copy of member data that Stage 2 spent its effort removing.
+
+**Verified against the live table:** the view has no `session_id`, the database rejects a reason outside the four, and a turn with a null answer still records its rating and reason.
+
+**Open:** migration 016 is the operator's to apply. Until then the answer column does not exist and feedback records as it did before.
+
+**Next:** cut v1.2.0.

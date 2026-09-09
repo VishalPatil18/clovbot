@@ -108,6 +108,46 @@ async function insights(days: number): Promise<void> {
     console.log("\n  Did this answer your question?");
     console.log(`    yes ${yes}   no ${no}   ${yes + no === 0 ? "(no responses yet)" : ""}`);
 
+    /*
+     * FR-P3-67. Read through feedback_report, which excludes the session id: a
+     * report about answers has no use for what else that visit asked, and
+     * reading through the view is what lets the analysis surface be blind to it
+     * while the loop breaker keeps the column it needs. D-102.
+     */
+    const reasons = await one(
+      `select feedback_reason, count(*) n from feedback_report
+        where asked_at > now() - $1::interval and feedback_reason is not null
+        group by feedback_reason order by n desc`,
+    );
+    if (reasons.length > 0) {
+      console.log("\n  Why not, when they said");
+      for (const row of reasons) {
+        console.log(`    ${String(row["n"]).padStart(3)}  ${String(row["feedback_reason"])}`);
+      }
+    }
+
+    /*
+     * The point of collecting any of this. A question that was answered and
+     * rated wrong is a candidate golden-set case: the answer is on the row, so
+     * the expected value can be written by hand and the case gated from then on.
+     */
+    const rejected = await one(
+      `select question, answer, plan_context, route, feedback_reason
+         from feedback_report
+        where asked_at > now() - $1::interval
+          and member_feedback = 'not_resolved'
+        order by feedback_at desc limit 10`,
+    );
+    console.log("\n  Answers a member rated wrong (candidates for the golden set)");
+    if (rejected.length === 0) console.log("    none");
+    for (const row of rejected) {
+      const why = row["feedback_reason"] === null ? "no reason given" : String(row["feedback_reason"]);
+      console.log(`    ${String(row["plan_context"])} [${String(row["route"])}] ${why}`);
+      console.log(`      Q: ${String(row["question"]).slice(0, 84)}`);
+      const answer = row["answer"] === null ? "(not stored: a signed-in turn)" : String(row["answer"]);
+      console.log(`      A: ${answer.replace(/\s+/g, " ").slice(0, 84)}`);
+    }
+
     const callbacks = await one(
       "select count(*) n from callbacks where created_at > now() - $1::interval",
     );

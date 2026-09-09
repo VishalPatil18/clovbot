@@ -1,4 +1,4 @@
-import type { Citation, Claim, Headline } from "./api.ts";
+import type { Citation, Claim, FeedbackReason, Headline } from "./api.ts";
 
 export interface StoredTurn {
   id: number;
@@ -12,6 +12,8 @@ export interface StoredTurn {
   staleness: string | null;
   outcome: "answered" | "refused" | "upstream_failure" | "needs_login" | "pending";
   feedback: "yes" | "no" | null;
+  /** Kept so a restored conversation does not ask for a reason twice. */
+  feedbackReason: FeedbackReason | null;
   turnId: string | null;
 }
 
@@ -59,7 +61,12 @@ export function readHistory(): StoredTurn[] {
     if (raw === null) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isTurn).slice(-MAX_TURNS);
+    // A conversation saved before the reason existed has none. Defaulting it
+    // here rather than at every read site keeps the type honest.
+    return parsed
+      .filter(isTurn)
+      .map((turn) => ({ ...turn, feedbackReason: turn.feedbackReason ?? null }))
+      .slice(-MAX_TURNS);
   } catch {
     return [];
   }

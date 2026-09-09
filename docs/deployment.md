@@ -20,6 +20,7 @@ migrations/012_member_access_log.sql   # one audit row per authenticated turn
 migrations/013_login_path_under_rls.sql # repairs sign-in, which 011 broke
 migrations/014_language_scoped_retrieval.sql # Spanish chunks, scoped before ranking
 migrations/015_caches.sql               # answer, embedding and audio caches
+migrations/016_feedback.sql             # the answer rated, why, and a session-blind view
 ```
 
 **014 must be followed by a re-ingest.** It adds a language to every chunk and

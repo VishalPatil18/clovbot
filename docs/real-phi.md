@@ -98,6 +98,12 @@ None of this changes when the data becomes real. What changes is everything belo
 
 **Still owed:** the distinction between *access* and *disclosure*, which this log does not draw. It records that the assistant read a field; a disclosure accounting is about the field leaving the covered entity. Those diverge here in a way worth naming, in §2.9.
 
+### 2.7a Feedback, and a second store of generated text
+
+**Today:** a rating a member gives on an answer is stored on the turn, with the answer text, the reason from a fixed set of four, and the time. **The answer is not stored when the turn carried a member id**, so no record-derived text reaches this table. There is no free-text field anywhere in the feedback surface, which is deliberate: identifier redaction catches a member id and not a condition someone types.
+
+**Still owed:** the same retention question as everything else in §2.8, and an honest label. The turn log is **pseudonymous, not anonymous**. A session id links every question in one visit and the loop breaker needs it, so it stays on the row; analysis reads a view that excludes it. That is a narrower claim than anonymity and is the one this document is prepared to make.
+
 ### 2.8 Retention and deletion
 
 **Required:** a stated policy, and the ability to honour it.

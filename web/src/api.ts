@@ -88,12 +88,26 @@ export async function requestCallback(
 }
 
 /** FR-27. Recorded against the turn, so a "no" can be traced to its answer. */
-export async function sendFeedback(turnId: string, resolved: boolean): Promise<boolean> {
+/** The four the member can pick after saying no. Never free text. D-102. */
+export const FEEDBACK_REASONS = [
+  "wrong_plan",
+  "not_what_i_asked",
+  "hard_to_understand",
+  "think_it_is_covered",
+] as const;
+
+export type FeedbackReason = (typeof FEEDBACK_REASONS)[number];
+
+export async function sendFeedback(
+  turnId: string,
+  resolved: boolean,
+  reason: FeedbackReason | null = null,
+): Promise<boolean> {
   try {
     const response = await fetch("/api/feedback", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ turnId, resolved }),
+      body: JSON.stringify({ turnId, resolved, reason }),
     });
     return response.ok;
   } catch {

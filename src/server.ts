@@ -31,7 +31,9 @@ import {
   consecutiveRefusals,
   indexedPlans,
   readCorpusFreshness,
+  FEEDBACK_REASONS,
   recordFeedback,
+  type FeedbackReason,
   writeCallback,
   writeTurn,
 } from "./rag/store.ts";
@@ -348,10 +350,18 @@ function collectBinary(
 async function handleFeedback(body: string, res: ServerResponse): Promise<void> {
   let turnId = "";
   let resolved: boolean | null = null;
+  let reason: FeedbackReason | null = null;
   try {
-    const parsed = JSON.parse(body) as { turnId?: unknown; resolved?: unknown };
+    const parsed = JSON.parse(body) as {
+      turnId?: unknown;
+      resolved?: unknown;
+      reason?: unknown;
+    };
     turnId = typeof parsed.turnId === "string" ? parsed.turnId : "";
     resolved = typeof parsed.resolved === "boolean" ? parsed.resolved : null;
+    // Only one of four. Anything else is dropped rather than stored, so the
+    // endpoint cannot become a free-text channel into the database.
+    reason = FEEDBACK_REASONS.find((allowed) => allowed === parsed.reason) ?? null;
   } catch {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
@@ -366,7 +376,7 @@ async function handleFeedback(body: string, res: ServerResponse): Promise<void> 
   const client = connect();
   try {
     await client.connect();
-    const recorded = await recordFeedback(client, turnId, resolved);
+    const recorded = await recordFeedback(client, turnId, resolved, reason);
     res.writeHead(recorded ? 200 : 404, { "content-type": "application/json" });
     res.end(JSON.stringify(recorded ? { recorded: true } : { error: "no such turn" }));
   } catch (error) {
@@ -682,6 +692,9 @@ async function handleAsk(
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,
+      // FR-P3-64. A member's answer holds their record, and this table has no
+      // policy over it, so it is kept out rather than written and protected.
+      answer: member === null ? turn.answer : null,
       provider: turn.provider,
       latencyMs: {
         ...turn.latencyMs,

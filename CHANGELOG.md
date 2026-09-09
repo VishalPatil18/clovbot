@@ -8,6 +8,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- **Telling the assistant an answer was wrong now does something.** After **No**, it asks what was wrong and offers four choices: not about my plan, not what I asked, hard to understand, or I think this is covered. There is no box to type in, on purpose. Your answer, and the reply it was about, are kept so the people running the assistant can see which answers are failing and fix them. Nothing you were shown from your own record is kept, only that you rated it.
 - **Ask in Spanish and get a Spanish answer**, from Clover's own Spanish plan documents rather than a translation, cited to the Spanish document you can go and read. The assistant notices you have written Spanish and follows, and a language button beside the microphone switches it back at any time. Answers are read aloud in a Spanish voice, and the buttons, help and refusals are Spanish too.
 - The drug list is published only in English, so a Spanish answer about a medication says so and points at the English list rather than refusing.
 - **The assistant works on a phone.** It opens as the full screen rather than a floating panel, the menu stacks into one row per item with nothing hidden behind a button, and the microphone in voice mode is centred and full size. Nothing is cut off at the edge of the screen any more, and the conversation itself now takes about half the screen instead of a third.

@@ -3790,6 +3790,51 @@ Clearing runs last rather than first so a question asked during the run cannot r
 
 ---
 
+## Decision D-102 - Feedback stores the answer, four fixed reasons, and no free text
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 7 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+"Did this answer your question?" already recorded a yes or a no against the turn, and the operator report already printed the split. Neither was useful: the turn holds the question but not the answer, so a thumbs-down said an answer failed without saying which answer, and a bare count of no's says nothing about what to change.
+
+### Options considered
+
+Three forks, decided together.
+
+**What is stored.** Every answer; only answers from turns with no member; or none, relying on `npm run reproduce`.
+
+**How the reason is captured.** Free text; four fixed reasons; or nothing beyond yes and no.
+
+**What the data drives.** A report feeding the golden set; a report alone; or a shape a future fine-tune could consume.
+
+### Decision
+
+Store the answer for turns with no member id. Four fixed reasons, never free text. A report that names rated-wrong answers as golden-set candidates.
+
+### Rationale
+
+**On storing answers.** A signed-in member's answer holds a claim amount or a prior-authorisation status. Writing it into `turns`, which has no policy over it, would rebuild the durable copy of member data that P3 Stage 2 spent its effort removing, and `docs/real-phi.md` would owe an account of a second store. Keeping it out is cheaper than writing it and protecting it. Replay was rejected because `reproduce` re-runs the model: it returns an answer, not the one the member disliked.
+
+**On free text.** It is the richest signal and the only surface in this product that could put a diagnosis into the database. Identifier redaction catches a member id and a date of birth. It does not catch "my doctor said I have diabetes". Four fixed reasons are countable, are enforced by a check constraint rather than by the form alone, and are faster to answer than typing for an audience that finds typing hard.
+
+**On fine-tuning.** The request asked for it. This project has no training pipeline, and its answers come from retrieval and a prompt rather than from weights, so building toward one would be scaffolding for an imagined need. What actually moves faithfulness here is the golden set, so a rated-wrong answer becomes a candidate case with its reason and route attached.
+
+**On anonymity.** The request asked for anonymised data. The turn log is pseudonymous: a session id links every question in one visit, and the loop breaker counts consecutive refusals within it, so the column cannot simply go. Analysis reads a view that excludes it, and the documentation says pseudonymous rather than anonymous. Nulling the id on rated rows was rejected because it would silently break the escalation path; hashing was rejected because a hash of a low-cardinality id reads more anonymous than it is.
+
+### Consequences
+
+- A thumbs-down on a signed-in turn records the rating and the reason but no answer text. The report says so rather than showing an empty column.
+- The reason set is now in three places that must agree: the check constraint, the server filter, and the interface. A test pins the wire values against the labels so they cannot drift.
+- The no is sent before the reason is asked, so abandoning the follow-up still records that the answer failed.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

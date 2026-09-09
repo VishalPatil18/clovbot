@@ -331,3 +331,13 @@ _<How this concept will apply to future work in this project.>_
 **Invalidate what can be wrong, not everything you can reach.** "Clear the caches on ingest" sounds prudent and is half wrong: two of the three could not go stale, and clearing them re-pays a provider bill to remove entries that were always correct. Working out which one actually depends on the thing that changed took less time than implementing the wrong answer would have.
 
 **Put invalidation in a `finally`.** The state that needs the cache cleared most is the failed run: a half-written corpus with a full cache is a fast wrong system. "On success" skips exactly the case that matters.
+
+## P3 Stage 7 - what feedback taught
+
+**Check whether the feature exists before building it.** Feedback had been recorded since v1.0.0, and the operator report had shown the split just as long. The real gap was one column: the answer that was rated. Half an hour of reading turned a feature request into a much smaller change.
+
+**"Anonymised" is usually a word, not a property.** A session id links every question in one visit and the loop breaker needs it, so the store is pseudonymous whatever the documentation says. The useful move was to make the analysis surface blind to it and then use the accurate word, rather than claim the stronger one.
+
+**Free text is the hole in a zero-PHI boundary.** Every other field in this system is a number, an enum or a redacted question. A text box invites a member to type a diagnosis, and no amount of identifier redaction catches that. Four fixed reasons are less rich and are the only version that keeps the boundary intact.
+
+**Do not build toward a pipeline that does not exist.** The request asked for data shaped for fine-tuning. There is no training path here and the answers come from retrieval and a prompt, so the honest destination was the golden set, which already gates every release.

@@ -30,6 +30,7 @@ const turn = (id: number) => ({
   staleness: null,
   outcome: "answered" as const,
   feedback: null,
+  feedbackReason: null,
   turnId: "t",
 });
 

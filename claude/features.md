@@ -1711,3 +1711,61 @@ None. A member sees the same answer sooner. That is the whole feature, and the p
 ### Verification
 
 Pure-function tests over the keys, including the collision the design exists to avoid: the in-network and out-of-network forms of the same question key differently, as do the same question under another plan, language or snapshot. Static assertions that the member gate wraps both the read and the write and sits after the guardrails.
+
+---
+
+## Feature: Feedback that goes somewhere (P3 Stage 7)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-63 to FR-P3-69, NFR-P3-17. **Decision:** D-102.
+
+### What was already there
+
+The yes/no control recorded a rating against the turn, and `npm run insights` printed the split. That had been true since v1.0.0. What it could not tell anyone was **which answer** failed or **why**: the turn holds the question, not the answer, and a bare count of no's does not say what to change.
+
+### UI
+
+```text
+Did this answer your question?   [ 👍 Yes ]  [ 👎 No ]              [copy]
+
+  ... after No:
+
+  What was wrong with it?
+  [ It is not about my plan ] [ Not what I asked ]
+  [ Hard to understand ]      [ I think this is covered ]
+
+  ... after a reason:
+  Thank you. That helps us fix it.
+```
+
+### UX flow
+
+1. Member taps No. The no is recorded immediately, before anything else is asked.
+2. Four reasons appear under the answer. No text box.
+3. Tapping one records it and replaces the row with a thank-you.
+4. Nothing appears if they say Yes, and nothing is asked twice.
+
+### Frontend entities
+
+- `REASONS` in `Assistant.tsx`, pairing each wire value with its copy key so the two cannot drift.
+- `Turn.feedbackReason` and `StoredTurn.feedbackReason`, so a restored conversation does not ask again.
+
+### Backend entities
+
+- `FEEDBACK_REASONS` and `FeedbackReason` in `src/rag/store.ts`.
+- `recordFeedback(client, turnId, resolved, reason)`.
+- `TurnRecord.answer`, written only when the turn carried no member id.
+
+### DB schema
+
+`turns` gains `answer text`, `feedback_reason text` under a four-value check constraint, and `feedback_at timestamptz`, plus a partial index on rated rows. `feedback_report` is a view over rated turns that **excludes `session_id`**.
+
+### Tech specs
+
+- **Reason capture:** four fixed values, constrained in the database. Rejected: free text, the one surface that could put a condition into the store; and nothing, which leaves a number with no cause.
+- **Answer storage:** public turns only. Rejected: all turns, which rebuilds a store of record data without a policy; and none, because `reproduce` re-runs the model and returns a different answer from the one that was disliked.
+- **Anonymity:** a view without the session id, and the word "pseudonymous" in the documentation. Rejected: nulling the id, which breaks the loop breaker; and hashing it, which reads more anonymous than it is.
+- **Use:** golden-set candidates in `npm run insights`. Rejected: building toward fine-tuning, which has no pipeline here and would be scaffolding for an imagined need.
+
+### Verification
+
+Static assertions over the constraint, the endpoint filter, the absence of any text input in the markup, and the report reading the view rather than the table. Live verification that the view has no `session_id` column, that a free-text reason is rejected by the database, and that a turn with no answer text still records its rating.

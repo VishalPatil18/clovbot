@@ -8,6 +8,7 @@ import {
   fetchSession,
   signOut,
   sendFeedback,
+  type FeedbackReason,
   type AskEvent,
   type CallbackDraft,
   type Citation,
@@ -67,6 +68,14 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
  * docs/call-drivers.md, one per kind of question this assistant answers, so the
  * set teaches what it is for rather than listing everything it can do.
  */
+/** Paired with the copy keys so the wire value and the label cannot drift. */
+const REASONS = [
+  { value: "wrong_plan", key: "reasonWrongPlan" },
+  { value: "not_what_i_asked", key: "reasonNotAsked" },
+  { value: "hard_to_understand", key: "reasonHardToRead" },
+  { value: "think_it_is_covered", key: "reasonThinkCovered" },
+] as const satisfies readonly { value: FeedbackReason; key: StringKey }[];
+
 const STARTERS = [
   {
     // The title is the question that gets asked. A card that sends something
@@ -110,6 +119,8 @@ interface Turn {
   staleness: string | null;
   outcome: "answered" | "refused" | "upstream_failure" | "needs_login" | "pending";
   feedback: "yes" | "no" | null;
+  /** Why they said no, once they have said. FR-P3-65. */
+  feedbackReason: FeedbackReason | null;
   /** Server id, so a feedback response can name the turn it answers. FR-27. */
   turnId: string | null;
 }
@@ -224,6 +235,7 @@ export function Assistant({
           staleness: null,
           outcome: "pending",
           feedback: null,
+          feedbackReason: null,
           turnId: null,
         },
       ]);
@@ -860,6 +872,8 @@ export function Assistant({
                                   ),
                                 );
                                 // Recorded, not just shown. FR-27.
+                                // A no is sent straight away: the reason is an
+                                // offer, not a toll on saying the answer failed.
                                 if (turn.turnId !== null)
                                   void sendFeedback(
                                     turn.turnId,
@@ -893,6 +907,46 @@ export function Assistant({
                           </span>
                         </button>
                       </div>
+
+                      {/*
+                        * FR-P3-65. Offered only after a no, and only once. Four
+                        * fixed reasons rather than a text box: free text is the
+                        * one surface that could put a diagnosis into the store,
+                        * and tapping is easier than typing for this audience.
+                        */}
+                      {turn.feedback === "no" && turn.feedbackReason === null && (
+                        <div className="feedback__why">
+                          <span id={`why-${turn.id}`}>{say("whatWentWrong")}</span>
+                          <div role="group" aria-labelledby={`why-${turn.id}`}>
+                            {REASONS.map(({ value, key }) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className="chip"
+                                onClick={() => {
+                                  setTurns((previous) =>
+                                    previous.map((item) =>
+                                      item.id === turn.id
+                                        ? { ...item, feedbackReason: value }
+                                        : item,
+                                    ),
+                                  );
+                                  if (turn.turnId !== null)
+                                    void sendFeedback(turn.turnId, false, value);
+                                }}
+                              >
+                                {say(key)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {turn.feedbackReason !== null && (
+                        <p className="feedback__thanks" role="status">
+                          {say("thanksForTelling")}
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
