@@ -1261,8 +1261,9 @@
    --------------------------------------------------------------------------- */
 @media (max-width: 48rem) {
   /* (4) Four labelled chips wrapped to two rows and cost a whole row of height.
-     Print and Clear saved carry their meaning in the icon; the two a member
-     reaches for under pressure keep their words. */
+     Save as PDF and Clear saved carry their meaning in the icon; the two a
+     member reaches for under pressure keep their words. The label stays in the
+     accessibility tree: this collapses the type size, it does not remove it. */
   .chips { flex-wrap: nowrap; gap: var(--spacing-4); }
   /* nowrap on the row squeezed the two labelled chips into two lines each,
      which cost the height the single row was meant to save. */

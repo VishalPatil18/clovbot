@@ -3835,6 +3835,53 @@ Store the answer for turns with no member id. Four fixed reasons, never free tex
 
 ---
 
+## Decision D-103 - The transcript is a generated PDF, built on the device
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 8 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The export control has shipped since P2 as `window.print()` over a print stylesheet (FR-P2-20), and the browser dialog can save the page as a PDF. The request was for a **downloaded file**. No browser API steers the print dialog to a file, so honouring it means generating the bytes.
+
+### Options considered
+
+Two forks, decided together.
+
+**Where the bytes are made.** A client library; a hand-rolled writer; or keep the dialog.
+
+**Where the rendering happens.** On the device, or on the server from a posted transcript.
+
+| Option | For | Against |
+| --- | --- | --- |
+| jsPDF, dynamically imported | Text wrapping, pagination and Latin-1 for Spanish for free; a separate chunk, so nobody who does not export pays for it | A new dependency, and 130 kB gzipped on first press |
+| Hand-rolled PDF writer | No dependency at all; a text-only PDF over base-14 Helvetica is a plain format | ~150 lines plus a font width table, and every pagination bug is ours |
+| Keep the print dialog | No change at all | Does not do what was asked; this audience has to find "Save as PDF" in a dialog |
+| Server-side rendering | One renderer, no client weight | Puts a signed-in member's own record back on the wire, for nothing |
+
+### Decision
+
+jsPDF 4.2.1, MIT, fetched by dynamic import on first press. The document is rendered **on the device** from the conversation already in memory. Nothing is posted anywhere.
+
+### Why
+
+The server option was rejected before the library question was even reached. The transcript holds a signed-in member's claim amounts and prior-authorisation status; posting it to a renderer would put that on the wire and into request logs, which is the transit path Stage 2 removed for the same data. Everything the file needs is already in the browser, so there is no reason to send it.
+
+Between the library and the hand-rolled writer: the writer is genuinely feasible, and for a monospaced English-only file it would win. It stops being lazy at the Helvetica width table, which is what proportional line-breaking needs, and again at Spanish, where the encoding has to be right. The dynamic import removes the usual reason to refuse the dependency, which is bundle weight on people who never use it.
+
+### Consequences
+
+- A member who presses the control on a slow connection waits for 130 kB before the file appears. The initial bundle is unchanged, which is the trade that was chosen.
+- The file is text, not a picture of the page. Amounts stay selectable and a screen reader can read it. It does not look like the panel, and no logo, colour or layout from the interface survives.
+- The print stylesheet stays and is now the failure path: if the library cannot be fetched, the member is told in a sentence and the print view opens.
+- The document model is separate from the renderer, so what the file says is asserted directly in tests rather than by parsing a PDF.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

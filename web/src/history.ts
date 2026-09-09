@@ -82,13 +82,24 @@ export function writeHistory(turns: StoredTurn[]): void {
 }
 
 /**
+ * Both labels, because `payload.ts` writes the citation in the answer's own
+ * language. Matching only the English one left a Spanish member's claim data in
+ * storage after they signed out.
+ */
+const MEMBER_RECORD_LABELS = ["Your member record", "Su registro de miembro"];
+
+/** True when any citation on the turn came from the member's own record. */
+export const isMemberTurn = (turn: { citations: { label: string }[] }): boolean =>
+  turn.citations.some((citation) =>
+    MEMBER_RECORD_LABELS.some((label) => citation.label.startsWith(label)),
+  );
+
+/**
  * FR-P2-39. Signing out on a shared device removes anything sourced from the
  * member's own record; answers from public documents are theirs to keep.
  */
 export function clearMemberTurns(): StoredTurn[] {
-  const kept = readHistory().filter(
-    (turn) => !turn.citations.some((citation) => citation.label.startsWith("Your member record")),
-  );
+  const kept = readHistory().filter((turn) => !isMemberTurn(turn));
   writeHistory(kept);
   return kept;
 }

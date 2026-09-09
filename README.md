@@ -269,7 +269,7 @@ Long-form: **[docs/architecture.md](./docs/architecture.md)**.
 - Panel and full-page layouts, keyboard reachable, `prefers-reduced-motion` honoured
 - Language control beside the voice control, in both layouts
 - Conversation saved on the device and restored, with an explicit clear
-- Print to a clean copy with every source intact; copy one answer with its sources
+- Save the conversation as a PDF, built on the device, with every source and the plan it was answered under; copy one answer with its sources
 - Help panel, plan switcher, suggested questions
 
 **Performance**

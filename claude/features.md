@@ -1769,3 +1769,81 @@ Did this answer your question?   [ 👍 Yes ]  [ 👎 No ]              [copy]
 ### Verification
 
 Static assertions over the constraint, the endpoint filter, the absence of any text input in the markup, and the report reading the view rather than the table. Live verification that the view has no `session_id` column, that a free-text reason is rejected by the database, and that a turn with no answer text still records its rating.
+
+---
+
+## Feature: A transcript the member can keep (P3 Stage 8)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-70 to FR-P3-77, NFR-P3-18. **Decision:** D-103.
+
+### What was already there
+
+A **Print** chip calling `window.print()`, over a print stylesheet that drops the chrome, releases the scrolling regions and keeps every citation. That is FR-P2-20 and it has shipped since v1.1.0. The browser dialog's "Save as PDF" destination was the export path, and this audience had to find it.
+
+### Interrogation summary
+
+Four forks went to the user; all four took the recommendation.
+
+1. **How the bytes are made.** jsPDF lazily imported, over a hand-rolled writer or keeping the dialog. Chosen: jsPDF.
+2. **Print or download.** Chosen: replace the chip. Two near-identical controls in a row that is already tight at 393px is the worse outcome, and Ctrl+P still gives a clean page.
+3. **A signed-in member's answers.** Chosen: include them, with a notice on page one. The file is built on their device and never leaves it, but it sits in a downloads folder on a possibly shared computer.
+4. **What else the file carries.** Chosen: plan, document date, save date, synthetic-data notice, Member Services number, page numbers.
+
+Answered without asking, and stated: the file covers the whole saved conversation on screen; its chrome follows the conversation's language; the filename is `clovbot-conversation-YYYY-MM-DD.pdf`; the wordmark is type, not an embedded image.
+
+### UI
+
+```text
+[ Talk to a person ]  [ Start over ]  [ Save as PDF ]  [ Clear saved ]
+
+  clovbot-conversation-2026-09-09.pdf
+  ------------------------------------------------------------
+  Your conversation with the Clover assistant
+  Saved: 2026-09-09
+  Plan: Clover Health Choice PPO (H5141-004)
+  Plan documents collected: 2026-09-08
+  This is not an official plan document. ... 1-555-0100 (TTY 711).
+  Every member record here is demonstration data.
+
+  This file contains information from your own member record.   <- only when true
+
+  You asked: what is my specialist copay
+  You pay $10 for each visit to an in-network specialist.
+  Where this comes from
+      [1] Summary of Benefits 2026 - Plan H5141-004 - Doctor's Office
+                                                        Page 1 of 1
+```
+
+### UX flow
+
+1. Member presses **Save as PDF**. Nothing else is asked.
+2. The renderer is fetched on this first press only.
+3. The file is built from the conversation in memory and handed to the browser.
+4. If the fetch fails, a sentence says so and the print view opens instead.
+
+### Frontend entities
+
+- `transcriptBlocks(turns, context)` in `web/src/transcript.ts`: the conversation as a flat list of typed blocks. Pure data.
+- `transcriptFilename(context)`, language-aware.
+- `renderTranscript(blocks, language)` in `web/src/pdf.ts`: the block list set in type. No DOM, so the Node test program can import it.
+- `saveTranscript()` in `Assistant.tsx`, holding the dynamic import, the blob and the anchor click.
+- `isMemberTurn` in `web/src/history.ts`, now shared with `clearMemberTurns`.
+
+### Backend entities
+
+None. Nothing is sent anywhere.
+
+### DB schema
+
+Unchanged. No migration.
+
+### Tech specs
+
+- **Framework:** jsPDF 4.2.1, MIT, dynamically imported. Rejected: a hand-rolled writer, which stops being the smaller option at the Helvetica width table; `html2canvas` rasterisation, which produces a large file of unselectable pixels; server-side rendering, which puts a member's own record back on the wire.
+- **Language:** TypeScript, strict, as everywhere else.
+- **Deployment target:** the existing static build. jsPDF is its own chunk and the initial bundle is unchanged.
+- **Data store:** none. The conversation is already in memory and in `localStorage`.
+
+### Verification
+
+The document model is asserted directly: content, order, source numbering, the prose fallback, the gaps, the plan and dates, the member notice in both languages, and the filename. Two render tests prove the bytes are a real multi-page PDF and that Spanish accents survive. Static tests assert the control no longer calls `window.print()`, that the renderer is dynamically imported, and that the print stylesheet is still there. Then the artifact itself: the built bundle served, the control pressed, the download captured, and the PDF read back in both languages.

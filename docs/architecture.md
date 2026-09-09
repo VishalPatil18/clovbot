@@ -170,6 +170,14 @@ Three boundaries make it safe to keep.
 
 The point of collecting it is `npm run insights`, which lists answers a member rated wrong with their reason and route. Those are candidate golden-set cases, which is the mechanism this project already uses to improve answers and gate regressions. There is no fine-tuning pipeline and none is implied: answers here come from retrieval and a prompt, not from weights.
 
+## Taking the conversation away
+
+The export renders a PDF **in the browser** from the conversation already in memory: every question, every answer, the numbered sources as the member saw them, the plan, the date the documents were collected, and the standing notices. A page-one warning appears when any answer cites the member's own record.
+
+Nothing is posted to the service to be rendered. The transcript of a signed-in member holds their claim amounts, and sending it to a renderer would put that back on the wire and into request logs, which is the transit path row-level security and the access log exist to narrow. D-103.
+
+The renderer is fetched by dynamic import on first press, so it is absent from the bundle a member downloads to ask a question. The document model is separate from the typesetting, which is what lets the tests assert what the file says without parsing a PDF. The print stylesheet stays as the fallback and as the path for anyone who wanted paper.
+
 ## Voice
 
 A three-tier chain with a circuit breaker: ElevenLabs, then Fish Audio, then the browser's own synthesiser. The last tier cannot run out of credits, which is the reason it is there. A degrade is announced rather than silent, because an unexplained change of voice reads as a fault to an audience with low trust in the technology.

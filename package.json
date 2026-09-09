@@ -42,6 +42,7 @@
   "dependencies": {
     "@huggingface/transformers": "4.2.0",
     "framer-motion": "13.2.0",
+    "jspdf": "4.2.1",
     "pg": "8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

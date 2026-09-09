@@ -1,4 +1,4 @@
-import { help, s, type StringKey } from "../strings.ts";
+import { MEMBER_SERVICES_DISPLAY, help, s, type StringKey } from "../strings.ts";
 import { useIsPhone } from "../viewport.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -32,7 +32,7 @@ import {
   IoLanguage,
   IoMic,
   IoMicOff,
-  IoPrint,
+  IoDownloadOutline,
   IoRefresh,
   IoTrash,
   IoPlay,
@@ -58,6 +58,7 @@ import {
   type VoiceMode,
 } from "../voice.ts";
 import { clearHistory, clearMemberTurns, readHistory, writeHistory } from "../history.ts";
+import { transcriptBlocks, transcriptFilename } from "../transcript.ts";
 import { SignIn } from "./SignIn.tsx";
 import { answerAsText } from "../copy.ts";
 import { STEP_MS, progressMessage, type Stage } from "../progress.ts";
@@ -105,7 +106,7 @@ const STARTERS = [
   },
 ];
 
-export const MEMBER_SERVICES_DISPLAY = "1-555-0100";
+export { MEMBER_SERVICES_DISPLAY };
 
 interface Turn {
   id: number;
@@ -536,9 +537,38 @@ export function Assistant({
       <IoRefresh aria-hidden="true" /> {say("startOver")}
     </button>
   );
-  const printChip = (
-    <button type="button" className="chip chip--compact" onClick={() => window.print()}>
-      <IoPrint aria-hidden="true" /> Print
+  /**
+   * FR-P3-70. Built here on the device: the conversation is already in memory,
+   * and posting a signed-in member's answer to a renderer would put their own
+   * record back on the wire for nothing.
+   */
+  const saveTranscript = async (): Promise<void> => {
+    const savedOn = new Date();
+    const context = {
+      planName: plan?.name ?? null,
+      documentDate: corpusDate,
+      language,
+      savedOn,
+    };
+    try {
+      const { renderTranscript } = await import("../pdf.ts");
+      const bytes = await renderTranscript(transcriptBlocks(turns, context), language);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = transcriptFilename(context);
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // FR-P3-77. The print view is still a clean page, and silence is worse.
+      setStatus(say("transcriptFailed"));
+      window.print();
+    }
+  };
+
+  const savePdfChip = (
+    <button type="button" className="chip chip--compact" onClick={() => void saveTranscript()}>
+      <IoDownloadOutline aria-hidden="true" /> {say("savePdf")}
     </button>
   );
   const clearChip = (
@@ -557,7 +587,7 @@ export function Assistant({
       {startOverChip}
       {turns.length > 0 && (
         <>
-          {printChip}
+          {savePdfChip}
           {clearChip}
         </>
       )}
@@ -578,7 +608,7 @@ export function Assistant({
       {turns.length > 0 && (
         <>
           {clearChip}
-          {printChip}
+          {savePdfChip}
         </>
       )}
       {helpControl}
@@ -726,8 +756,8 @@ export function Assistant({
                 forgets the plan you chose.
               </li>
               <li>
-                <strong>Print</strong> produces a copy with every source, which
-                your browser can save as a PDF.
+                <strong>Save as PDF</strong> downloads this whole conversation,
+                with every source, as a file you can keep or print.
               </li>
               <li>
                 <strong>Copy</strong> puts one answer and its sources on the

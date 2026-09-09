@@ -104,11 +104,17 @@ None of this changes when the data becomes real. What changes is everything belo
 
 **Still owed:** the same retention question as everything else in §2.8, and an honest label. The turn log is **pseudonymous, not anonymous**. A session id links every question in one visit and the loop breaker needs it, so it stays on the row; analysis reads a view that excludes it. That is a narrower claim than anonymity and is the one this document is prepared to make.
 
+### 2.7b The transcript leaves on the member's own device
+
+**Today:** the export builds the PDF **in the browser**, from the conversation already in memory, and hands it to the download. Nothing is posted to the service to be rendered, so a signed-in member's claim amounts never make a second trip over the wire or into a request log. When any answer in the file cites the member's own record, the first page says so, because the file then sits in a downloads folder on a device that may be shared.
+
+**Still owed:** nothing technical. Once the file exists it is the member's, on their hardware, outside anything this system can enforce - which is the correct end state for a record they asked for, and worth stating rather than leaving implied.
+
 ### 2.8 Retention and deletion
 
 **Required:** a stated policy, and the ability to honour it.
 
-**Today:** nothing is deleted, anywhere. Turns, callbacks, access-log rows and login codes all persist. One thing does get cleared, and it is the one nobody would have thought to ask for: **signing out removes record-sourced turns from the conversation saved in the browser**, on the shared-device reasoning that a caregiver holding the tablet is indistinguishable from the member.
+**Today:** nothing is deleted, anywhere. Turns, callbacks, access-log rows and login codes all persist. One thing does get cleared, and it is the one nobody would have thought to ask for: **signing out removes record-sourced turns from the conversation saved in the browser**, on the shared-device reasoning that a caregiver holding the tablet is indistinguishable from the member. That clearing matched only the English citation label until 2026-09-09, so a Spanish member's record-sourced answers survived a sign-out; it now matches both.
 
 **Still owed:** the policy itself, deletion that actually runs, and the interaction between deletion and the audit log, which must not be deletable on the same schedule as the thing it audits.
 

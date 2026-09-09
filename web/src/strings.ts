@@ -1,5 +1,8 @@
 import type { Speech } from "./api.ts";
 
+/** Lives here rather than in a component so non-React modules can reach it. */
+export const MEMBER_SERVICES_DISPLAY = "1-555-0100";
+
 /**
  * Panel chrome in both languages. FR-P3-43.
  *
@@ -10,7 +13,7 @@ import type { Speech } from "./api.ts";
 const STRINGS = {
   talkToPerson: ["Talk to a person", "Hablar con una persona"],
   startOver: ["Start over", "Empezar de nuevo"],
-  print: ["Print", "Imprimir"],
+  savePdf: ["Save as PDF", "Guardar en PDF"],
   clearSaved: ["Clear saved", "Borrar lo guardado"],
   ask: ["Ask", "Preguntar"],
   askPlaceholder: [
@@ -65,6 +68,34 @@ const STRINGS = {
   workingOnIt: ["Working on it", "Trabajando en ello"],
   readingAloud: ["Reading this answer aloud", "Leyendo esta respuesta en voz alta"],
   signInAndAnswer: ["Sign in and answer this", "Inicie sesión y responda esto"],
+  transcriptTitle: [
+    "Your conversation with the Clover assistant",
+    "Su conversación con el asistente de Clover",
+  ],
+  transcriptSaved: ["Saved", "Guardado"],
+  transcriptPlan: ["Plan", "Plan"],
+  transcriptNoPlan: ["No plan chosen", "Ningún plan elegido"],
+  transcriptDocuments: ["Plan documents collected", "Documentos del plan recopilados"],
+  youAsked: ["You asked", "Usted preguntó"],
+  notAnswered: [
+    "Not answered from the plan documents",
+    "Sin respuesta en los documentos del plan",
+  ],
+  // The file can be opened by anyone holding the device, long after the
+  // session that made it ended.
+  transcriptMemberNotice: [
+    "This file contains information from your own member record. Keep it somewhere private.",
+    "Este archivo contiene información de su propio registro de miembro. Guárdelo en un lugar privado.",
+  ],
+  transcriptNotOfficial: [
+    "This is not an official plan document. For a decision about your coverage, call Member Services.",
+    "Este no es un documento oficial del plan. Para una decisión sobre su cobertura, llame a Servicios para Miembros.",
+  ],
+  transcriptFailed: [
+    "The file could not be made. Opening the print view instead.",
+    "No se pudo crear el archivo. Abriendo la vista de impresión.",
+  ],
+  pageOf: ["Page $1 of $2", "Página $1 de $2"],
 } as const satisfies Record<string, readonly [string, string]>;
 
 /**

@@ -143,7 +143,7 @@ describe("the ten fixes from the device pass [FR-P3-45]", () => {
   });
 
   it("shrinks the two chips whose icon carries the meaning, not the two that matter", () => {
-    expect(assistant).toMatch(/chip chip--compact" onClick=\{\(\) => window\.print\(\)\}/);
+    expect(assistant).toMatch(/chip chip--compact" onClick=\{\(\) => void saveTranscript\(\)\}/);
     expect(assistant).toMatch(/chip chip--compact" onClick=\{forgetHistory\}/);
     // Has to out-specify `.chips .chip`, or the width lands and the font-size
     // does not: a 44px button holding the whole label.
@@ -249,7 +249,7 @@ describe("playback is pause and resume, not stop [D-045]", () => {
 describe("the rail is one set of tools [FR-P3-48]", () => {
   it("orders them deliberately rather than inheriting the chips row", () => {
     const rail = assistant.slice(assistant.indexOf("const railTools = ("));
-    const order = ["modeControl", "languageControl", "startOverChip", "clearChip", "printChip", "helpControl"];
+    const order = ["modeControl", "languageControl", "startOverChip", "clearChip", "savePdfChip", "helpControl"];
     let cursor = 0;
     for (const name of order) {
       const at = rail.indexOf(name, cursor);

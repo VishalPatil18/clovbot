@@ -9,13 +9,13 @@
 | Field | Value |
 | --- | --- |
 | Project | Clover Member Assistant |
-| Version | 1.3.0 |
+| Version | 1.4.0 |
 | Status | Frozen |
 | Last Updated | 2026-09-09 |
-| Covers | `claude/plan-p3.md` stages 1-7, shipping as v1.2.0 |
+| Covers | `claude/plan-p3.md` stages 1-8, shipping as v1.2.0 |
 | Sources | `docs/ideas.md` §7 P3-01 and P3-02, `claude/plan-p3.md`, `claude/srs.md` v1.1.0, `claude/srs-p2.md` v1.0.1, `docs/research-init.md`, D-047, D-080, D-085 |
 | Predecessor | `claude/srs-p2.md` v1.0.1 (P2, frozen) |
-| Amendments | 1.3.0 - Stage 7 added 2026-09-09 with FR-P3-63 to FR-P3-69 and NFR-P3-17. 1.2.1 - FR-P3-62 added 2026-09-09. 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14. 1.2.0 - Stage 6 added 2026-09-09 with FR-P3-53 to FR-P3-61 and NFR-P3-15, NFR-P3-16, promoting P4-01 |
+| Amendments | 1.4.0 - Stage 8 added 2026-09-09 with FR-P3-70 to FR-P3-77 and NFR-P3-18. 1.3.0 - Stage 7 added 2026-09-09 with FR-P3-63 to FR-P3-69 and NFR-P3-17. 1.2.1 - FR-P3-62 added 2026-09-09. 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14. 1.2.0 - Stage 6 added 2026-09-09 with FR-P3-53 to FR-P3-61 and NFR-P3-15, NFR-P3-16, promoting P4-01 |
 
 ---
 
@@ -177,6 +177,21 @@ No existing job is removed. One is narrowed on purpose: a signed-in member askin
 | FR-P3-67 | Feedback analysis reads a view that excludes the session id. The turn keeps it, because the loop breaker counts consecutive refusals within a session, but nothing in a report about answers needs to know what else that visit asked. |
 | FR-P3-68 | The store is **pseudonymous, not anonymous**, and is described that way. A session id links the questions in one visit. Claiming otherwise would be the kind of overstatement `docs/real-phi.md` exists to avoid. |
 | FR-P3-69 | The operator report lists answers a member rated wrong, with the reason and the route, as candidate golden-set cases. That is the mechanism this project already uses to improve answers and gate regressions; there is no fine-tuning pipeline and none is implied. |
+
+### 4.9 A transcript the member can keep (Stage 8)
+
+> **The control already existed.** `window.print()` and the print stylesheet have shipped since P2 as FR-P2-20, and the browser dialog's "Save as PDF" destination was the export path. What no browser API offers is a way to steer that dialog to a file, so a download means generating the bytes.
+
+| ID | Requirement |
+| --- | --- |
+| FR-P3-70 | The export control downloads a PDF file. It does not open the print dialog and rely on the member finding the right destination in it. |
+| FR-P3-71 | The file is built on the device from the conversation already in memory. No transcript is sent to the server to be rendered. A signed-in member's answer holds their own record, and posting it back to a renderer would rebuild the transit path Stage 2 removed. |
+| FR-P3-72 | Every turn on screen appears in the file: the question, the answer as its claims or its prose, any unanswered gaps, and the numbered source list. The numbers match the markers the member saw beside the claims. |
+| FR-P3-73 | The file carries its own context: the plan the answers were scoped to, the date the plan documents were collected, the date it was saved, the synthetic-data notice, and the Member Services number. A saved page leaves the application behind and may be read by a doctor or a family member who never saw it. |
+| FR-P3-74 | When any turn in the file cites the member's own record, the first page says so. The file sits in a downloads folder on a possibly shared device. |
+| FR-P3-75 | The file's chrome is in the language the conversation was held in, on the same authored-copy rule as the panel. FR-P3-43. |
+| FR-P3-76 | The PDF library is fetched only when the control is pressed. A member who never exports pays none of its bytes on a slow connection. |
+| FR-P3-77 | The print stylesheet stays and remains the fallback. If the file cannot be built, the member is told in a sentence and the print view opens instead of nothing happening. |
 
 ---
 
@@ -447,12 +462,38 @@ Scenario: [FR-P3-65] the endpoint accepts no reason it was not offered
   And the database would reject it in any case
 ```
 
+### Transcript export
+
+```gherkin
+Scenario: [FR-P3-72] the numbers in the file are the numbers on the screen
+  Given an answer whose second claim carries the marker [2]
+  When the transcript is built
+  Then the source list in the file numbers that source [2]
+```
+
+```gherkin
+Scenario: [FR-P3-74] a file holding member data says so on its first page
+  Given a conversation with one answer citing "Your member record"
+  When the transcript is built
+  Then the first page carries the notice that it contains member-record data
+  And a conversation with no such citation carries no notice
+```
+
+```gherkin
+Scenario: [FR-P3-77] the export fails without failing the member
+  Given a device that cannot fetch the PDF library
+  When the member presses the export control
+  Then a sentence says the file could not be made
+  And the print view opens
+```
+
 ---
 
 ## 6. Non-Functional Requirements
 
 | ID | Requirement | Gate |
 | --- | --- | --- |
+| NFR-P3-18 | The export adds nothing to the bundle a member downloads to ask a question. Verified from the build output: the PDF library is its own chunk. | Build |
 | NFR-P3-17 | No feedback surface accepts free text. Asserted by test over the markup as well as the endpoint. | CI |
 | NFR-P3-15 | Emptying every cache changes no answer. The caches are measured on latency only, never on correctness. | Asserted by test |
 | NFR-P3-16 | Cache hit and miss counts are recorded per entry, so the hit rate is measured rather than assumed. | Recorded |

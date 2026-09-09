@@ -829,3 +829,21 @@ Two more were the same shape: `.assistant--page > .assistant__foot` out-specifie
 **Open:** migration 016 is the operator's to apply. Until then the answer column does not exist and feedback records as it did before.
 
 **Next:** cut v1.2.0.
+
+## 2026-09-09 - P3 Stage 8: a transcript the member can keep
+
+**Did:** the export control now downloads a PDF of the conversation instead of opening the print dialog. 851 tests pass.
+
+**Files:** added `web/src/transcript.ts`, `web/src/pdf.ts`, `tests/unit/transcript.test.ts`. Changed the web panel, `web/src/strings.ts`, `web/src/history.ts`, `package.json`, three test files, the SRS to v1.4.0, plan-p3, D-103, README, architecture, real-phi and the changelog.
+
+**The button already worked.** `window.print()` and the print stylesheet have shipped since P2 as FR-P2-20, and the browser dialog's "Save as PDF" destination was the export path. What no browser API offers is a way to steer that dialog to a file, so a download meant generating the bytes. jsPDF 4.2.1, fetched by dynamic import so the initial bundle is unchanged and only a member who exports pays the 130 kB.
+
+**Rendered on the device, never on the server.** Everything the file needs is already in the browser. Posting a transcript to a renderer would put a signed-in member's claim amounts back on the wire and into request logs, which is the transit path Stage 2 removed for exactly that data. D-103.
+
+**The document model is separate from the renderer**, so what the file says is asserted directly rather than by parsing a PDF. The renderer is text-only: an HTML-to-canvas rasteriser would produce a large file of unselectable pixels that a screen reader cannot read and a member cannot copy an amount out of.
+
+**Found a real bug on the way in.** `clearMemberTurns` matched only the English citation label `"Your member record"`, so signing out in Spanish left the member's claim data in `localStorage`. The predicate now matches both labels and is shared with the export, which needs the same question answered. FR-P2-39, regression test added.
+
+**Verified by looking at the artifact**, in both languages and end to end: the built bundle served, history seeded, the control pressed, the download captured and the PDF read back.
+
+**Next:** cut v1.2.0.

@@ -191,8 +191,11 @@ describe("required surfaces", () => {
 
   // D-026: an unaffiliated deploy must not publish a routable support line.
   it("never shows the real Clover number", () => {
-    expect(tsx).not.toMatch(/1-888-778-1478/);
-    expect(tsx).toMatch(/1-555-0100/);
+    const strings = readFileSync("web/src/strings.ts", "utf8");
+    expect(tsx + strings).not.toMatch(/1-888-778-1478/);
+    // The placeholder lives in strings.ts, where the PDF export can reach it
+    // without importing a React component.
+    expect(strings).toMatch(/1-555-0100/);
   });
 
   // FR-30: the notice collapses rather than disappearing, so the page always

@@ -13,7 +13,7 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
-| Status | **Complete.** Seven stages done, shipping as v1.2.0 |
+| Status | **Complete.** Eight stages done, shipping as v1.2.0 |
 | Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
 | Last Updated | 2026-09-09 |
 | Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
@@ -193,6 +193,27 @@
 
 ---
 
+## Stage 8 - A transcript the member can keep
+
+- **Goal:** Turn the export control into a file the member downloads, rather than a print dialog they have to steer.
+- **Context:** Added 2026-09-09. `window.print()` and the print stylesheet have shipped since P2 (FR-P2-20) and the browser could already save the page as a PDF, but only via a dialog whose "Save as PDF" destination this audience has to find. No browser API steers that dialog to a file, so a download means generating the bytes.
+- **Scope in:** A PDF built on the device from the conversation in memory, carrying every question, every answer, the numbered sources, the plan, the document date, the synthetic-data notice and the Member Services number; a notice on page one when the file holds member-record data; chrome in the conversation's language; the library fetched only on press; the print stylesheet kept as the fallback.
+- **Scope out:** Server-side rendering, which would put a signed-in member's answer back on the wire for no gain. Styled layout beyond text: no logo image, no colour, no HTML-to-canvas rasterisation, which produces a large file of unselectable pixels. Emailing the transcript, which is a different feature with a different threat model.
+- **Acceptance criteria:**
+  - [x] Pressing the control downloads a `.pdf` without opening a dialog.
+  - [x] Every turn on screen is in the file, with source numbers matching the on-screen markers.
+  - [x] The file names its plan, its document date, its save date, the synthetic-data notice and the Member Services number.
+  - [x] A file containing an answer cited to the member's own record says so on page one; one that does not, does not.
+  - [x] The chrome is Spanish when the conversation is Spanish.
+  - [x] The library is a separate chunk, absent from the initial bundle.
+  - [x] A failed build says so and falls back to the print view.
+- **Test plan:** The document model is pure data, so content, ordering, numbering, language and the member notice are asserted directly rather than by parsing a PDF. One render test proves the bytes are a real multi-page PDF and that Spanish accents survive. A static test asserts the control no longer calls `window.print()` and that the print stylesheet is still there.
+- **Effort:** M
+- **Exit signal:** A member presses one button and has a file they can hand to a doctor, with every source and no application chrome.
+- **Status:** [x] done, 2026-09-09.
+
+---
+
 ## Completion Checklist
 
 - [x] Stage 1 - Row-level security
@@ -202,6 +223,7 @@
 - [x] Stage 5 - Mobile layout
 - [x] Stage 6 - Caching
 - [x] Stage 7 - Feedback that goes somewhere
+- [x] Stage 8 - A transcript the member can keep
 
 ---
 

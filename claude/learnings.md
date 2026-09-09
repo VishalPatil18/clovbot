@@ -341,3 +341,17 @@ _<How this concept will apply to future work in this project.>_
 **Free text is the hole in a zero-PHI boundary.** Every other field in this system is a number, an enum or a redacted question. A text box invites a member to type a diagnosis, and no amount of identifier redaction catches that. Four fixed reasons are less rich and are the only version that keeps the boundary intact.
 
 **Do not build toward a pipeline that does not exist.** The request asked for data shaped for fine-tuning. There is no training path here and the answers come from retrieval and a prompt, so the honest destination was the golden set, which already gates every release.
+
+## P3 Stage 8 - what the export taught
+
+**Check whether the button already works, twice in a row now.** The request opened with "if not already", and it already did: `window.print()` over a print stylesheet, tested, shipped since P2. The feature was not "make the button work" but "the dialog is not a download", which is a much narrower change and a different justification.
+
+**A dynamic import is the answer to "we cannot afford that dependency".** The reflex objection to jsPDF is 130 kB gzipped on an audience with slow connections. Loading it on press moves that cost onto the people who asked for it and leaves the initial bundle untouched, which turned a refusal into a one-line `await import`.
+
+**Ask where the rendering happens before asking which library.** The server option was the tempting one and was wrong for a reason that has nothing to do with PDFs: it would have posted a signed-in member's claim amounts to an endpoint and into its logs, undoing Stage 2 for exactly that data. The library question only mattered after that was settled.
+
+**Separate the document from its typesetting.** Making `transcriptBlocks` return plain data meant every assertion about what the file says is a string comparison, and not one test parses a PDF. The renderer then holds nothing but sizes and spacing, which is the part a test could not usefully check anyway.
+
+**Read the artifact, not the test output.** Rendering a sample and looking at it caught two things no test would have: body type set smaller than the 18px the product holds itself to on screen, and a cited headline amount dropped from the export because it lives in its own field rather than in a claim.
+
+**A shared predicate written for a new feature exposed an old bug.** The export needed to know whether a turn came from the member's record. The existing answer to that question matched only the English citation label, so signing out in Spanish left claim data in storage. One predicate, both callers, and a regression test.
