@@ -573,3 +573,17 @@ Two faults, not one. The constraint is the cause; migration 010 widens it. But t
 **Open:** unchanged. FR-P2-53 waits on the user applying migrations 005 to 010 and running the deploy.
 
 **Next:** the user re-runs the browser pass with migration 010 applied.
+
+## 2026-09-09 - v1.1.0 released
+
+**Did:** cut the release. `CHANGELOG.md` moves everything under `[Unreleased]` into `[1.1.0] - 2026-09-09` and opens a fresh unreleased section; `package.json` goes to 1.1.0.
+
+**What the version contains:** P2's eight stages. A second Medicare contract (H8010-002 HMO alongside the two H5141 PPOs), typed drug lookups behind a deterministic router, the session UX cluster, synthetic member records as citable sources, emailed one-time-code sign-in, login detection in both directions, and one eval run that reports four gates.
+
+**Filed by what the member sees.** Twelve bullets moved from Changed to Added during the cut. Sign-in, member-record answers, print, copy, help and saved conversations are new capabilities, not modifications, and the list had accumulated them in the order the work landed rather than by what they are.
+
+**Numbers at the cut:** 675 tests, and in the live snapshot `2026-09-08T1714Z`, 1913 chunks across 19 documents and three plans on two contracts, plus 2466 typed drug rows and five synthetic members. The earlier snapshot's 608 chunks are still in the table and are not served. Faithfulness 0.963, structural 100%, refusal 10.0%, bucket A 37/40, B 8/8, C 10/10. Router 32/32. Login detection 34 cases, zero false negatives, zero false positives. Regression gate: every P1 floor met.
+
+**Open:** FR-P2-53 stays unverified until the production migrations and the deploy run. Migration 010 is required and is new since the manual test pass.
+
+**Next:** deploy the API, merge development to main for the frontend.
