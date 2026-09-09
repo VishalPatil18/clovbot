@@ -15,6 +15,7 @@ import {
 } from "./corpus/scope.ts";
 import type { PlanRef } from "./types.ts";
 import { stalenessWarning } from "./freshness.ts";
+import type { Speech } from "./i18n.ts";
 import { sendLoginCode } from "./auth/mail.ts";
 import {
   currentSession,
@@ -379,9 +380,11 @@ async function handleFeedback(body: string, res: ServerResponse): Promise<void> 
 /** FR-19, FR-20. Synthesis runs here so the provider keys stay off the page. */
 async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
   let text = "";
+  let speech: Speech = "en";
   try {
-    const parsed = JSON.parse(body) as { text?: unknown };
+    const parsed = JSON.parse(body) as { text?: unknown; language?: unknown };
     text = typeof parsed.text === "string" ? parsed.text.slice(0, 5_000).trim() : "";
+    speech = parsed.language === "es" ? "es" : "en";
   } catch {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
@@ -396,7 +399,10 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
   // Cache before the chain: a repeated answer is never synthesised twice. FR-20.
   // Every provider is checked, because a recording made while the chain was
   // degraded is still a valid recording of the same words.
-  const voice = process.env["ELEVENLABS_VOICE_ID"] ?? "default";
+  const voice =
+    (speech === "es" ? process.env["ELEVENLABS_VOICE_ID_SPANISH"] : undefined) ??
+    process.env["ELEVENLABS_VOICE_ID"] ??
+    "default";
   const cached = findCachedAudio(text, voice, ["elevenlabs", "fishaudio"]);
   if (cached !== null) {
     res.writeHead(200, {
@@ -409,7 +415,7 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
   }
 
   try {
-    const result = await speak(text);
+    const result = await speak(text, speech);
     const notice = degradeNotice(result);
 
     if (result.value === null) {
@@ -532,8 +538,15 @@ async function handleAsk(
   let question = "";
   let planId: string | null = null;
   let contractId: string | null = null;
+  let language: Speech = "en";
   try {
-    const parsed = JSON.parse(body) as { question?: unknown; planId?: unknown; contractId?: unknown };
+    const parsed = JSON.parse(body) as {
+      question?: unknown;
+      planId?: unknown;
+      contractId?: unknown;
+      language?: unknown;
+    };
+    language = parsed.language === "es" ? "es" : "en";
     question = typeof parsed.question === "string" ? parsed.question.slice(0, MAX_QUESTION).trim() : "";
     planId = typeof parsed.planId === "string" ? parsed.planId : null;
     contractId = typeof parsed.contractId === "string" ? parsed.contractId : null;
@@ -610,6 +623,7 @@ async function handleAsk(
       planRef ?? firstIndexedPlan(),
       {
         onToken: () => send(res, { type: "progress" }),
+        language,
         ...(member === null
           ? {}
           : { memberId: member.memberId, sessionId: member.sessionId }),
@@ -628,6 +642,7 @@ async function handleAsk(
         stale,
       ),
       outcome: turn.outcome,
+      language: turn.language,
       claims: turn.payload?.claims ?? [],
       unanswered: turn.payload?.unanswered ?? [],
       refusal: turn.payload?.refusal ?? null,

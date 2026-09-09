@@ -17,6 +17,12 @@ export interface Headline {
   citationIds: string[];
 }
 
+/**
+ * Lives here rather than in voice.ts: a test pulls api.ts into the Node-typed
+ * program, and importing from voice.ts drags its DOM globals in with it.
+ */
+export type Speech = "en" | "es";
+
 export interface PlanOption {
   contractId: string;
   id: string;
@@ -29,6 +35,8 @@ export type AskEvent =
   | {
       type: "answer";
       answer: string;
+      /** What the assistant answered in, so the control can follow it. FR-P3-34. */
+      language?: Speech;
       /** The answer without citation markers or the source list. Read aloud. */
       spokenAnswer?: string;
       outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
@@ -117,11 +125,17 @@ export async function ask(
   plan: PlanOption | null,
   onEvent: (event: AskEvent) => void,
   signal?: AbortSignal,
+  language: Speech = "en",
 ): Promise<void> {
   const response = await fetch("/api/ask", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ question, planId: plan?.id ?? null, contractId: plan?.contractId ?? null }),
+    body: JSON.stringify({
+      question,
+      planId: plan?.id ?? null,
+      contractId: plan?.contractId ?? null,
+      language,
+    }),
     ...(signal === undefined ? {} : { signal }),
   });
 

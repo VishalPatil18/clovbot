@@ -1,3 +1,4 @@
+import { t, type Speech } from "../i18n.ts";
 import type { AnswerPayload, CitableKind } from "../types.ts";
 import type { DocumentKind } from "../corpus/types.ts";
 import type { Prompt } from "./prompt.ts";
@@ -143,7 +144,20 @@ const SYSTEM = [
 
 const defuse = (content: string): string => content.replace(/<\/?sources>/gi, "");
 
-export function buildStructuredPrompt(question: string, chunks: CitableChunk[]): Prompt {
+/**
+ * D-069 measured what touching the system prompt costs: adding one rule moved
+ * faithfulness and flipped a case. So the Spanish instruction goes in the user
+ * message, and an English prompt stays byte-for-byte what it was.
+ */
+const ANSWER_IN_SPANISH =
+  "Responde en español. Las fuentes pueden estar en español o en inglés; " +
+  "la respuesta debe estar en español en ambos casos.";
+
+export function buildStructuredPrompt(
+  question: string,
+  chunks: CitableChunk[],
+  speech: Speech = "en",
+): Prompt {
   if (chunks.length === 0) throw new Error("cannot build a prompt with no sources");
 
   const sources = chunks
@@ -158,7 +172,11 @@ export function buildStructuredPrompt(question: string, chunks: CitableChunk[]):
     )
     .join("\n\n---\n\n");
 
-  return { system: SYSTEM, user: `<sources>\n${sources}\n</sources>\n\nQuestion: ${question}` };
+  const user = `<sources>\n${sources}\n</sources>\n\nQuestion: ${question}`;
+  return {
+    system: SYSTEM,
+    user: speech === "es" ? `${user}\n\n${ANSWER_IN_SPANISH}` : user,
+  };
 }
 
 /**

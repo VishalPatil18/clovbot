@@ -147,6 +147,9 @@ async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
 
   return {
     id: testCase.id,
+    // What the turn actually answered in, not what the case asked for: a Spanish
+    // case answered in English is a failure the score has to be able to see.
+    language: turn.language,
     answer: turn.answer,
     bucket: testCase.bucket,
     driver: testCase.driver,
@@ -326,6 +329,14 @@ function print(report: ReturnType<typeof buildReport>, all: CaseOutcome[]): void
   console.log(
     `  refusal rate        ${(report.refusalRate * 100).toFixed(1)}% [${report.refusalVerdict}]`,
   );
+  // FR-P3-41. Never pooled: six Spanish cases against sixty English ones could
+  // score zero and barely move the average.
+  console.log("  per language:");
+  for (const row of report.faithfulnessByLanguage) {
+    if (row.cases === 0) continue;
+    const score = row.faithfulness === null ? "n/a" : row.faithfulness.toFixed(3);
+    console.log(`    ${row.language.padEnd(12)} ${score} over ${String(row.cases)} cases`);
+  }
   console.log("  per bucket:");
   for (const bucket of report.buckets) {
     const accuracy = bucket.accuracy === null ? "not enforced" : `${(bucket.accuracy * 100).toFixed(1)}%`;

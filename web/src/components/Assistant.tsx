@@ -1,3 +1,4 @@
+import { s, type StringKey } from "../strings.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -26,6 +27,7 @@ import {
   IoExpand,
   IoHelpCircleOutline,
   IoLockClosedOutline,
+  IoLanguage,
   IoMic,
   IoMicOff,
   IoPrint,
@@ -44,10 +46,13 @@ import { DictateButton } from "./DictateButton.tsx";
 import { CallbackPanel } from "./CallbackPanel.tsx";
 import { VoiceComposer } from "./VoiceComposer.tsx";
 import {
+  readLanguage,
   readMode,
   speak,
+  writeLanguage,
   writeMode,
   type Spoken,
+  type Speech,
   type VoiceMode,
 } from "../voice.ts";
 import { clearHistory, clearMemberTurns, readHistory, writeHistory } from "../history.ts";
@@ -145,6 +150,9 @@ export function Assistant({
   const [callback, setCallback] = useState<CallbackDraft | null>(null);
   const [limited, setLimited] = useState<string | null>(null);
   const [mode, setMode] = useState<VoiceMode>(() => readMode());
+  const [language, setLanguage] = useState<Speech>(() => readLanguage());
+  /** Panel chrome follows the answer's language, not a separate setting. */
+  const say = useCallback((key: StringKey): string => s(key, language), [language]);
   const [spoken, setSpoken] = useState<Spoken | null>(null);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [dictateError, setDictateError] = useState<string | null>(null);
@@ -214,6 +222,10 @@ export function Assistant({
       ]);
 
       const apply = (event: AskEvent): void => {
+        if (event.type === "answer" && event.language !== undefined && event.language !== language) {
+          setLanguage(event.language);
+          writeLanguage(event.language);
+        }
         if (event.type === "answer" && event.outcome === "needs_login") {
           setSigningInFor(id);
         }
@@ -222,7 +234,7 @@ export function Assistant({
           setTurns((previous) => previous.filter((turn) => turn.id !== id));
           setPlanPrompt({ plans: event.plans, question: event.question });
           setStage(null);
-          setStatus("Which plan are you on?");
+          setStatus(say("whichPlan"));
           return;
         }
         if (event.type === "progress") {
@@ -310,7 +322,7 @@ export function Assistant({
       };
 
       try {
-        await ask(trimmed, chosen, apply);
+        await ask(trimmed, chosen, apply, undefined, language);
       } catch {
         apply({
           type: "error",
@@ -322,7 +334,7 @@ export function Assistant({
         setStatus("");
       }
     },
-    [busy, mode],
+    [busy, language, mode],
   );
 
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
@@ -456,8 +468,27 @@ export function Assistant({
               ) : (
                 <IoMic aria-hidden="true" />
               )}
-              {mode === "voice" ? "Switch to text" : "Switch to voice"}
+              {mode === "voice" ? say("switchToText") : say("switchToVoice")}
             </button>
+  );
+
+  /** FR-P3-34. Named in the language it switches to, so it reads to either member. */
+  const languageControl = (
+    <button
+      type="button"
+      className="assistant__mode"
+      lang={language === "es" ? "en" : "es"}
+      onClick={() => {
+        const next: Speech = language === "es" ? "en" : "es";
+        spoken?.stop();
+        setSpeakingTurn(null);
+        setLanguage(next);
+        writeLanguage(next);
+      }}
+    >
+      <IoLanguage aria-hidden="true" />
+      {language === "es" ? "English" : "Español"}
+    </button>
   );
 
   const helpControl = (
@@ -484,12 +515,13 @@ export function Assistant({
       {/* FR-13. The human path is here in every state; the header carries only
             icon controls now. Help lives in the header and is not repeated. */}
       <a className="chip chip--human" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-        <IoCall aria-hidden="true" /> Talk to a person
+        <IoCall aria-hidden="true" /> {say("talkToPerson")}
       </a>
       <button type="button" className="chip" onClick={startOver}>
-        <IoRefresh aria-hidden="true" /> Start over
+        <IoRefresh aria-hidden="true" /> {say("startOver")}
       </button>
       {railId !== undefined && modeControl}
+      {railId !== undefined && languageControl}
       {railId !== undefined && helpControl}
       {turns.length > 0 && (
         <>
@@ -497,7 +529,7 @@ export function Assistant({
             <IoPrint aria-hidden="true" /> Print
           </button>
           <button type="button" className="chip" onClick={forgetHistory}>
-            <IoTrash aria-hidden="true" /> Clear saved
+            <IoTrash aria-hidden="true" /> {say("clearSaved")}
           </button>
         </>
       )}
@@ -531,6 +563,7 @@ export function Assistant({
               header control worth naming. */}
           <div className="assistant__corner">
             {railId === undefined && modeControl}
+            {railId === undefined && languageControl}
             {railId === undefined && helpControl}
             {variant === "panel" && onExpand !== undefined && (
               <button
@@ -539,7 +572,7 @@ export function Assistant({
                 onClick={onExpand}
               >
                 <IoExpand aria-hidden="true" />
-                <span className="visually-hidden">Open full page</span>
+                <span className="visually-hidden">{say("openFullPage")}</span>
               </button>
             )}
             {variant === "panel" && onClose !== undefined && (
@@ -549,7 +582,7 @@ export function Assistant({
                 onClick={onClose}
               >
                 <IoClose aria-hidden="true" />
-                <span className="visually-hidden">Close the assistant</span>
+                <span className="visually-hidden">{say("closeAssistant")}</span>
               </button>
             )}
           </div>
@@ -574,12 +607,12 @@ export function Assistant({
             )}
           </span>
           {signedInAs === null ? (
-            <span className="meta-chip meta-chip--quiet">Not signed in</span>
+            <span className="meta-chip meta-chip--quiet">{say("notSignedIn")}</span>
           ) : (
             <span className="meta-chip meta-chip--signed">
               Signed in as {signedInAs}{" "}
               <button type="button" className="assistant__plan-change" onClick={() => void leave()}>
-                Sign out
+                {say("signOut")}
               </button>
             </span>
           )}
@@ -713,7 +746,7 @@ export function Assistant({
                       exit={reduceMotion === true ? { opacity: 1 } : { opacity: 0, y: -8 }}
                       transition={{ duration: reduceMotion === true ? 0 : 0.26, ease: "easeOut" }}
                     >
-                      {progress || "Working on it"}
+                      {progress || say("workingOnIt")}
                     </motion.span>
                   </AnimatePresence>
                 </p>
@@ -735,7 +768,7 @@ export function Assistant({
                         className="button button--primary"
                         onClick={() => setSigningInFor(turn.id)}
                       >
-                        <IoLockClosedOutline aria-hidden="true" /> Sign in and answer this
+                        <IoLockClosedOutline aria-hidden="true" /> {say("signInAndAnswer")}
                       </button>
                     ))}
                 </div>
@@ -765,7 +798,7 @@ export function Assistant({
                     <>
                       <div className="feedback">
                         <span id={`fb-${turn.id}`}>
-                          Did this answer your question?
+                          {say("didThisAnswer")}
                         </span>
                         <div role="group" aria-labelledby={`fb-${turn.id}`}>
                           {(["yes", "no"] as const).map((value) => (
@@ -842,7 +875,7 @@ export function Assistant({
           {planPrompt !== null && (
             <div className="plan-prompt">
               <div className="plan-prompt__head">
-                <h3 className="plan-prompt__title">Which plan are you on?</h3>
+                <h3 className="plan-prompt__title">{say("whichPlan")}</h3>
                 <button
                   type="button"
                   className="assistant__icon-button"
@@ -945,7 +978,7 @@ export function Assistant({
                 setDraft("");
                 void submit(question, plan);
               }}
-              placeholder="Ask about costs, drugs, providers or appeals"
+              placeholder={say("askPlaceholder")}
               autoComplete="off"
               maxLength={3_000}
             />

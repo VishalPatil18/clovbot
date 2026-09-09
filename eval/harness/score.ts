@@ -55,6 +55,8 @@ export interface CaseOutcome {
   faithfulness: number | null;
   structural: StructuralResult;
   note: string;
+  /** FR-P3-41. Reported separately, never pooled. */
+  language: "en" | "es";
 }
 
 export interface BucketScore {
@@ -98,6 +100,12 @@ export function meanFaithfulness(outcomes: CaseOutcome[]): number | null {
 
 export interface Report {
   faithfulness: number | null;
+  /**
+   * FR-P3-41. A pooled figure lets Spanish fail behind an English average: with
+   * six Spanish cases against fifty-four English ones, Spanish could score zero
+   * and move the mean by a tenth.
+   */
+  faithfulnessByLanguage: { language: "en" | "es"; cases: number; faithfulness: number | null }[];
   structuralCompliance: number;
   refusalRate: number;
   refusalVerdict: RefusalVerdict;
@@ -108,6 +116,10 @@ export interface Report {
 export function buildReport(outcomes: CaseOutcome[]): Report {
   const rate = refusalRate(outcomes);
   const faithfulness = meanFaithfulness(outcomes);
+  const faithfulnessByLanguage = (["en", "es"] as const).map((language) => {
+    const spoken = outcomes.filter((outcome) => outcome.language === language);
+    return { language, cases: spoken.length, faithfulness: meanFaithfulness(spoken) };
+  });
   const structural =
     outcomes.length === 0
       ? 1
@@ -127,6 +139,7 @@ export function buildReport(outcomes: CaseOutcome[]): Report {
 
   return {
     faithfulness,
+    faithfulnessByLanguage,
     structuralCompliance: structural,
     refusalRate: rate,
     refusalVerdict: refusalVerdict(rate),

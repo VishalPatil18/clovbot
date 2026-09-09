@@ -18,6 +18,7 @@ const outcome = (over: Partial<CaseOutcome>): CaseOutcome => ({
   faithfulness: 1,
   structural: { compliant: true, uncitedSentences: [] },
   note: "",
+  language: "en" as const,
   ...over,
 });
 

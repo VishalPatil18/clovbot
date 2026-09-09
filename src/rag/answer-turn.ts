@@ -2,6 +2,7 @@ import { findContainmentViolations, validateAnswerPayload } from "../answer.ts";
 import { checkGuardrails } from "../guardrails.ts";
 import { needsMemberData, type LoginRequired } from "../auth/login-required.ts";
 import { detectLanguage } from "../language.ts";
+import { corpusLanguage, t, type Speech } from "../i18n.ts";
 import { applyConfidenceGate } from "../retrieval.ts";
 import { redactIdentifiers } from "../logging.ts";
 import type { AnswerPayload } from "../types.ts";
@@ -38,13 +39,12 @@ export interface TurnResult {
   provider: string;
   latencyMs: Record<string, number>;
   route: RouteDecision;
+  /** What the answer is written in, so the interface can follow it. FR-P3-34. */
+  language: Speech;
 }
 
-const refusalText = (explanation: string): string =>
-  `${explanation}\n\nTo speak with a person, call Member Services at ${MEMBER_SERVICES}.`;
-
-const NOT_FOUND =
-  "I could not find an answer to that in the plan documents I searched.";
+const refusalText = (explanation: string, speech: Speech = "en"): string =>
+  `${explanation}\n\n${t("toAPerson", speech)} ${MEMBER_SERVICES}.`;
 
 /** An exact table row outranks anything the reranker can score. */
 const EXACT_MATCH_SCORE = 1;
@@ -89,6 +89,8 @@ export interface TurnOptions {
   memberId?: number;
   /** The session the member id came from, named in the access log. */
   sessionId?: string;
+  /** The member's chosen language. A Spanish question overrides it. FR-P3-34. */
+  language?: Speech;
 }
 
 /**
@@ -136,6 +138,10 @@ async function runTurn(
   read: { fields: string[] },
 ): Promise<TurnResult> {
   const started = Date.now();
+  const detected = detectLanguage(question);
+  // A Spanish question overrides the setting; anything the detector is unsure
+  // about falls back to it. D-091's sibling rule, for language. FR-P3-34.
+  const speech: Speech = detected === "es" ? "es" : (options.language ?? "en");
 
   const base = {
     question,
@@ -145,15 +151,14 @@ async function runTurn(
     confidenceFloor: CONFIDENCE_FLOOR,
     provider: "none",
     route: RAG_ONLY,
+    language: speech,
   };
 
   // FR-24. Answered in English, with the human path, and no partial attempt.
-  if (detectLanguage(question) === "other") {
+  if (detected === "other") {
     return {
       ...base,
-      answer: refusalText(
-        "I can only answer in English today. A person at the plan can help you in your language.",
-      ),
+      answer: refusalText(t("unsupportedLanguage", speech), speech),
       rerankTopScore: Number.NEGATIVE_INFINITY,
       outcome: "refused",
       refusalTrigger: "unsupported_language",
@@ -163,14 +168,14 @@ async function runTurn(
 
   // FR-21. Bucket C is decided before retrieval, so a guarded question never
   // reaches the model and cannot leak a partial answer on its way to refusal.
-  const guard = checkGuardrails(question);
+  const guard = checkGuardrails(question, speech);
   if (guard !== null) {
     return {
       ...base,
       answer:
         guard.kind === "emergency"
-          ? `${guard.explanation}\n\nOnce you are safe, Member Services can help with anything about your plan: ${MEMBER_SERVICES}.`
-          : refusalText(guard.explanation),
+          ? `${guard.explanation}\n\n${t("afterEmergency", speech)} ${MEMBER_SERVICES}.`
+          : refusalText(guard.explanation, speech),
       rerankTopScore: Number.NEGATIVE_INFINITY,
       outcome: "refused",
       refusalTrigger: guard.trigger,
@@ -217,10 +222,19 @@ async function runTurn(
     const memberSources =
       record === null ? [] : record.facts.map((fact) => memberFactAsChunk(record, fact));
 
+    /*
+     * FR-P3-36, D-093. The drug list is published in English only, so it is the
+     * one source a Spanish answer may cite across languages. The mismatch is
+     * stated in the chunk rather than hidden, and it is written as an exception
+     * here rather than by loosening the language scope in retrieval.
+     */
     const structured = route.paths.includes("structured")
-      ? (await lookupDrugs(client, snapshotId, route.drugs)).map((row) =>
-          drugAsChunk(row, snapshotId),
-        )
+      ? (await lookupDrugs(client, snapshotId, route.drugs)).map((row) => {
+          const chunk = drugAsChunk(row, snapshotId);
+          return speech === "es"
+            ? { ...chunk, content: `${chunk.content} ${t("englishDrugList", "es")}` }
+            : chunk;
+        })
       : [];
 
     // D-062: paths are additive, so a question that is both a lookup and a rules
@@ -229,7 +243,13 @@ async function runTurn(
     if (route.paths.includes("rag")) {
       const [vector] = await embed([question]);
       if (vector === undefined) throw new Error("no embedding returned");
-      const pool = await searchHybrid(client, vector, question, scope, CANDIDATE_POOL);
+      const pool = await searchHybrid(
+        client,
+        vector,
+        question,
+        { ...scope, language: corpusLanguage(speech) },
+        CANDIDATE_POOL,
+      );
       prose = (await rerank(question, pool)).slice(0, TOP_K);
     }
     retrieved = [...memberSources, ...structured, ...prose];
@@ -238,9 +258,7 @@ async function runTurn(
     // FR-09 and FR-25: an upstream failure never produces a factual claim.
     return {
       ...base,
-      answer: refusalText(
-        "I am having trouble reaching the plan documents right now, so I cannot answer safely.",
-      ),
+      answer: refusalText(t("upstream", speech), speech),
       rerankTopScore: Number.NEGATIVE_INFINITY,
       outcome: "upstream_failure",
       refusalTrigger: "upstream_failure",
@@ -257,7 +275,7 @@ async function runTurn(
     return {
       ...base,
       retrieved,
-      answer: refusalText(NOT_FOUND),
+      answer: refusalText(t("notFound", speech), speech),
       rerankTopScore: topScore,
       outcome: "refused",
       refusalTrigger: "below_floor",
@@ -270,7 +288,7 @@ async function runTurn(
   // controls. An automated amount-diff detector was removed: it compared amounts
   // from unrelated benefits, and telling the model a conflict existed made it
   // invent one and call a correct document wrong.
-  const prompt = buildStructuredPrompt(question, retrieved);
+  const prompt = buildStructuredPrompt(question, retrieved, speech);
 
   let raw: string;
   let provider: string;
@@ -296,7 +314,7 @@ async function runTurn(
     return {
       ...base,
       retrieved,
-      answer: refusalText("I could not produce an answer right now."),
+      answer: refusalText(t("noAnswer", speech), speech),
       rerankTopScore: topScore,
       outcome: "upstream_failure",
       refusalTrigger: "upstream_failure",
@@ -324,7 +342,7 @@ async function runTurn(
     return {
       ...base,
       retrieved,
-      answer: refusalText(NOT_FOUND),
+      answer: refusalText(t("notFound", speech), speech),
       rerankTopScore: topScore,
       outcome: "refused",
       refusalTrigger: "invalid_payload",
@@ -339,7 +357,7 @@ async function runTurn(
     return {
       ...base,
       retrieved,
-      answer: refusalText(NOT_FOUND),
+      answer: refusalText(t("notFound", speech), speech),
       rerankTopScore: topScore,
       outcome: "refused",
       refusalTrigger: "citation_not_retrieved",
@@ -355,7 +373,7 @@ async function runTurn(
 
   return {
     question,
-    answer: answered || payload.refusal !== null ? renderAnswer(payload, retrieved) : refusalText(NOT_FOUND),
+    answer: answered || payload.refusal !== null ? renderAnswer(payload, retrieved) : refusalText(t("notFound", speech), speech),
     payload,
     retrieved,
     citedIds: [...new Set(payload.claims.flatMap((claim) => claim.citationIds))],
@@ -366,5 +384,6 @@ async function runTurn(
     provider,
     latencyMs,
     route,
+    language: speech,
   };
 }

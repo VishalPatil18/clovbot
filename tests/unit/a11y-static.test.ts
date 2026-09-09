@@ -446,6 +446,8 @@ describe("print output [FR-P2-20]", () => {
   });
 });
 
+const strings = readFileSync("web/src/strings.ts", "utf8");
+
 describe("overlay and interface pass [D-074 to D-078]", () => {
   const app = readFileSync("web/src/App.tsx", "utf8");
 
@@ -551,8 +553,10 @@ describe("overlay and interface pass [D-074 to D-078]", () => {
   });
 
   it("names the voice toggle rather than leaving it an icon", () => {
-    expect(markup).toMatch(/Switch to voice/);
-    expect(markup).toMatch(/Switch to text/);
+    // The label moved into the copy module when the panel gained Spanish.
+    expect(strings).toMatch(/switchToVoice: \["Switch to voice", ".+"\]/);
+    expect(strings).toMatch(/switchToText: \["Switch to text", ".+"\]/);
+    expect(markup).toMatch(/say\("switchToText"\) : say\("switchToVoice"\)/);
     expect(markup).toContain('aria-pressed={mode === "voice"}');
     const mode = rule(".assistant__mode");
     expect(Number(/min-height:\s*var\(--target-min\)/.test(mode))).toBe(1);

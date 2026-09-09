@@ -1,3 +1,5 @@
+import type { Speech } from "./api.ts";
+export type { Speech };
 export type VoiceMode = "text" | "voice";
 
 const MODE_KEY = "clovbot_mode";
@@ -154,4 +156,24 @@ export async function speak(text: string): Promise<Spoken> {
       notify(false);
     },
   };
+}
+
+
+const LANGUAGE_KEY = "clovbot_language";
+
+/** FR-P3-34. Detection seeds it on the first Spanish question; this remembers it. */
+export function readLanguage(): Speech {
+  try {
+    return window.localStorage.getItem(LANGUAGE_KEY) === "es" ? "es" : "en";
+  } catch {
+    return "en";
+  }
+}
+
+export function writeLanguage(speech: Speech): void {
+  try {
+    window.localStorage.setItem(LANGUAGE_KEY, speech);
+  } catch {
+    // Losing the preference is survivable; failing to switch language is not.
+  }
 }

@@ -85,6 +85,7 @@ describe("upstream failures are excluded from the refusal rate [FR-25]", () => {
     faithfulness: 1,
     structural: { compliant: true, uncitedSentences: [] },
     note: "",
+  language: "en" as const,
     ...over,
   });
 

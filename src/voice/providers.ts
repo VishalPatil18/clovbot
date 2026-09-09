@@ -1,3 +1,4 @@
+import type { Speech } from "../i18n.ts";
 import { runChain, type Attempt, type ChainResult } from "./chain.ts";
 
 /**
@@ -30,8 +31,16 @@ async function post(url: string, init: RequestInit): Promise<Response> {
 
 // --- Text to speech ---------------------------------------------------------
 
-async function elevenLabsSpeak(text: string): Promise<Uint8Array> {
-  const voice = required("ELEVENLABS_VOICE_ID");
+/**
+ * A Spanish answer read in an English voice is not an answer this audience can
+ * use, so each provider gets its own Spanish voice. Falls back to the English
+ * one when none is configured, rather than failing the whole chain. FR-P3-35.
+ */
+const voiceFor = (base: string, speech: Speech): string =>
+  (speech === "es" ? optional(`${base}_SPANISH`) : null) ?? required(base);
+
+async function elevenLabsSpeak(text: string, speech: Speech): Promise<Uint8Array> {
+  const voice = voiceFor("ELEVENLABS_VOICE_ID", speech);
   const response = await post(
     `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`,
     {
@@ -46,8 +55,10 @@ async function elevenLabsSpeak(text: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-async function fishAudioSpeak(text: string): Promise<Uint8Array> {
-  const reference = optional("FISH_AUDIO_VOICE_ID");
+async function fishAudioSpeak(text: string, speech: Speech): Promise<Uint8Array> {
+  const reference =
+    (speech === "es" ? optional("FISH_AUDIO_VOICE_ID_SPANISH") : null) ??
+    optional("FISH_AUDIO_VOICE_ID");
   const response = await post("https://api.fish.audio/v1/tts", {
     method: "POST",
     headers: {
@@ -71,14 +82,14 @@ export type SpeechResult = ChainResult<Uint8Array | null>;
  * body: there is nothing to send, and the page speaks the text itself. That tier
  * cannot run out of credits, which is the point of it.
  */
-export function speak(text: string): Promise<SpeechResult> {
+export function speak(text: string, speech: Speech = "en"): Promise<SpeechResult> {
   const attempts: Attempt<Uint8Array | null>[] = [];
 
   if (optional("ELEVENLABS_API_KEY") !== null) {
-    attempts.push({ provider: "elevenlabs", run: () => elevenLabsSpeak(text) });
+    attempts.push({ provider: "elevenlabs", run: () => elevenLabsSpeak(text, speech) });
   }
   if (optional("FISH_AUDIO_API_KEY") !== null) {
-    attempts.push({ provider: "fishaudio", run: () => fishAudioSpeak(text) });
+    attempts.push({ provider: "fishaudio", run: () => fishAudioSpeak(text, speech) });
   }
   attempts.push({ provider: "browser", run: async () => null });
 
