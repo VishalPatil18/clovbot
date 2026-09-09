@@ -562,6 +562,9 @@ async function handleAsk(
   }
 
   const client = connect();
+  // Instrumentation runs after the answer is on screen. A failure there must not
+  // replace a delivered answer with an error the member cannot act on.
+  let delivered = false;
   try {
     await client.connect();
 
@@ -632,6 +635,7 @@ async function handleAsk(
       staleness: stale,
       latencyMs: turn.latencyMs,
     });
+    delivered = true;
 
     const turnId = await writeTurn(client, {
       question: turn.question,
@@ -667,13 +671,11 @@ async function handleAsk(
       });
     }
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     // FR-25: an upstream failure is an explicit error state with the human path,
     // never a silent degrade into an uncited answer.
-    send(res, {
-      type: "error",
-      message: "Something went wrong reaching the plan documents.",
-      detail: error instanceof Error ? error.message : String(error),
-    });
+    if (delivered) console.error(`turn instrumentation failed: ${detail}`);
+    else send(res, { type: "error", message: "Something went wrong reaching the plan documents.", detail });
   } finally {
     await client.end().catch(() => {});
     res.end();

@@ -28,6 +28,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - While an answer is being prepared, the assistant says what it is doing at each step rather than showing one unchanging line.
 - The question box now grows to four lines as you type and holds a much longer question.
 - You can play an answer aloud and scroll back through the written version at the same time.
+- Every quality check now runs in one pass and reports together: answer faithfulness, which retrieval path each question took, whether sign-in was asked for correctly in both directions, and whether any earlier measure has slipped. A drop in any of them fails the build.
 - Ask something only your own record can answer while signed out, and the assistant now says so plainly and offers to sign you in, rather than refusing or guessing. Sign in and it answers the question you already asked, without you retyping it. Questions the plan documents can answer are never put behind a sign-in.
 - You can sign in without a password. Enter your email, get a six-digit code, and type or paste it in - all inside the assistant, so the conversation you were having is still there afterwards. The code works once and lasts ten minutes.
 - While signed in, the assistant says who you are signed in as, and one tap signs you out. Signing out removes anything about your own record from the conversation saved on that device, and leaves the general answers.
@@ -37,6 +38,9 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Fixed
 
+- Asking something only your own record can answer showed the sign-in card and then replaced it with "Something went wrong reaching the plan documents." The answer was right; recording the question failed, and the failure was shown instead of the answer.
+- The sign-in card now opens under the question that needs it rather than at the top of the conversation, where a second question pushed it off screen. It closes with an **X** at its top right, and asking something else closes it too.
+- A code that does not match now reads as an error, in red, rather than in the same colour as everything else on the card.
 - Statin citations named the wrong drug class. Ten drugs under "ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS" were indexed and cited under the class listed above them, so an answer about atorvastatin pointed a member at the wrong part of the drug list. The tier was right; the source line was not.
 
 ### Removed

@@ -153,9 +153,11 @@ export function Assistant({
   const [corpusDate, setCorpusDate] = useState<string | null>(null);
   const [voiceReset, setVoiceReset] = useState(0);
   const [signedInAs, setSignedInAs] = useState<string | null>(null);
-  const [signingIn, setSigningIn] = useState(false);
-  /** FR-P2-46. Held across the login detour and asked again on return. */
-  const [heldQuestion, setHeldQuestion] = useState<string | null>(null);
+  /**
+   * FR-P2-46. The id of the turn the sign-in was asked for, so the form sits
+   * under that question and its text is what gets asked again on return.
+   */
+  const [signingInFor, setSigningInFor] = useState<number | null>(null);
   const [stage, setStage] = useState<Stage | null>(null);
   const [stageElapsed, setStageElapsed] = useState(0);
   const reduceMotion = useReducedMotion();
@@ -191,6 +193,7 @@ export function Assistant({
       setPlanPrompt(null);
       setCallback(null);
       setLimited(null);
+      setSigningInFor(null);
       setStage("retrieving");
       setTurns((previous) => [
         ...previous,
@@ -212,8 +215,7 @@ export function Assistant({
 
       const apply = (event: AskEvent): void => {
         if (event.type === "answer" && event.outcome === "needs_login") {
-          setHeldQuestion(trimmed);
-          setSigningIn(true);
+          setSigningInFor(id);
         }
         if (event.type === "needs_plan") {
           setPlanOptions(event.plans);
@@ -376,9 +378,8 @@ export function Assistant({
    */
   const resumeAfterLogin = (name: string): void => {
     setSignedInAs(name);
-    setSigningIn(false);
-    const pending = heldQuestion;
-    setHeldQuestion(null);
+    const pending = turns.find((turn) => turn.id === signingInFor)?.question ?? null;
+    setSigningInFor(null);
     if (pending === null) return;
     setTurns((previous) => previous.filter((turn) => turn.outcome !== "needs_login"));
     void submit(pending, plan);
@@ -586,18 +587,7 @@ export function Assistant({
       </header>
 
       <div className="assistant__scroll">
-        {/* FR-P2-23. An expandable region, not a dialog: tab passes through and out,
-          so nothing is trapped and Escape is unnecessary. D-071. */}
-        {signingIn && signedInAs === null && (
-        <SignIn
-          onSignedIn={resumeAfterLogin}
-          onCancel={() => {
-            setSigningIn(false);
-            setHeldQuestion(null);
-          }}
-        />
-      )}
-      {helpOpen && (
+        {helpOpen && (
           <section
             id="assistant-help"
             className="help"
@@ -730,18 +720,24 @@ export function Assistant({
               ) : turn.outcome === "needs_login" ? (
                 <div className="turn__answer turn__answer--needs-login">
                   <p>{turn.answer}</p>
-                  {signedInAs === null && (
-                    <button
-                      type="button"
-                      className="button button--primary"
-                      onClick={() => {
-                        setHeldQuestion(turn.question);
-                        setSigningIn(true);
-                      }}
-                    >
-                      <IoLockClosedOutline aria-hidden="true" /> Sign in and answer this
-                    </button>
-                  )}
+                  {/* FR-P2-23. An expandable region under the question that needs
+                      it, not a dialog: tab passes through and out, so nothing is
+                      trapped and Escape is unnecessary. D-071. */}
+                  {signedInAs === null &&
+                    (signingInFor === turn.id ? (
+                      <SignIn
+                        onSignedIn={resumeAfterLogin}
+                        onCancel={() => setSigningInFor(null)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => setSigningInFor(turn.id)}
+                      >
+                        <IoLockClosedOutline aria-hidden="true" /> Sign in and answer this
+                      </button>
+                    ))}
                 </div>
               ) : (
                 <div

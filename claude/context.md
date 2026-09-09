@@ -530,3 +530,46 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** the keyboard and screen-reader pass over the login flow, still needing P3's browser tooling. Row-level security is P3-01.
 
 **Next:** Stage 8, auth-tier eval and deploy - the last stage of P2.
+
+## 2026-09-09 - P2 Stage 8: auth-tier eval, and P2 complete
+
+**Did:** Bucket B rewritten against the authenticated tier, a login-detection gate and a P1 regression gate folded into the one eval run, and the deploy prepared. P2's eight stages are built.
+
+**Files:** changed `eval/golden/golden-set.json`, `eval/harness/run.ts`, `scripts/deploy-api.sh`, `README.md`, plus two test files.
+
+**One run, four reports:** answers (faithfulness 0.963, structural 100%, refusal 10.0%, A 37/40, B 8/8, C 10/10), router (1.000, zero missed), login detection (34 cases, zero false negatives, zero false positives), and the regression gate (all floors met). CI runs this on every pull request, and the harness exits non-zero on any of the three gates. 669 tests pass.
+
+**What building it surfaced:**
+
+- **Bucket B was stale.** All eight cases expected a refusal, which was P1's behaviour before a login existed. Five now expect `needs_login`; three stay refusals because no refill date, ID card or payment record is stored, so a login would not help. FR-P2-42 is narrowed, in writing, to fields actually held.
+- **A floor of 0.90 does not catch a regression from 1.000.** The gate now sits one case below the measured baseline, with the measurement written beside the number.
+- **The faithfulness dips are not variance.** A-21 in three of six runs, PAIR-03b once, both adding a clause the cited chunk does not state - "before the drug will be covered", "waived if you are admitted". The judge is right; this is an answer-quality issue about unsupported glosses, not flakiness to tune away.
+- **The gate is tight on purpose.** 0.963 against a 0.96 floor. Raising it when it next fails would be moving the goalposts.
+
+**Open:** FR-P2-53, the deployed flow, waits on the user applying migrations 005 to 009 and running the deploy. The keyboard and screen-reader pass over the login flow still needs P3's browser tooling. Row-level security is P3-01.
+
+**Next:** P3, or a v1.1.0 release cut.
+
+## 2026-09-09 - Four bugs from the manual test pass
+
+**Did:** fixed what a browser pass over Stages 6 to 8 found. Two were real defects, two were the sign-in surface being in the wrong place and the wrong colour.
+
+**Files:** added `migrations/010_needs_login_outcome.sql` and `tests/unit/migration-turn-outcomes.test.ts`; changed `src/server.ts`, `web/src/components/Assistant.tsx`, `web/src/components/SignIn.tsx`, `web/src/app.css`, `tests/unit/signin-surface.test.ts`, `README.md`. 675 tests pass.
+
+**The one that mattered:** a gated question rendered its sign-in card and then replaced it with "Something went wrong reaching the plan documents." `turns_outcome_check` predates `needs_login`, so the insert was rejected:
+
+```
+new row for relation "turns" violates check constraint "turns_outcome_check"
+```
+
+Two faults, not one. The constraint is the cause; migration 010 widens it. But the answer had already streamed, so a failure in the instrumentation that follows it destroyed a correct answer. `/api/ask` now logs a post-delivery failure server-side instead of sending an error event over the top of what the member is reading.
+
+**What building it surfaced:**
+
+- **A typed union and a check constraint drifted apart silently.** `TurnRecord.outcome` gained a fourth member in Stage 7 and nothing failed, because the constraint lives in SQL that TypeScript cannot see. The regression test now reads the union out of `store.ts` and asserts the migration covers every member of it, so the next outcome added cannot repeat this.
+- **The error only appeared in a browser.** The eval harness and every test call `answerTurn` directly; only the server writes a turn row. A path with no test coverage was the one the member hit first.
+- **Placement was the bug, not the scroll.** The form at the top of the thread was invisible after a second question. Anchoring it to the gated turn also deleted `heldQuestion`: the turn already holds the question. D-089.
+
+**Open:** unchanged. FR-P2-53 waits on the user applying migrations 005 to 010 and running the deploy.
+
+**Next:** the user re-runs the browser pass with migration 010 applied.

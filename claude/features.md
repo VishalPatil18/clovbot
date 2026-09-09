@@ -1426,3 +1426,46 @@ Classifier, outcome, turn wiring, web offer and resume, eval set and gate, verif
 **The rules needed adjacency, not proximity.** Two bugs in the first draft, both from matching a possessive anywhere in the sentence: "what is my copay for a specialist **visit**" was gated as an appointment, and "what is the status of **my prior authorization**" was let through because the general-phrasing exception swallowed it. Requiring the possessive to sit directly on the noun fixes both, and both are now cases in the set.
 
 **A mistake I had already made once and repeated.** `LOGIN_FALSE_POSITIVE_FLOOR` was declared below the top-level call that reads it, so the eval ran all 60 cases and then threw - exactly the `ROUTING_FLOOR` fault from Stage 2, which is recorded in `learnings.md`. Reading my own learnings file would have been faster than rediscovering it.
+
+---
+
+## Feature: Auth-tier eval and deploy (P2 Stage 8)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-09, minus the deployed check |
+| Cycle            | 19                               |
+| Stage of plan.md | `plan-p2.md` Stage 8             |
+| Requirements     | `srs-p2.md` FR-P2-49 to FR-P2-53 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Topics the record cannot answer | Do not gate them; a login that ends in a refusal is worse |
+| 2 | Who deploys | The user; I prepare the runbook and verify everything else |
+| 3 | Public login exposure | Ship it, the rate limit is the control |
+| 4 | How to gate a P1 regression given measured variance | One case below the baseline, with the measurement recorded (D-088) |
+
+### Phase 2 to 5
+
+D-088. Bucket B splits: five cases now expect `needs_login` with their record topic; three stay refusals because no refill date, ID card or payment record is stored, so a login would not help. That is a stated narrowing of FR-P2-42 to fields actually held.
+
+### Phase 6 - Writing Code
+
+**One run now prints four reports**, satisfying FR-P2-51:
+
+| Report | Result |
+| --- | --- |
+| Answers | faithfulness 0.963, structural 100%, refusal 10.0%, A 37/40, B **8/8**, C 10/10 |
+| Router | 1.000, zero drug questions reaching prose alone |
+| Login detection | 34 cases, **0 false negatives**, **0 false positives** |
+| Regression gate | every P1 metric at or above its floor |
+
+Bucket B at 8/8 is the live proof of Stage 7: five member questions gated, three refused, all matching hand-pinned expectations.
+
+**CI already runs the eval, so the gates bind.** The harness exits non-zero on a routing breach, a login breach, or a P1 regression, and `.github/workflows/ci.yml` runs it on every pull request. `scripts/deploy-api.sh` now forwards the three login secrets inside the separator-safe loop - forgetting one would deploy a login that silently cannot send mail.
+
+**The faithfulness dips are not noise.** A-21 has scored 0 in three of six runs and PAIR-03b scored 0.667 once. Both add a clause the cited chunk does not state. The judge is doing its job; this is recorded as an answer-quality issue, and the gate was set to tolerate one such case rather than to hide them.
+
+**Not verified: FR-P2-53.** The deployed signed-out to signed-in to answered flow needs migrations 005 through 009 applied to production and a deploy, both of which are the user's to run. The runbook is in `README.md`. The same flow is verified locally over HTTP.

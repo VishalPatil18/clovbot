@@ -30,6 +30,27 @@ describe("inline sign-in [FR-P2-33, FR-P2-34]", () => {
     expect(signin).toContain("Send a new code");
   });
 
+  it("closes from the card itself, on either step", () => {
+    expect(signin).toMatch(/className="assistant__icon-button" onClick=\{onCancel\}/);
+    expect(signin).toContain("Close sign in");
+  });
+
+  // The form belongs to the question that needs it. At the top of the thread it
+  // pushed the conversation off screen and read as unrelated to anything.
+  it("opens under the turn that asked for it", () => {
+    expect(assistant).toMatch(/turn__answer--needs-login[\s\S]*?signingInFor === turn\.id[\s\S]*?<SignIn/);
+    expect(assistant.match(/<SignIn/g)).toHaveLength(1);
+  });
+
+  // An ignored form must not stay open above the answer to the next question.
+  it("dismisses an ignored form when the next question is asked", () => {
+    expect(assistant).toMatch(/const submit = useCallback\([\s\S]*?setSigningInFor\(null\)/);
+  });
+
+  it("shows a rejected code in the danger colour, not the body colour", () => {
+    expect(rule(".signin__error")).toContain("#7a1f1f");
+  });
+
   it("announces the outcome to a screen reader", () => {
     expect(signin).toMatch(/role="status"/);
     expect(signin).toMatch(/role="alert"/);

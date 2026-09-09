@@ -947,6 +947,13 @@
   display: grid; gap: var(--spacing-8);
 }
 
+.signin__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--spacing-8);
+  /* Pulls the 44px target back into the card's own padding. */
+  margin: calc(var(--spacing-8) * -1) calc(var(--spacing-8) * -1) 0 0;
+}
+
 .signin__title {
   margin: 0; display: flex; align-items: center; gap: var(--spacing-8);
   font-size: var(--text-subheading); font-family: var(--font-display);
@@ -974,8 +981,20 @@
 .signin__input--code { letter-spacing: 0.35em; font-variant-numeric: tabular-nums; }
 
 .signin__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
-.signin__notice, .signin__error { margin: 0; font-size: var(--text-body); line-height: 1.45; }
-.signin__error { color: var(--color-forest-ink); font-weight: var(--font-weight-semibold); }
+.signin__notice { margin: 0; font-size: var(--text-body); line-height: 1.45; }
+
+/* A wrong code is a dead end until it reads as one. Same danger red the
+   callback and voice surfaces already use. */
+.signin__error {
+  margin: 0; font-size: var(--text-body); line-height: 1.45;
+  display: flex; align-items: flex-start; gap: var(--spacing-8);
+  padding: var(--spacing-8) var(--spacing-12);
+  border-radius: var(--radius-sm);
+  background: #fdeceb; color: #7a1f1f;
+  font-weight: var(--font-weight-semibold);
+}
+
+.signin__error svg { flex-shrink: 0; font-size: var(--text-subheading); }
 
 .meta-chip--signed { background: var(--color-mint-veil); border-color: var(--color-sage-mist); }
 
@@ -986,3 +1005,9 @@
   display: grid; gap: var(--spacing-12); justify-items: start;
 }
 .turn__answer--needs-login p { margin: 0; font-size: var(--text-message); line-height: var(--leading-message); }
+
+/* The form belongs to the question above it. Paper on keylime so the card
+   inside the invitation does not read as one flat block. */
+.turn__answer--needs-login .signin {
+  width: 100%; background: var(--color-cream-paper);
+}

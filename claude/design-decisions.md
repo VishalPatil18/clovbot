@@ -3234,6 +3234,87 @@ Both are fixed by requiring the possessive to sit directly on the noun. "my prio
 
 ---
 
+## Decision D-088 - The regression gate sits one case below the measured baseline
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 8 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-52` requires CI to fail on any regression in a P1 metric, and `NFR-P2-04` pins faithfulness at 1.000. CI's existing floor is P1's 0.90, which would let a slide from 1.000 to 0.91 pass silently.
+
+But faithfulness moves on its own. Across six runs with no code change, A-21 scored 0 three times, and PAIR-03b once scored 0.667. One case of thirty-six is 0.028, so a gate at 1.000 would fail the build on a single flip.
+
+### Options considered
+
+1. Gate one case below the measured baseline, and record the measurement.
+2. Gate strictly at 1.000 and change the case that keeps flipping.
+3. Keep the 0.90 floor and report the baseline without gating it.
+
+### Decision
+
+Option 1. Faithfulness floors at 0.96, bucket A at 36/40, structural at 1, refusal at 0.20. One flip passes; two do not.
+
+### Rationale
+
+Option 3 is the gap `NFR-P2-04` exists to close. Option 2 means editing a case because it fails, which is selecting the result rather than measuring it.
+
+The tolerance is one case wide, and the measurement that justifies it sits in the code beside the number rather than being a round figure someone chose.
+
+### What the flipping actually is
+
+Not noise, on inspection. Both cases share a pattern: the model adds a clause its cited chunk does not state - "before the drug will be covered", "waived if you are admitted". The judge is correctly refusing to support them. This is an answer-quality signal about unsupported glosses, recorded as such rather than tuned away.
+
+### Consequences
+
+- The gate is tight. The last run measured 0.963 against a 0.96 floor; a third simultaneous dip would fail it.
+- Raising the floor when it next fails would be moving the goalposts. The correct response is to look at what the model added.
+
+---
+
+## Decision D-089 - The sign-in form is anchored to the turn that needs it
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 bug fixes, manual test pass |
+| Status | accepted |
+| Supersedes | the placement half of D-071 |
+
+### Context
+
+The form rendered at the top of the scroll region, above the help panel and above every turn. Manual testing found the failure that placement guarantees: after a second question, the card sat off screen above the conversation, so the member had to scroll up or zoom out to find the thing the answer had just asked them to do. It also stayed open above the next answer, reading as unrelated to anything.
+
+### Options considered
+
+1. Anchor the form inside the turn that was gated, under that question's answer.
+2. Keep it at the top and scroll it into view whenever it opens.
+3. Make it a modal over the conversation.
+
+### Decision
+
+Option 1, plus two rules: a new question closes an open form, and a close control sits at the top right of the card on both steps.
+
+### Rationale
+
+Option 2 treats the symptom. The card is still detached from the question it belongs to, and a second gated question has no way to say which one it means.
+
+Option 3 is the pattern D-071 rejected for help, for the same reason: it covers the conversation the member is trying to keep, and it needs a focus trap and an Escape handler that an inline region does not.
+
+Anchoring also removes a duplicate state. `heldQuestion` existed only to carry the gated question across the detour; the anchored turn already holds it, so the question asked on return is read from the turn rather than from a second copy that could disagree with it.
+
+### Consequences
+
+- Two gated questions can each carry their own form, and only one can be open, because the anchor is a turn id rather than a boolean.
+- The card is paper-coloured inside the keylime invitation. Same colour on same colour read as one flat block.
+- Focus moves into the form when it opens, which is also what scrolls it into view.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

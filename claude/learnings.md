@@ -243,3 +243,25 @@ _<How this concept will apply to future work in this project.>_
 **Never average two errors that cost different things.** Answering a member's question without knowing who they are, and putting a public question behind a login wall, are both classifier errors and nothing else about them is alike. One is gated at zero and the other at 95%, reported separately, because a single accuracy figure would let the severe one hide behind the harmless one.
 
 **Read your own learnings file before repeating what is in it.** A const declared below its top-level call site threw after all sixty eval cases had run. The identical fault, in the identical file, is written up two stages earlier. The notes only pay off if they are consulted before the code, not after the failure.
+
+## P2 Stage 8 - what closing the tier taught
+
+**Test expectations rot when behaviour is added, not just when it changes.** All eight bucket B cases expected a refusal, which was correct until a login existed. Nothing failed - the cases still passed - and they had quietly stopped describing what the product should do. New capability is a reason to reread old expectations.
+
+**A floor is not a regression gate.** CI failed below 0.90 while the real number was 1.000, so a slide to 0.91 would have passed silently. The gate has to know the baseline, not just the disaster line.
+
+**Set a tolerance from a measurement, and write the measurement next to it.** The faithfulness floor is one case below the baseline because one case is 0.028 and a single flip should not fail a build. That is defensible. A round number chosen because it felt safe would not be, and would drift upward every time it failed.
+
+**Look at what keeps failing before deciding it is noise.** Two cases dipping across six runs looked like judge variance. Both turned out to add a clause the cited chunk does not state. The judge was right each time, and calling it flakiness would have thrown away a real signal about the model glossing beyond its source.
+
+**Do not gate a question the system cannot answer either way.** A refill date is member-specific by any definition, and we store none. Gating it walks a member through a login to reach the same refusal. The rule became "fields we actually hold", and that narrowing is written down rather than left as an unexplained gap against the requirement.
+
+## P2 manual test pass - what a browser found that 669 tests did not
+
+**A TypeScript union and a SQL check constraint drift apart in silence.** `TurnRecord.outcome` gained `needs_login` in Stage 7, the type checker was satisfied, every test passed, and the database rejected the row on the first real question. Nothing in the type system reaches into a constraint written in a migration. The regression test now reads the union out of the source and asserts the migration covers each member, so the two are checked against each other rather than trusted to stay aligned.
+
+**Cover the layer nothing else exercises.** The eval harness and the unit tests call `answerTurn` directly. Only the HTTP server writes a turn row, so the write path had no coverage at all, and it was the first thing a member touched. The gap was not in the hard part; it was in the plumbing around it.
+
+**A failure after the answer is a different failure.** The answer had already streamed when the insert threw, and the catch sent an error event over the top of it. The member watched a correct, cited answer turn into "something went wrong". Once output is delivered, an error in what follows is an operator's problem, not the reader's.
+
+**Manual testing finds placement bugs that a static test cannot see.** Every assertion about the sign-in form passed while it was rendering above the fold of a scrolled conversation. "Is it in the document" and "can the member see it" are different questions, and only one of them was being asked.

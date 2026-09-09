@@ -15,6 +15,51 @@ const ROUTING_FLOOR = 0.9;
 /** NFR-P2-02. False positives are gated; false negatives are not tolerated. */
 const LOGIN_FALSE_POSITIVE_FLOOR = 0.95;
 
+/*
+ * NFR-P2-04. Regression floors, set one case below the measured baseline rather
+ * than at it.
+ *
+ * A-21's faithfulness has scored 0 in two of six runs with no code change: the
+ * model sometimes adds "before the drug will be covered", which its cited chunk
+ * does not say. One case of 36 is 0.028, so a strict 1.000 gate would fail the
+ * build on that alone. One flip passes here; two do not.
+ */
+const BASELINE = {
+  faithfulness: 0.96,
+  structural: 1,
+  refusalRate: 0.2,
+  buckets: { A: 36 / 40, B: 8 / 8, C: 10 / 10 },
+} as const;
+
+function checkRegression(report: ReturnType<typeof buildReport>): boolean {
+  const failures: string[] = [];
+  // Null means nothing was judged, which is itself a reason not to pass.
+  if (report.faithfulness === null || report.faithfulness < BASELINE.faithfulness) {
+    failures.push(
+      `faithfulness ${report.faithfulness?.toFixed(3) ?? "not measured"} below ${String(BASELINE.faithfulness)}`,
+    );
+  }
+  if (report.structuralCompliance < BASELINE.structural) {
+    failures.push(`structural compliance ${report.structuralCompliance.toFixed(3)} below 1`);
+  }
+  if (report.refusalRate > BASELINE.refusalRate) {
+    failures.push(`refusal rate ${report.refusalRate.toFixed(3)} above ${String(BASELINE.refusalRate)}`);
+  }
+  for (const bucket of report.buckets) {
+    const floor = BASELINE.buckets[bucket.bucket as keyof typeof BASELINE.buckets];
+    if (floor === undefined || (bucket.accuracy ?? 0) >= floor) continue;
+    failures.push(`bucket ${bucket.bucket} ${bucket.passed}/${bucket.total} below its floor`);
+  }
+
+  console.log("\n=== Regression gate (NFR-P2-04) ===");
+  if (failures.length === 0) {
+    console.log("  every P1 metric is at or above its floor");
+    return false;
+  }
+  for (const failure of failures) console.log(`  REGRESSION: ${failure}`);
+  return true;
+}
+
 interface GoldenCase {
   id: string;
   bucket: Bucket;
@@ -23,7 +68,9 @@ interface GoldenCase {
   planRef: PlanRef;
   enforced: boolean;
   expect: {
-    outcome: "answered" | "refused";
+    outcome: "answered" | "refused" | "needs_login";
+    /** Which kind of record data the login is for. FR-P2-49. */
+    recordTopic?: string;
     keyFact?: string | string[];
     sourceDocument?: string;
     mustCite?: boolean;
@@ -63,9 +110,10 @@ const login = scoreLogin();
 
 const report = buildReport(outcomes);
 print(report, outcomes);
+const regressed = checkRegression(report);
 persist(report, outcomes);
 
-if (report.failures.length > 0 || routing.failed || login.failed) process.exit(1);
+if (report.failures.length > 0 || routing.failed || login.failed || regressed) process.exit(1);
 
 async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
   const turn = await answerTurn(client, testCase.question, {
@@ -94,7 +142,7 @@ async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
     faithfulness = judged.score;
   }
 
-  const passed = evaluate(testCase, { answer: turn.answer, refused, structural });
+  const passed = evaluate(testCase, { answer: turn.answer, refused, outcome: turn.outcome, structural });
   process.stdout.write(`${passed ? "pass" : "FAIL"}${testCase.enforced ? "" : " (not enforced)"}\n`);
 
   return {
@@ -113,8 +161,20 @@ async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
 
 function evaluate(
   testCase: GoldenCase,
-  actual: { answer: string; refused: boolean; structural: { compliant: boolean } },
+  actual: {
+    answer: string;
+    refused: boolean;
+    outcome: string;
+    structural: { compliant: boolean };
+  },
 ): boolean {
+  /*
+   * FR-P2-49. A gated turn is neither answered nor refused: it offered a login.
+   * Checked before the refusal branch, because a needs_login turn is not
+   * refused and would otherwise read as a failure.
+   */
+  if (testCase.expect.outcome === "needs_login") return actual.outcome === "needs_login";
+  if (actual.outcome === "needs_login") return false;
   if (testCase.expect.outcome === "refused") return actual.refused;
   if (actual.refused) return false;
   if (testCase.expect.mustCite === true && !actual.structural.compliant) return false;

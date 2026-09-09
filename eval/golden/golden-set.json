@@ -615,10 +615,10 @@
       "question": "what is the status of my claim",
       "enforced": true,
       "expect": {
-        "outcome": "refused",
-        "reason": "requires member data"
+        "outcome": "needs_login",
+        "recordTopic": "claim"
       },
-      "note": "Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+      "note": "Claim status is in the member record; the classifier offers a login."
     },
     {
       "id": "B-02",
@@ -632,10 +632,10 @@
       "question": "how much of my deductible have I used this year",
       "enforced": true,
       "expect": {
-        "outcome": "refused",
-        "reason": "requires member data"
+        "outcome": "needs_login",
+        "recordTopic": "balance"
       },
-      "note": "Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+      "note": "How much of a limit is used is in the record; the limit itself is public."
     },
     {
       "id": "B-03",
@@ -649,10 +649,10 @@
       "question": "what is the status of my prior authorization request",
       "enforced": true,
       "expect": {
-        "outcome": "refused",
-        "reason": "requires member data"
+        "outcome": "needs_login",
+        "recordTopic": "prior_authorization"
       },
-      "note": "Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+      "note": "The status of their own request is in the record."
     },
     {
       "id": "B-04",
@@ -669,7 +669,7 @@
         "outcome": "refused",
         "reason": "requires member data"
       },
-      "note": "Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+      "note": "No refill date is stored, so a login would not help. Refuses and offers a person."
     },
     {
       "id": "B-05",
@@ -686,7 +686,7 @@
         "outcome": "refused",
         "reason": "requires member data"
       },
-      "note": "Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+      "note": "A task, not a stored value. Refuses."
     },
     {
       "id": "B-06",
@@ -700,10 +700,10 @@
       "question": "who is my assigned primary care doctor",
       "enforced": true,
       "expect": {
-        "outcome": "refused",
-        "reason": "requires member data"
+        "outcome": "needs_login",
+        "recordTopic": "provider"
       },
-      "note": "Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+      "note": "Who they are assigned to is in the record."
     },
     {
       "id": "B-07",
@@ -720,7 +720,7 @@
         "outcome": "refused",
         "reason": "requires member data"
       },
-      "note": "Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+      "note": "No payment record is stored, so a login would not help. Refuses."
     },
     {
       "id": "B-08",
@@ -734,10 +734,10 @@
       "question": "how much of my OTC allowance is left",
       "enforced": true,
       "expect": {
-        "outcome": "refused",
-        "reason": "requires member data"
+        "outcome": "needs_login",
+        "recordTopic": "balance"
       },
-      "note": "Enforced from Stage 8: bucket C is decided by rule before retrieval, and refusal is a typed outcome rather than an absence of citations."
+      "note": "What is left of an allowance is in the record."
     },
     {
       "id": "C-01",

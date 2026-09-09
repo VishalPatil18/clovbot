@@ -95,3 +95,21 @@ describe("the server refuses to start on a broken environment", () => {
     expect(result.status).not.toBe(0);
   });
 });
+
+describe("Stage 6 secrets reach the deployed service", () => {
+  const script = readFileSync("scripts/deploy-api.sh", "utf8");
+
+  // Forgetting one of these deploys a login that silently cannot send mail.
+  it("forwards every variable the login flow needs", () => {
+    for (const name of ["RESEND_API_KEY", "OTP_FROM_ADDRESS", "OPERATOR_MEMBER_EMAILS"]) {
+      expect(script, name).toContain(name);
+    }
+  });
+
+  // The separator-safe loop is the one listing names, not the required-vars check.
+  it("keeps them inside the separator-safe loop rather than appending by hand", () => {
+    const loop = /for name in DATABASE_URL([\s\S]*?); do/.exec(script)?.[1] ?? "";
+    expect(loop).toContain("RESEND_API_KEY");
+    expect(loop).toContain("OPERATOR_MEMBER_EMAILS");
+  });
+});

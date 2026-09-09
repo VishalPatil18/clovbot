@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { IoLockClosedOutline, IoMailOutline } from "react-icons/io5";
+import {
+  IoAlertCircleOutline,
+  IoClose,
+  IoLockClosedOutline,
+  IoMailOutline,
+} from "react-icons/io5";
 import { requestLoginCode, verifyLoginCode } from "../api.ts";
 
 interface Props {
@@ -47,9 +52,16 @@ export function SignIn({ onSignedIn, onCancel }: Props): React.JSX.Element {
 
   return (
     <section className="signin" aria-label="Sign in">
-      <h3 className="signin__title">
-        <IoLockClosedOutline aria-hidden="true" /> Sign in to see your own details
-      </h3>
+      <div className="signin__head">
+        <h3 className="signin__title">
+          <IoLockClosedOutline aria-hidden="true" /> Sign in to see your own details
+        </h3>
+        {/* The one dismissal that exists on both steps. */}
+        <button type="button" className="assistant__icon-button" onClick={onCancel}>
+          <IoClose aria-hidden="true" />
+          <span className="visually-hidden">Close sign in</span>
+        </button>
+      </div>
       <p className="signin__body">
         We email you a six-digit code. There is no password to remember.
       </p>
@@ -72,6 +84,7 @@ export function SignIn({ onSignedIn, onCancel }: Props): React.JSX.Element {
             value={email}
             autoComplete="email"
             required
+            autoFocus
             onChange={(event) => setEmail(event.target.value)}
           />
           <div className="signin__actions">
@@ -104,6 +117,7 @@ export function SignIn({ onSignedIn, onCancel }: Props): React.JSX.Element {
             value={code}
             maxLength={12}
             required
+            autoFocus
             onChange={(event) => setCode(event.target.value)}
           />
           <div className="signin__actions">
@@ -129,6 +143,7 @@ export function SignIn({ onSignedIn, onCancel }: Props): React.JSX.Element {
       )}
       {error !== null && (
         <p className="signin__error" role="alert">
+          <IoAlertCircleOutline aria-hidden="true" />
           {error}
         </p>
       )}

@@ -187,16 +187,16 @@
 - **Scope in:** Golden set extended with bucket B questions and both classifier directions. Router accuracy folded into the eval report. CI gates updated. Deployment of the full P2 surface.
 - **Scope out:** Nothing.
 - **Acceptance criteria:**
-  - [ ] The golden set covers bucket B drivers with expected record sources pinned by hand.
-  - [ ] Classifier accuracy in both directions is a reported and gated metric.
-  - [ ] Router accuracy from Stage 2 is reported in the same output.
-  - [ ] Faithfulness on the extended set stays at or above 0.90.
-  - [ ] CI fails on any regression in the P1 metrics.
-  - [ ] The deployed system completes a full signed-out to signed-in to answered flow.
+  - [x] The golden set covers bucket B drivers with expected record sources pinned by hand. Five now expect `needs_login` with their record topic; three stay refusals because no such field is stored, and a login would not help.
+  - [x] Classifier accuracy in both directions is a reported and gated metric. 0 false negatives against zero tolerance, 0 false positives against a 95% floor, 34 cases, never aggregated.
+  - [x] Router accuracy from Stage 2 is reported in the same output. 1.000, zero structured misses.
+  - [x] Faithfulness on the extended set stays at or above 0.90. Measured 0.963.
+  - [x] CI fails on any regression in the P1 metrics. A regression gate set one case below the measured baseline, with the measurement recorded beside it.
+  - [-] The deployed system completes a full signed-out to signed-in to answered flow. **Not verified.** Migrations and the deploy are the user's to run; the runbook is in `README.md`. The flow is verified locally over HTTP.
 - **Test plan:** Full eval against the deployed system. Regression assertion that P1 numbers did not degrade, since the added surface area is where regressions hide.
 - **Effort:** S
-- **Exit signal:** One eval run reports P1 and P2 metrics together, and all gates are green.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Exit signal:** One eval run reports P1 and P2 metrics together, and all gates are green. Met: one run prints the answer report, the router report, the login report and the regression gate.
+- **Status:** [x] done, 2026-09-09, except the deployed verification, which waits on the user running the migrations and the deploy.
 
 ---
 
@@ -209,7 +209,7 @@
 - [x] Stage 5 - Synthetic member records
 - [x] Stage 6 - Email OTP authentication (accessibility pass outstanding)
 - [x] Stage 7 - Login detection and member answering
-- [ ] Stage 8 - Auth-tier eval and deploy
+- [x] Stage 8 - Auth-tier eval and deploy (deployed verification outstanding)
 
 ---
 
