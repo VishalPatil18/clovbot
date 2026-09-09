@@ -6,8 +6,27 @@ describe("detectLanguage [FR-24]", () => {
     expect(detectLanguage("what is my copay for a specialist visit")).toBe("en");
   });
 
-  it("identifies Spanish as unsupported", () => {
-    expect(detectLanguage("cual es mi copago para una visita al especialista")).toBe("other");
+  // FR-P3-42 amends FR-24: Spanish is answered, every other language is not.
+  it("identifies Spanish as Spanish", () => {
+    expect(detectLanguage("cual es mi copago para una visita al especialista")).toBe("es");
+    expect(detectLanguage("¿cuánto cuesta ver a un especialista?")).toBe("es");
+    expect(detectLanguage("que medicamentos cubre mi plan")).toBe("es");
+  });
+
+  it("still refuses a language with no source documents", () => {
+    expect(detectLanguage("quel est mon ticket moderateur pour un specialiste")).toBe("other");
+    expect(detectLanguage("quanto costa una visita dal medico specialista")).toBe("other");
+  });
+
+  // A false Spanish verdict answers from a corpus the member did not ask against.
+  it("does not read an English question as Spanish", () => {
+    for (const question of [
+      "what is my copay for a specialist visit",
+      "is my plan covering dental",
+      "how much do I pay for a doctor visit",
+    ]) {
+      expect(detectLanguage(question), question).toBe("en");
+    }
   });
 
   it("does not classify a short English question as unsupported", () => {

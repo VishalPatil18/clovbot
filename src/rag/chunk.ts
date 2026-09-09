@@ -1,4 +1,5 @@
 import type { DocumentKind } from "../types.ts";
+import type { Language } from "../corpus/types.ts";
 
 export interface ChunkInput {
   text: string;
@@ -8,6 +9,8 @@ export interface ChunkInput {
   planId: string;
   planYear: number;
   snapshotId: string;
+  /** Retrieval scopes by it, so it travels with the chunk rather than the document. */
+  language: Language;
 }
 
 export interface CorpusChunk {
@@ -22,6 +25,7 @@ export interface CorpusChunk {
   /** D-006. Prepended before embedding and lexical indexing, not shown to members. */
   contextPrefix: string;
   embedText: string;
+  language: Language;
   /** True when no heading was available, so the prefix has to be generated. */
   needsGeneratedContext: boolean;
   snapshotId: string;
@@ -223,6 +227,7 @@ export function chunkDocument(input: ChunkInput): CorpusChunk[] {
         embedText: `${contextPrefix}\n\n${content}`,
         needsGeneratedContext: path.length === 0,
         snapshotId: input.snapshotId,
+        language: input.language,
       });
     }
   }

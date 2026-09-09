@@ -9,6 +9,7 @@ const entry = (
 ): ManifestEntry => ({
   documentId,
   kind,
+  language: "english",
   contractId: "H5141",
   planId: "004",
   status: "ok",

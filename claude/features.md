@@ -1518,3 +1518,53 @@ Two design corrections came out of running it:
 
 1. The first version disabled the policy on a live table to watch a leak appear, from the admin connection while reading from the app connection. That takes an `ACCESS EXCLUSIVE` lock the reading connection then waits on, and it timed out. `SET ROLE` to collapse it onto one connection is refused: PostgreSQL 16+ requires the `SET` option on a role membership, which the owner does not hold here.
 2. The replacement proves the same thing without DDL. The identical query, on the same table, run as the member who owns those rows returns them; run as the other member it returns nothing. The difference is the policy. A check that turns off security on a live table is a hazard the first time its rollback does not run.
+
+---
+
+## Feature: Access log and minimum-necessary reads (P3 Stage 2)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-13 to FR-P3-24. **Decisions:** D-091, D-092, D-094.
+
+### The problem this closes
+
+Being signed in was by itself enough to read the whole record. `chooseRoute` added the member path on identity, and `loadMemberRecord` ran `select *` across five tables, so a signed-in member asking a specialist copay had their claims, prior authorisations and appointments read to answer it. Nothing chose that; it accumulated.
+
+### UX flow
+
+Two visible changes. A member whose session ran out is told which limit was reached and offered the way back, instead of being shown a sign-in form with no explanation. `ask:member` prints the member id rather than the name, because printing the name would mean reading it.
+
+### Backend entities
+
+- `MemberFact.sources` - the columns a fact was built from. The access log is the union of these, so what is logged and what is answered come from one structure.
+- `fieldsRead(record)` - deduplicated `table.column@row-id` strings.
+- `writeAccessLog(client, entry)` - one row per authenticated turn, inside the member's identity.
+- `loadMemberPlan(client, memberId)` - plan identity only, for scoping retrieval.
+- `SessionLookup { session, ended }` - tells an expired session apart from never having had one.
+- `member_for_login(text)` - a `security definer` function for the one lookup that cannot have an identity yet.
+
+### DB schema
+
+`member_access_log` (id, member_id, session_id, read_at, topic, question, fields_read text[], outcome), behind its own policy for select and insert, granted `insert` and `select` only. Migration 013 adds `member_for_login`.
+
+### Tech specs
+
+- **Audit point:** `answerTurn`, the one place every outcome converges. Rejected: inside the read transaction, which does not know the outcome; and the request handler, which would miss the CLI entirely.
+- **Field naming:** column plus row id. Rejected: column alone, which cannot say which of three claims was read; and the citation label, which is presentation text that a wording change would silently reformat.
+- **Immutability:** by grant. Rejected: convention plus a code review.
+- **Failure mode:** a failed audit write fails the turn. No answer has reached the member at that point, so nothing is disclosed without a record of it.
+
+### Verification
+
+`npm run check:audit`, 14 checks against the live database, wired into CI beside `check:rls`.
+
+---
+
+## Feature: Real-PHI writeup (P3 Stage 3)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-25 to FR-P3-30. Written, not built.
+
+**Output:** `docs/real-phi.md`. Eleven controls, each stating what exists today and what a real deployment would still owe; what P3 Stages 1 and 2 carry over and what needs strengthening; and three scenarios answered, each saying what cannot be done as well as what can.
+
+**Tech specs:** a Markdown document in `docs/`, reviewer-facing. No UI, no schema, no dependency. `tests/unit/real-phi-writeup.test.ts` asserts source integrity: every regulation named in the body appears in the sources list, every control section carries both halves, and the section on Azure retention states no period the project did not verify.
+
+**What measuring found that reading the code would not.** The pooler accepts plaintext, so TLS is a client-side convention rather than a server-side rule, and `pg_stat_ssl` shows the pooler-to-database hop unencrypted. Three outbound paths carry answer content to vendors with no agreement, none of which appears on the briefing's five-item HIPAA list.

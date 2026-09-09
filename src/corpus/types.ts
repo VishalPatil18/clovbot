@@ -58,6 +58,8 @@ export interface ManifestEntry {
   kind: DocumentKind;
   contractId: string;
   planId: string;
+  /** Which edition of the document this is. Retrieval scopes by it. FR-P3-31. */
+  language: Language;
   status: FetchStatus;
   url: string;
   retrievedAt: string;

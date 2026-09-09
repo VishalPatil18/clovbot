@@ -76,12 +76,20 @@ interface PlanColumns {
   boundary: number;
 }
 
-/** Header words read "(Plan" "004)", so the plan id is the token after "(Plan". */
+/**
+ * Header words read "(Plan" "004)", so the plan id is the token after it.
+ *
+ * The Spanish edition writes "(plan 004)" in lower case. One character, and the
+ * only reason it was not read as a document with no columns at all is that
+ * D-031 fails loudly rather than emitting amounts it cannot attribute.
+ */
+const PLAN_WORD = /^\(plan$/i;
+
 function findPlanHeaders(page: BboxPage): PlanHeaders | null {
   const headers: { planId: string; x: number }[] = [];
   for (const line of page.lines) {
     for (const [index, word] of line.words.entries()) {
-      if (word.text !== "(Plan") continue;
+      if (!PLAN_WORD.test(word.text)) continue;
       const match = PLAN_HEADER.exec(line.words[index + 1]?.text ?? "");
       if (match?.[1] !== undefined) headers.push({ planId: match[1], x: word.x });
     }

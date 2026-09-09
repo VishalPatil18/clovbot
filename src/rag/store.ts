@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import pg from "pg";
 import type { CorpusChunk } from "./chunk.ts";
-import type { DocumentKind } from "../corpus/types.ts";
+import type { DocumentKind, Language as CorpusLanguage } from "../corpus/types.ts";
 import type { CitableKind, PlanRef } from "../types.ts";
 import type { PromptChunk } from "./prompt.ts";
 
@@ -87,18 +87,19 @@ export async function upsertChunks(
       await client.query(
         `insert into chunks
            (id, snapshot_id, document_id, kind, contract_id, plan_id, plan_year,
-            section, content, context_prefix, embedding)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            section, content, context_prefix, embedding, language)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          on conflict (id) do update set
            snapshot_id = excluded.snapshot_id, document_id = excluded.document_id,
            kind = excluded.kind, contract_id = excluded.contract_id,
            plan_id = excluded.plan_id, plan_year = excluded.plan_year,
            section = excluded.section, content = excluded.content,
-           context_prefix = excluded.context_prefix, embedding = excluded.embedding`,
+           context_prefix = excluded.context_prefix, embedding = excluded.embedding,
+           language = excluded.language`,
         [
           chunk.id, chunk.snapshotId, chunk.documentId, chunk.kind, chunk.contractId,
           chunk.planId, chunk.planYear, chunk.section, chunk.content,
-          chunk.contextPrefix, toVector(vector),
+          chunk.contextPrefix, toVector(vector), chunk.language,
         ],
       );
     }
@@ -133,15 +134,17 @@ export async function searchHybrid(
   client: pg.Client,
   embedding: number[],
   queryText: string,
-  scope: { contractId: string; planId: string; planYear: number },
+  scope: { contractId: string; planId: string; planYear: number; language?: CorpusLanguage },
   limit: number,
   mode: RetrievalMode = "hybrid",
 ): Promise<RetrievedChunk[]> {
+  // FR-P3-32. Scoped in the query, beside the plan, so a Spanish question cannot
+  // retrieve an English chunk however well it scores.
   const { rows } = await client.query(
-    "select * from search_hybrid($1,$2,$3,$4,$5,$6,60,$7)",
+    "select * from search_hybrid($1,$2,$3,$4,$5,$6,$7,60,$8)",
     [
       toVector(embedding), queryText, scope.contractId, scope.planId,
-      scope.planYear, limit, mode,
+      scope.planYear, scope.language ?? "english", limit, mode,
     ],
   );
 

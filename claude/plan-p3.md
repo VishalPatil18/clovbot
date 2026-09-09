@@ -84,15 +84,15 @@
 - **Scope in:** A document covering: BAA-eligible model tier and why the current deployment already satisfies it; zero-data-retention configuration; encryption in transit and at rest; role-based access control; disclosure accounting; retention and deletion policy; incident response; identity proofing sufficient for a record write, which email OTP is not.
 - **Scope out:** Implementing any of it.
 - **Acceptance criteria:**
-  - [ ] Every control names what exists today versus what would have to be added.
-  - [ ] The identity-proofing gap is stated explicitly - the current OTP is adequate for reads of synthetic data and inadequate for writes to a real record.
-  - [ ] The document states which parts of P3 Stages 1 and 2 would carry over unchanged, and which would need strengthening.
-  - [ ] Every regulatory claim traces to `docs/research-init.md` or to a CMS or HIPAA source, with no invented requirements.
-  - [ ] The document answers "what if X happened" for at least three failure scenarios: a disclosure, a lost session, an audit request.
+  - [x] Every control names what exists today versus what would have to be added. Eleven controls, each with both halves, asserted by test.
+  - [x] The identity-proofing gap is stated explicitly - the current OTP is adequate for reads of synthetic data and inadequate for writes to a real record.
+  - [x] The document states which parts of P3 Stages 1 and 2 would carry over unchanged, and which would need strengthening, including the limit of what Stage 1 achieved.
+  - [x] Every regulatory claim traces to `docs/research-init.md` or to a CMS or HIPAA source, with no invented requirements. A test asserts every regulation named in the body appears in the sources list.
+  - [x] The document answers "what if X happened" for a disclosure, a lost session and an audit request, each saying what cannot be done as well as what can.
 - **Test plan:** Not testable by execution. Reviewed against `docs/research-init.md` for source integrity - the failure mode here is inventing a plausible-sounding regulatory requirement, which is worse than omitting one.
 - **Effort:** S
-- **Exit signal:** A reader can tell exactly which controls are real, which are described, and what the gap costs.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Exit signal:** A reader can tell exactly which controls are real, which are described, and what the gap costs. Met: `docs/real-phi.md`.
+- **Status:** [x] done, 2026-09-09. Measuring the deployment while writing it found two unencrypted-transport facts that were assumed to be fine.
 
 ---
 
@@ -130,7 +130,7 @@
 
 - [x] Stage 1 - Row-level security
 - [x] Stage 2 - Audit log and minimum-necessary access
-- [ ] Stage 3 - Real-PHI writeup
+- [x] Stage 3 - Real-PHI writeup
 - [ ] Stage 4 - Spanish
 
 ---

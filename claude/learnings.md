@@ -293,3 +293,13 @@ _<How this concept will apply to future work in this project.>_
 **A guard proves itself the first time it fires on your own work.** Adding the audit table made the schema check fail, because the table carried a `member_id` and had not been declared. That is the check working, and it cost thirty seconds to satisfy honestly.
 
 **Minimum-necessary finds reads nobody defended.** Being signed in was enough to read the whole record, on every question. Nothing chose that; it accumulated. Asking what each question actually needs removed four table reads from a plan-document answer and stopped the member's name being read at all.
+
+## P3 Stage 3 - what writing the gap analysis taught
+
+**Measure the deployment before describing it, even when the code is right in front of you.** The code pins a CA and verifies it, so "encryption in transit" would have been written up as done. The server accepts plaintext from any client that does not ask for TLS, and the pooler-to-database hop has none. Both facts took one query each and neither was visible in the source.
+
+**A checklist of five controls will not name the paths the product added later.** The briefing's HIPAA list predates voice and email. A spoken answer containing a claim amount leaves to a vendor with no agreement, and no item on the list would have caught it. Walking the outbound calls found in a minute what re-reading the list would never have.
+
+**State the limit of your own control.** Row-level security here filters on a value the application sets, so the trust boundary moved rather than left. Writing that down is worth more than the control is, because a reader who finds it themselves stops believing the rest.
+
+**A document can have a regression test.** Every regulation named in the body must appear in the sources list, and the one control section that skipped the "what exists today" half failed the check. Both were real defects in the writing, caught the same way a code defect would be.

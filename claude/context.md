@@ -642,3 +642,43 @@ Two faults, not one. The constraint is the cause; migration 010 widens it. But t
 **Open:** the deployed browser flow for sign-in under the policies is unverified; `DATABASE_APP_URL` still needs to reach Cloud Run and the CI secrets.
 
 **Next:** P3 Stage 3, the real-PHI writeup, on the user's word.
+
+## 2026-09-09 - P3 Stage 3: the real-PHI writeup
+
+**Did:** wrote `docs/real-phi.md`, which states control by control what exists in this system and what a real deployment would still owe. Nothing was built. `tests/unit/real-phi-writeup.test.ts` checks it for source integrity.
+
+**Files:** added `docs/real-phi.md` and its test. 730 tests pass.
+
+**Measuring the deployment while writing it beat describing it from memory, twice:**
+
+- **The pooler accepts a plaintext connection.** A client that omits the TLS options connects successfully. Encryption in transit is a convention this application follows, not a rule the server enforces. Supabase can enforce it; nobody had.
+- **`pg_stat_ssl` reports no TLS on the backend serving our queries.** The client's TLS terminates at Supavisor, and the pooler-to-database hop runs inside Supabase's network without it.
+
+Both would have been written up as "encryption: done" from the code alone, because the code does pin a CA and does verify it.
+
+**Three outbound paths that the briefing's five-item list does not cover.** Spoken answers go to ElevenLabs, recorded questions go to speech-to-text, and sign-in mail goes through Resend. Under the authenticated tier a spoken answer can carry a claim amount. With real records each needs its own BAA, and the honest alternative for voice is dropping spoken answers for authenticated content.
+
+**The most important admission in the document.** Row-level security moved the trust boundary from every query to one function. The policies filter on a setting the application puts there, so a compromised application can still set any member id. That is a large improvement and it is not the database deciding independently, and saying so is worth more than claiming the control is complete.
+
+**Open:** unchanged. `DATABASE_APP_URL` still needs to reach Cloud Run and the CI secrets.
+
+**Next:** P3 Stage 4, Spanish, on the user's word. It is the largest of the four and the only one that changes what a member sees.
+
+## 2026-09-09 - P3 Stage 4, first half: the Spanish corpus and language scoping
+
+**Did:** the corpus and plumbing half of Spanish. Not yet member-visible. Discover walks `documents.spanish`, 26 documents fetch and convert, chunks carry a language, retrieval scopes by it, and the detector tells Spanish from other languages.
+
+**Files:** added `migrations/014_language_scoped_retrieval.sql` and its down script. Changed `src/corpus/discover.ts`, `src/corpus/columns.ts`, `src/corpus/cli.ts`, `src/corpus/fetch.ts`, `src/corpus/types.ts`, `src/corpus/synthetic.ts`, `src/rag/chunk.ts`, `src/rag/ingest.ts`, `src/rag/store.ts`, `src/language.ts`, five test files. 734 tests pass.
+
+**Two parser defects, both found by measuring rather than by a failing test:**
+
+- **The Spanish Summary of Benefits writes `(plan 004)` in lower case.** English writes `(Plan 004)`. One character, and the only reason it did not silently mis-attribute two columns of amounts is that D-031 fails loudly when it cannot attribute a money row.
+- **A conversion failure was sticky.** `convertAll` skipped any entry whose status was not `ok`, so fixing the parser re-reported the stale reason from the run that broke. A failed entry whose raw file still exists is now retried.
+
+**Verified:** the Spanish column split matches English exactly. ES 004 reads `$10` and `$20` for a specialist, ES 007 reads `$2` and `$15`, and `$175`, which belongs only to 007, appears zero times in the 004 column.
+
+**Migration 014 was dry-run inside a transaction and rolled back.** It failed the first time: `to_tsvector(language::regconfig, ...)` in a generated column is rejected because casting text to regconfig is a catalog lookup and therefore only stable. A `case` over constant configurations is immutable and accepted. The old eight-argument `search_hybrid` has to be dropped rather than left beside the new one, or an eight-argument call becomes ambiguous, and the grant does not follow the function.
+
+**Open:** migration 014 is not applied and the Spanish corpus is not ingested. The answering half is not built: session language, the Spanish prompt, Spanish refusal and guardrail copy, the English-drug-list exception (FR-P3-36), the language control, the Spanish voice ids, and the Spanish golden cases.
+
+**Next:** apply 014, ingest, then the answering and interface half.

@@ -68,6 +68,9 @@ export function planIngest(
         contractId: CONTRACT_WIDE.includes(entry.kind) ? ALL_CONTRACTS : entry.contractId,
         planId: CONTRACT_WIDE.includes(entry.kind) ? ALL_PLANS : entry.planId,
         planYear,
+        // From the manifest, so the language travels from the source document
+        // rather than being guessed from the text at query time.
+        language: entry.language,
         snapshotId: snapshot.id,
       }),
     );
