@@ -11,9 +11,9 @@
 
 <p align="center">
   <a href="https://clovbot.v-ai.org/"><strong>Website</strong></a> ·
-  <a href="https://github.com/VishalPatil18/clovbot/blob/development/docs/research-init.md"><strong>Research</strong></a> ·
-  <a href="https://github.com/VishalPatil18/clovbot/blob/development/docs/guardrails-and-evaluation.md"><strong>Guardrails & Evaluation</strong></a> ·
-  <a href="https://github.com/VishalPatil18/clovbot/blob/development/docs/future-work.md"><strong>Future Work</strong></a>
+  <a href="https://drive.google.com/file/d/1vtQ6dMXxhaikisyye1pZyu4CxL_m4Czo/view?usp=sharing"><strong>Explainer Video</strong></a> ·
+  <a href="https://drive.google.com/file/d/1qtaHYQBmKZjo3-LUkLKgm-JnmTZL8WZc/view?usp=sharing"><strong>Presentation</strong></a> ·
+  <a href="https://github.com/VishalPatil18/clovbot/blob/development/docs/research-init.md"><strong>Research</strong></a>
 </p>
 
 <p align="center">
@@ -43,6 +43,12 @@ Clovbot answers Medicare Advantage plan questions from **real 2026 Clover Health
 **No real member data enters this system at any version.** Every record is invented and labelled synthetic in the schema, in the seed and in the output.
 
 Built with [_throughspec_](https://throughspec.v-ai.org/), a Spec-Driven Development kit.
+
+---
+
+## Explainer Video
+
+<video width="630" height="300" src="https://github.com/user-attachments/assets/51583f3d-6a97-43a0-9af5-37b351b6f554" download=false></video>
 
 ---
 
