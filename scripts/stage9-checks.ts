@@ -6,7 +6,7 @@
 import { writeFileSync } from "node:fs";
 import { answerTurn } from "../src/rag/answer-turn.ts";
 import { connectAdmin } from "../src/rag/store.ts";
-import { audioKey, findCachedAudio } from "../src/voice/cache.ts";
+import { readAudio, writeAudio } from "../src/cache.ts";
 import { speak } from "../src/voice/providers.ts";
 
 const SCOPE = { contractId: "H5141", planId: "004", planYear: 2026 };
@@ -74,14 +74,9 @@ try {
     const first = Date.now();
     const one = await speak(text);
     const firstMs = Date.now() - first;
-    if (one.value !== null) {
-      const { writeAudio } = await import("../src/voice/cache.ts");
-      writeAudio(audioKey(text, process.env["ELEVENLABS_VOICE_ID"] ?? "default", one.provider), one.value);
-    }
-    const hit = findCachedAudio(text, process.env["ELEVENLABS_VOICE_ID"] ?? "default", [
-      "elevenlabs",
-      "fishaudio",
-    ]);
+    const voice = process.env["ELEVENLABS_VOICE_ID"] ?? "default";
+    if (one.value !== null) await writeAudio(client, text, voice, one.provider, one.value);
+    const hit = await readAudio(client, text, voice, ["elevenlabs", "fishaudio"]);
     check("second request finds the recording", hit !== null, `first synthesis ${firstMs}ms`);
   }
 

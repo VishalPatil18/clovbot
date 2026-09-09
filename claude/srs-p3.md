@@ -9,13 +9,13 @@
 | Field | Value |
 | --- | --- |
 | Project | Clover Member Assistant |
-| Version | 1.1.0 |
+| Version | 1.2.1 |
 | Status | Frozen |
 | Last Updated | 2026-09-09 |
-| Covers | `claude/plan-p3.md` stages 1-5, shipping as v1.2.0 |
+| Covers | `claude/plan-p3.md` stages 1-6, shipping as v1.2.0 |
 | Sources | `docs/ideas.md` §7 P3-01 and P3-02, `claude/plan-p3.md`, `claude/srs.md` v1.1.0, `claude/srs-p2.md` v1.0.1, `docs/research-init.md`, D-047, D-080, D-085 |
 | Predecessor | `claude/srs-p2.md` v1.0.1 (P2, frozen) |
-| Amendments | 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14 |
+| Amendments | 1.2.1 - FR-P3-62 added 2026-09-09. 1.1.0 - Stage 5 added 2026-09-09 with FR-P3-45 to FR-P3-52 and NFR-P3-13, NFR-P3-14. 1.2.0 - Stage 6 added 2026-09-09 with FR-P3-53 to FR-P3-61 and NFR-P3-15, NFR-P3-16, promoting P4-01 |
 
 ---
 
@@ -148,6 +148,23 @@ No existing job is removed. One is narrowed on purpose: a signed-in member askin
 | FR-P3-50 | Primary navigation is never hidden behind a menu control. |
 | FR-P3-51 | In voice mode the microphone is centred and full size on a phone, with its instruction beneath rather than beside it. |
 | FR-P3-52 | The conversation is the largest region on the screen. Chrome that reserves space it is not using yields it. |
+
+### 4.7 Caching (Stage 6)
+
+> **Promoted from P4-01**, which `claude/srs.md` §8 and `claude/srs-p2.md` §8 both list as deferred. Those documents stay frozen as the requirements their releases were built against; the promotion is recorded here. `docs/ideas.md` P4-01 also warns that at demo volume caching "changes nothing" and that a loose similarity threshold "collides two similar questions with different copays and returns a wrong answer". Both warnings shaped FR-P3-54.
+
+| ID | Requirement |
+| --- | --- |
+| FR-P3-53 | Every cache is a pure optimisation. Emptying all of them changes no answer, only the time taken to produce one. |
+| FR-P3-54 | The answer cache is keyed on the **exact** normalised question within its scope: corpus snapshot, contract, plan, plan year and language. Never on similarity. Two questions one word apart can differ by ten dollars. |
+| FR-P3-55 | A turn carrying a member id is never read from or written to any cache. It is the only way one member's record could reach another, and a cached answer would make the access log record a read that never happened. |
+| FR-P3-56 | Query embeddings are cached on the exact text and the embedding model. A different model is a different vector space and must not serve the old one's vectors. |
+| FR-P3-57 | Only an answered turn is cached. A refusal costs no generation, and a failure is never served twice. |
+| FR-P3-58 | Synthesised audio is cached in the same store, keyed on text, voice and provider. Not on a container filesystem, which is per-instance and lost on restart. |
+| FR-P3-59 | A cached turn is recorded in the turn log with its provider as `cache`, so a hit cannot be mistaken for a model call. |
+| FR-P3-60 | Re-indexing invalidates the answer cache by construction: the snapshot id is part of the key, so a new corpus cannot hit an old entry. |
+| FR-P3-61 | A cache read or write that fails never fails a turn. A cache that cannot be reached is a slower product, not a broken one. |
+| FR-P3-62 | Ingest clears the answers cached against the snapshot it writes, whether the run succeeds or fails. FR-P3-60 covers a re-ingest under a **new** id; this covers re-running into the **same** id, where the chunks change and the key does not. Embeddings and audio are not cleared: neither can go stale, and clearing them would re-pay a provider call for nothing. |
 
 ---
 
@@ -373,10 +390,39 @@ Scenario: [FR-P3-49] the human path survives the smallest screen
 
 ---
 
+### Caching
+
+```gherkin
+Scenario: [FR-P3-54] a near-identical question is not a cache hit
+  Given an answer cached for "what is my specialist copay"
+  When a member asks "what is my out-of-network specialist copay"
+  Then the cache does not answer it
+  And the two keys differ
+```
+
+```gherkin
+Scenario: [FR-P3-55] a signed-in member's turn is never cached
+  Given a signed-in member asking about their own record
+  When the turn completes
+  Then nothing is written to the answer cache
+  And no later turn is served from it
+```
+
+```gherkin
+Scenario: [FR-P3-60] re-indexing invalidates the answers
+  Given answers cached against one corpus snapshot
+  When the corpus is re-ingested under a new snapshot id
+  Then no cached answer is served
+```
+
+---
+
 ## 6. Non-Functional Requirements
 
 | ID | Requirement | Gate |
 | --- | --- | --- |
+| NFR-P3-15 | Emptying every cache changes no answer. The caches are measured on latency only, never on correctness. | Asserted by test |
+| NFR-P3-16 | Cache hit and miss counts are recorded per entry, so the hit rate is measured rather than assumed. | Recorded |
 | NFR-P3-13 | The floor is an iPhone 14 Pro, 393x852. Layout is verified by rendering at that size and looking, not by reading the stylesheet. | Screenshot run, recorded |
 | NFR-P3-14 | Every target stays at 44x44 CSS pixels and every reading surface at its type floor on a phone. Chrome may shrink; controls and body text may not. | Static assertion |
 | NFR-P3-01 | The row-level security proof runs against a real database with the application bypassed, as a step in the existing CI job that already holds `DATABASE_URL`. A control that only runs on one laptop is not a control. | CI, fails on any leaked row |

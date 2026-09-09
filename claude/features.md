@@ -1677,3 +1677,37 @@ Measured before and after at 393x852:
 | Foot | 242px | 201px |
 
 Content width against its frame, after the fix: 1440 fits in 576, 1280 in 512, 1024 in 410, 393 in 393.
+
+---
+
+## Feature: Caching (P3 Stage 6)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-53 to FR-P3-61, NFR-P3-15, NFR-P3-16. **Decision:** D-100.
+
+### What was already there
+
+The audio cache existed and shipped, keyed on provider, voice and text, written to `data/audio`. Query embeddings were not cached: `embed([question])` ran on every turn. Answer caching did not exist and was listed as deferred in three documents.
+
+### UX flow
+
+None. A member sees the same answer sooner. That is the whole feature, and the property that makes it safe: emptying every cache changes no answer.
+
+### Backend entities
+
+- `src/cache.ts` - `answerKey`, `normaliseQuestion`, `readAnswer`, `writeAnswer`, `embeddingKey`, `readEmbedding`, `writeEmbedding`, `audioKey`, `readAudio`, `writeAudio`.
+- The lookup sits in `answerTurn` after the guardrail and login gates and before any provider call.
+
+### DB schema
+
+`answer_cache` (key, snapshot_id, contract_id, plan_id, plan_year, language, question, turn jsonb, hits, last_hit_at), `embedding_cache` (key, model, embedding vector(1536), hits, last_hit_at), `audio_cache` (key, provider, voice, audio bytea, bytes, hits, last_hit_at). No table carries a `member_id`, so none needs a policy.
+
+### Tech specs
+
+- **Matching:** exact normalised question inside its scope. Rejected: similarity above a threshold, which `docs/ideas.md` itself says returns a wrong copay, and which costs an embedding call per turn to check.
+- **Store:** Postgres. Rejected: in-process, which dies with a Cloud Run instance; and the container filesystem, which the audio cache used and which had both problems.
+- **Scope:** authenticated turns excluded entirely. Rejected: keying per member, which puts record-derived text in a store `docs/real-phi.md` would then have to account for.
+- **Failure:** every read and write is best-effort. A cache that cannot be reached is a slower product, not a broken one.
+
+### Verification
+
+Pure-function tests over the keys, including the collision the design exists to avoid: the in-network and out-of-network forms of the same question key differently, as do the same question under another plan, language or snapshot. Static assertions that the member gate wraps both the read and the write and sits after the guardrails.

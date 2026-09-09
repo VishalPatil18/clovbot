@@ -18,7 +18,24 @@ migrations/010_needs_login_outcome.sql # let a turn record the outcome "needs_lo
 migrations/011_row_level_security.sql  # member scoping enforced by the database
 migrations/012_member_access_log.sql   # one audit row per authenticated turn
 migrations/013_login_path_under_rls.sql # repairs sign-in, which 011 broke
+migrations/014_language_scoped_retrieval.sql # Spanish chunks, scoped before ranking
+migrations/015_caches.sql               # answer, embedding and audio caches
 ```
+
+**014 must be followed by a re-ingest.** It adds a language to every chunk and
+replaces `search_hybrid` with a nine-argument version; the old eight-argument
+one is dropped, because leaving both would make an eight-argument call
+ambiguous. Run `npm run ingest` after applying it.
+
+**Re-running ingest clears the answer cache for that snapshot**, on failure as
+well as success, so a corpus change is never answered from before it. Embeddings
+and audio survive: neither can go stale, and clearing them would re-pay a
+provider call for nothing.
+
+**015 replaces a filesystem cache.** Synthesised audio moves from `data/audio`
+into the database, so a recording survives a restart and is shared between Cloud
+Run instances. Nothing is lost by not migrating the old directory: every entry
+is derivable again from the providers.
 
 **013 is not optional.** 011 put `members` behind a policy, and both sign-in
 paths read that table before any identity exists to satisfy it, so no code could

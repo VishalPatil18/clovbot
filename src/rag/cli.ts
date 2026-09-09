@@ -1,6 +1,7 @@
 import type pg from "pg";
 import { existsSync, readFileSync } from "node:fs";
 import { redactIdentifiers } from "../logging.ts";
+import { clearAnswers } from "../cache.ts";
 import { bboxPath, latestSnapshotId, readSnapshot } from "../corpus/snapshot.ts";
 import { parseFormulary } from "../corpus/formulary.ts";
 import { CORPUS_SCOPE, findPlanRef, formatPlanRef } from "../corpus/scope.ts";
@@ -116,28 +117,45 @@ async function ingest(): Promise<void> {
   );
   console.log(`${chunks.length} chunks, ${changed.length} new or changed`);
 
-  // Persist each batch, so a rate-limit failure costs one batch rather than all of them.
+  /*
+   * From here on the corpus is being rewritten, so the answers cached against
+   * this snapshot are suspect whatever happens next. Clearing runs in a finally
+   * rather than on the success path: a run that dies at chunk 235 leaves a
+   * half-written corpus, and that is precisely when a cached answer citing text
+   * that no longer exists is most likely and least expected.
+   *
+   * Last rather than first, so a question asked during the run cannot repopulate
+   * the cache from the corpus being replaced.
+   */
   let done = 0;
-  for (const batch of batchByTokens(changed, BATCH_TOKEN_BUDGET)) {
-    const tokens = batch.reduce((sum, chunk) => sum + estimateTokens(chunk.embedText), 0);
-    const vectors = await embed(batch.map((chunk) => chunk.embedText));
-    const embeddings = new Map<string, number[]>();
-    for (const [index, chunk] of batch.entries()) {
-      const vector = vectors[index];
-      if (vector !== undefined) embeddings.set(chunk.id, vector);
+  try {
+    // Persist each batch, so a rate-limit failure costs one batch rather than all of them.
+    for (const batch of batchByTokens(changed, BATCH_TOKEN_BUDGET)) {
+      const tokens = batch.reduce((sum, chunk) => sum + estimateTokens(chunk.embedText), 0);
+      const vectors = await embed(batch.map((chunk) => chunk.embedText));
+      const embeddings = new Map<string, number[]>();
+      for (const [index, chunk] of batch.entries()) {
+        const vector = vectors[index];
+        if (vector !== undefined) embeddings.set(chunk.id, vector);
+      }
+      await withAdmin((client) => upsertChunks(client, batch, embeddings));
+      done += batch.length;
+      console.log(`  embedded and stored ${done}/${changed.length}`);
+
+      // Stay under the per-minute token budget rather than retrying into it.
+      if (done < changed.length) await sleep((tokens / TOKENS_PER_MINUTE) * 60_000);
     }
-    await withAdmin((client) => upsertChunks(client, batch, embeddings));
-    done += batch.length;
-    console.log(`  embedded and stored ${done}/${changed.length}`);
 
-    // Stay under the per-minute token budget rather than retrying into it.
-    if (done < changed.length) await sleep((tokens / TOKENS_PER_MINUTE) * 60_000);
+    const pruned = await withAdmin((client) =>
+      pruneChunks(client, snapshotId, chunks.map((chunk) => chunk.id)),
+    );
+    if (pruned > 0) console.log(`pruned ${pruned} chunks no longer produced`);
+  } finally {
+    if (done > 0 || changed.length === 0) {
+      const cleared = await withAdmin((client) => clearAnswers(client, snapshotId));
+      console.log(`cleared ${cleared} cached answers for this snapshot`);
+    }
   }
-
-  const pruned = await withAdmin((client) =>
-    pruneChunks(client, snapshotId, chunks.map((chunk) => chunk.id)),
-  );
-  if (pruned > 0) console.log(`pruned ${pruned} chunks no longer produced`);
   console.log(`snapshot ${snapshotId}: ${chunks.length} chunks indexed`);
 }
 

@@ -238,6 +238,7 @@ Long-form: **[docs/architecture.md](./docs/architecture.md)**.
 | Animation | **Framer Motion 13** | The only runtime UI dependency added, and it respects `prefers-reduced-motion`. |
 | Voice | **ElevenLabs, Fish Audio, then the browser synthesiser** | The last tier cannot run out of credits, which is the point of having it. |
 | Email | **Resend** free tier | Sign-in codes only. |
+| Caching | **Postgres, exact-keyed** | Answers, query embeddings and synthesised audio in the store the app already has. Rejected: semantic caching on similarity, which can return a confidently wrong amount; and in-process or on-disk caches, which die with a Cloud Run instance. |
 | Tests | **Vitest 5** | 756 tests, no DOM library, offline, about a second. |
 
 ---
@@ -271,6 +272,12 @@ Long-form: **[docs/architecture.md](./docs/architecture.md)**.
 - Print to a clean copy with every source intact; copy one answer with its sources
 - Help panel, plan switcher, suggested questions
 
+**Performance**
+- Repeated questions answered from cache with no model call, keyed exactly so a near-identical question never inherits the wrong answer
+- Re-indexing the corpus clears the answers cached against it, so a document change can never be answered from before it
+- Query embeddings cached on the text and the model
+- Spoken answers synthesised once and served from the database, so a recording survives a restart and is shared between instances
+
 **Operations**
 - One eval run reports four gates
 - Turn log with route, reason, latency and outcome; answer reproduction from a turn id
@@ -292,6 +299,7 @@ Ninety-four decisions are recorded in [claude/design-decisions.md](./claude/desi
 | **Retrieval paths are additive** | A question that is both a drug lookup and a rules question keeps both halves. Neither can be dropped by a router that picked one. |
 | **The same rule gates a question and scopes the read** | Whether you must sign in and what gets read from your record are one call, so they cannot disagree. |
 | **The Spanish instruction rides on the user message** | Measurement showed that touching the system prompt moves faithfulness and flips cases, so the English prompt stays byte-identical and Spanish costs English nothing. |
+| **The answer cache is keyed on the question, not its meaning** | "What is my specialist copay" and "what is my out-of-network specialist copay" are one word and ten dollars apart. Semantic caching is the documented design in `docs/ideas.md`, and its own warning is why this one keys on the exact question inside its plan, language and corpus scope. A signed-in member's turn is never cached at all. |
 | **A regression gate one case below the measured baseline** | Set from a measurement, with the measurement written beside it, rather than a round number that would drift upward every time it failed. |
 
 ---

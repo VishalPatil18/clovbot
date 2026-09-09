@@ -13,7 +13,7 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
-| Status | **Complete.** Five stages done, shipping as v1.2.0 |
+| Status | **Complete.** Six stages done, shipping as v1.2.0 |
 | Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
 | Last Updated | 2026-09-09 |
 | Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
@@ -149,6 +149,29 @@
 
 ---
 
+## Stage 6 - Caching
+
+- **Goal:** Stop paying twice for work already done, without ever changing an answer.
+- **Context:** Added 2026-09-09. Promoted from P4-01, which `srs.md` §8 and `srs-p2.md` §8 both list as deferred. `docs/ideas.md` says it "changes nothing" at demo volume and warns that a loose similarity threshold returns a wrong copay; both warnings are in the design rather than argued away.
+- **Scope in:** An answer cache keyed on the exact question inside its scope; a query-embedding cache; the audio cache moved off the container filesystem into the same store; hit counters on all three.
+- **Scope out:** Semantic matching on similarity. A near-identical question can have a different amount, and this product's whole claim is that an answer is grounded in a document. Also out: caching authenticated turns, and any eviction policy beyond re-indexing.
+- **Acceptance criteria:**
+  - [x] Emptying every cache changes no answer, only latency.
+  - [x] Two questions one word apart key differently, including the in-network and out-of-network forms of the same question.
+  - [x] The same question under a different plan, language or snapshot keys differently.
+  - [x] A turn carrying a member id is never read from or written to any cache.
+  - [x] Only an answered turn is cached; refusals and failures are not.
+  - [x] A cached turn records its provider as `cache` in the turn log.
+  - [x] A cache read or write that fails does not fail the turn.
+  - [x] Audio is served from the store rather than a container filesystem, so a recording survives a restart.
+  - [x] Ingest clears the answers for the snapshot it writes, on success and on failure. Embeddings and audio are left, because neither can go stale.
+- **Test plan:** Pure-function tests over the keys, including the collision `docs/ideas.md` warns about. Static assertions that the member gate wraps both the read and the write and sits after the guardrails. The operator voice check now measures the store the product actually uses.
+- **Effort:** M
+- **Exit signal:** A repeated question is answered without a model call, and no two questions that differ in meaning share a key.
+- **Status:** [x] done, 2026-09-09. Migration 015 is the operator's to apply.
+
+---
+
 ## Completion Checklist
 
 - [x] Stage 1 - Row-level security
@@ -156,6 +179,7 @@
 - [x] Stage 3 - Real-PHI writeup
 - [x] Stage 4 - Spanish
 - [x] Stage 5 - Mobile layout
+- [x] Stage 6 - Caching
 
 ---
 

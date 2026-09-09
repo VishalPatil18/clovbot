@@ -36,7 +36,7 @@ import {
   writeTurn,
 } from "./rag/store.ts";
 import { shouldPresentCallbackForm } from "./session.ts";
-import { audioKey, findCachedAudio, writeAudio } from "./voice/cache.ts";
+import { readAudio, writeAudio } from "./cache.ts";
 import { degradeNotice } from "./voice/chain.ts";
 import { speak, transcribe } from "./voice/providers.ts";
 
@@ -398,21 +398,26 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
 
   // Cache before the chain: a repeated answer is never synthesised twice. FR-20.
   // Every provider is checked, because a recording made while the chain was
-  // degraded is still a valid recording of the same words.
-  const voice =
-    (speech === "es" ? process.env["ELEVENLABS_VOICE_ID_SPANISH"] : undefined) ??
-    process.env["ELEVENLABS_VOICE_ID"] ??
-    "default";
-  const cached = findCachedAudio(text, voice, ["elevenlabs", "fishaudio"]);
-  if (cached !== null) {
-    res.writeHead(200, {
-      "content-type": "audio/mpeg",
-      "x-voice-provider": cached.provider,
-      "x-voice-cached": "1",
-    });
-    res.end(cached.audio);
-    return;
-  }
+  // degraded is still a valid recording of the same words. In Postgres rather
+  // than on a container filesystem, so a recording survives a restart and is
+  // shared between instances. FR-P3-58, D-100.
+  const client = connect();
+  await client.connect();
+  try {
+    const voice =
+      (speech === "es" ? process.env["ELEVENLABS_VOICE_ID_SPANISH"] : undefined) ??
+      process.env["ELEVENLABS_VOICE_ID"] ??
+      "default";
+    const cached = await readAudio(client, text, voice, ["elevenlabs", "fishaudio"]);
+    if (cached !== null) {
+      res.writeHead(200, {
+        "content-type": "audio/mpeg",
+        "x-voice-provider": cached.provider,
+        "x-voice-cached": "1",
+      });
+      res.end(cached.audio);
+      return;
+    }
 
   try {
     const result = await speak(text, speech);
@@ -425,7 +430,7 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
       return;
     }
 
-    writeAudio(audioKey(text, voice, result.provider), result.value);
+    await writeAudio(client, text, voice, result.provider, result.value);
     res.writeHead(200, {
       "content-type": "audio/mpeg",
       "x-voice-provider": result.provider,
@@ -433,14 +438,17 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
       ...(notice === null ? {} : { "x-voice-notice": encodeURIComponent(notice) }),
     });
     res.end(Buffer.from(result.value));
-  } catch (error) {
-    res.writeHead(503, { "content-type": "application/json" });
-    res.end(
-      JSON.stringify({
-        error: "The answer could not be read aloud. It is on screen above.",
-        detail: error instanceof Error ? error.message : String(error),
-      }),
-    );
+    } catch (error) {
+      res.writeHead(503, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "The answer could not be read aloud. It is on screen above.",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  } finally {
+    await client.end().catch(() => {});
   }
 }
 

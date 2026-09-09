@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { audioKey, audioPath, findCachedAudio } from "../../src/voice/cache.ts";
+import { audioKey } from "../../src/cache.ts";
 import {
   ChainExhaustedError,
   degradeNotice,
@@ -117,34 +116,5 @@ describe("audio cache key [FR-20]", () => {
   // Serving yesterday's provider after a fall-through would be a silent swap.
   it("differs when the provider differs", () => {
     expect(audioKey("hello", "v1", "elevenlabs")).not.toBe(audioKey("hello", "v1", "fishaudio"));
-  });
-
-  it("produces a filesystem-safe path", () => {
-    expect(audioPath(audioKey("hello", "v1", "elevenlabs"))).toMatch(/^data\/audio\/[0-9a-f]{64}\.mp3$/);
-  });
-});
-
-// A recording made while the chain was degraded is still a valid recording of
-// the same words. Checking only the primary key would miss it and, worse, would
-// report the wrong provider for the one it did find.
-describe("cache lookup across the chain", () => {
-  const text = `cache-test-${Math.random()}`;
-  const chain = ["elevenlabs", "fishaudio"] as const;
-  const fallbackPath = audioPath(audioKey(text, "v1", "fishaudio"));
-
-  it("finds a recording stored by the fallback provider", () => {
-    mkdirSync("data/audio", { recursive: true });
-    writeFileSync(fallbackPath, Buffer.from([1, 2, 3]));
-    try {
-      const found = findCachedAudio(text, "v1", chain);
-      expect(found?.provider).toBe("fishaudio");
-      expect(found?.audio.byteLength).toBe(3);
-    } finally {
-      rmSync(fallbackPath, { force: true });
-    }
-  });
-
-  it("returns nothing when no provider has it", () => {
-    expect(findCachedAudio(`missing-${Math.random()}`, "v1", chain)).toBeNull();
   });
 });

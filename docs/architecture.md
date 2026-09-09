@@ -136,6 +136,26 @@ One consequence learned the hard way: a failure **after** the answer has been se
 
 ---
 
+## Caching
+
+Three caches, one store, and one property that makes them safe: **emptying all of them changes no answer, only the time taken to produce one.** That is asserted by test, not assumed.
+
+| Cache | Key | Invalidated by |
+| --- | --- | --- |
+| Answers | snapshot, contract, plan, plan year, language, normalised question | Re-indexing, two ways: a new snapshot id cannot hit an old key, and ingest clears the entries for the id it writes |
+| Query embeddings | text, embedding model | Nothing; a new model is a new key |
+| Audio | text, voice, provider | Nothing; a new voice is a new key |
+
+**The answer cache is keyed on the question, not on its meaning.** `docs/ideas.md` P4-01 describes semantic caching above a similarity threshold and warns in the same line that a loose one "collides two similar questions with different copays and returns a wrong answer". That is not hypothetical: "what is my specialist copay" and "what is my out-of-network specialist copay" are one word apart and ten dollars apart. Exact keying removes the question. D-100.
+
+**A turn carrying a member id is never cached.** It is the only route by which one member's record could reach another, and a cached answer would also make the access log record a read that never happened.
+
+**Only answered turns are cached.** A refusal costs no generation, and a failure must never be served twice. A hit is recorded in the turn log with its provider as `cache`, so it cannot be mistaken for a model call.
+
+**Ingest clears the answers for the snapshot it writes, on failure as well as success.** The snapshot id in the key already handles a re-ingest under a *new* id. This handles re-running into the *same* one, where the chunks change and the key does not, which is what a parser fix produces. It runs in a `finally` because a run that dies part-way leaves a half-written corpus, which is when a cached answer citing text that no longer exists is most likely; and it runs last, so a question asked during the run cannot repopulate the cache from the corpus being replaced. Embeddings and audio are not cleared: a question's vector does not depend on the corpus, and a changed answer produces a new audio key rather than a wrong recording. D-101.
+
+Everything lives in Postgres rather than memory or a container filesystem. On Cloud Run an in-process cache dies with the instance and is shared with nothing; the audio cache previously had both problems.
+
 ## Voice
 
 A three-tier chain with a circuit breaker: ElevenLabs, then Fish Audio, then the browser's own synthesiser. The last tier cannot run out of credits, which is the reason it is there. A degrade is announced rather than silent, because an unexplained change of voice reads as a fault to an audience with low trust in the technology.

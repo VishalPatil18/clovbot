@@ -317,3 +317,17 @@ _<How this concept will apply to future work in this project.>_
 **Translating an interface is an audit of what it claims.** The help panel said the assistant holds no member data and never signs you in. That was true when it was written and false for two stages. Nobody re-read it until somebody had to write it again in another language.
 
 **A measured cost changes where new code goes.** D-069 measured that touching the answering system prompt moves faithfulness. So the Spanish instruction went on the user message instead, and an English prompt is byte-for-byte what it was. The measurement paid for itself a second time, in a stage written weeks later.
+
+## P3 Stage 6 - what caching taught
+
+**Read the idea's own warning before implementing it.** `docs/ideas.md` proposed semantic caching and, in the same sentence, described the failure it causes: two similar questions with different copays. The document that asked for the feature also contained the reason not to build it that way.
+
+**A cache is only safe when emptying it changes nothing.** That property is worth asserting as a test rather than believing, because every shortcut that would break it looks like a performance win at the time.
+
+**Do not run a formatter the repository does not use.** Prettier rewrote 330 lines of a file where the change needed ten, and broke three tests that match source text. There was no config and no other file was prettier-clean, which was checkable in one command before running it rather than after.
+
+**Order matters in a chain of string replaces.** Stripping trailing punctuation before trimming leaves the punctuation on any input with a trailing space. The test caught it; reading the chain would also have caught it.
+
+**Invalidate what can be wrong, not everything you can reach.** "Clear the caches on ingest" sounds prudent and is half wrong: two of the three could not go stale, and clearing them re-pays a provider bill to remove entries that were always correct. Working out which one actually depends on the thing that changed took less time than implementing the wrong answer would have.
+
+**Put invalidation in a `finally`.** The state that needs the cache cleared most is the failed run: a half-written corpus with a full cache is a fast wrong system. "On success" skips exactly the case that matters.

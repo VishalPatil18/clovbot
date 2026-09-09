@@ -3,6 +3,14 @@ import { checkGuardrails } from "../guardrails.ts";
 import { needsMemberData, type LoginRequired } from "../auth/login-required.ts";
 import { detectLanguage } from "../language.ts";
 import { corpusLanguage, t, type Speech } from "../i18n.ts";
+import {
+  answerKey,
+  readAnswer,
+  readEmbedding,
+  writeAnswer,
+  writeEmbedding,
+  embeddingKey,
+} from "../cache.ts";
 import { applyConfidenceGate } from "../retrieval.ts";
 import { redactIdentifiers } from "../logging.ts";
 import type { AnswerPayload } from "../types.ts";
@@ -200,6 +208,30 @@ async function runTurn(
     };
   }
 
+  /*
+   * FR-P3-54. After the gates, before any provider call, and never for a member.
+   *
+   * A turn carrying a member id is neither read from nor written to the cache.
+   * It would be the only way one member's record could reach another, and a
+   * cached answer would also make the access log claim a read that never
+   * happened. The authenticated tier gives up the speed-up. D-100.
+   */
+  const cacheable = options.memberId === undefined;
+  const key = answerKey(question, scope, speech, latestSnapshotId());
+
+  if (cacheable) {
+    const hit = await readAnswer(client, key).catch(() => null);
+    if (hit !== null) {
+      return {
+        ...(hit as unknown as TurnResult),
+        // The turn log has to say where the answer came from, or a cache hit
+        // would overstate how often the model was actually called.
+        provider: "cache",
+        latencyMs: { total: Date.now() - started },
+      };
+    }
+  }
+
   let retrieved: RerankedChunk[] = [];
   let retrievedAt = started;
   let route: RouteDecision = RAG_ONLY;
@@ -241,8 +273,18 @@ async function runTurn(
     // question keeps both halves and neither can be dropped.
     let prose: RerankedChunk[] = [];
     if (route.paths.includes("rag")) {
-      const [vector] = await embed([question]);
-      if (vector === undefined) throw new Error("no embedding returned");
+      const model = process.env["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"] ?? "unknown";
+      const embedKey = embeddingKey(question, model);
+      const cachedVector = await readEmbedding(client, embedKey).catch(() => null);
+      let vector: number[];
+      if (cachedVector === null) {
+        const [fresh] = await embed([question]);
+        if (fresh === undefined) throw new Error("no embedding returned");
+        vector = fresh;
+        await writeEmbedding(client, embedKey, model, vector).catch(() => {});
+      } else {
+        vector = cachedVector;
+      }
       const pool = await searchHybrid(
         client,
         vector,
@@ -371,7 +413,7 @@ async function runTurn(
   const payload = validated.value;
   const answered = payload.claims.length > 0;
 
-  return {
+  const result: TurnResult = {
     question,
     answer: answered || payload.refusal !== null ? renderAnswer(payload, retrieved, speech) : refusalText(t("notFound", speech), speech),
     payload,
@@ -386,4 +428,25 @@ async function runTurn(
     route,
     language: speech,
   };
+
+  /*
+   * Only an answered turn, and only when the model was actually called. A
+   * refusal costs no generation, and a failure must never be served twice.
+   * A write that fails is not a reason to withhold an answer that is already
+   * correct, so it is logged and swallowed rather than thrown.
+   */
+  if (cacheable && answered) {
+    await writeAnswer(client, {
+      key,
+      snapshotId: latestSnapshotId(),
+      scope,
+      language: speech,
+      question,
+      turn: result,
+    }).catch((error: unknown) => {
+      console.warn(`answer cache write failed: ${error instanceof Error ? error.message : ""}`);
+    });
+  }
+
+  return result;
 }

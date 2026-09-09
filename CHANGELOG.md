@@ -14,6 +14,8 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Changed
 
+- **Re-indexing the plan documents clears the saved answers for them**, so a change to a document is never answered from before the change.
+- **Repeated questions come back immediately.** An answer already given for the same question, on the same plan and in the same language, is served without asking the model again, and a spoken answer is only ever recorded once. Asking a *different* question never reuses another one's answer, however similar it sounds.
 - **A spoken answer can be paused and picked up where it left off.** The Stop button is gone: it threw away your place, and playing again from the start was already a button of its own. Controls that are unavailable now look unavailable instead of doing nothing when pressed.
 - The assistant panel on a desktop was quietly cutting off the right-hand edge of its own contents at narrower window sizes. It now fits whatever width it is given.
 - On the full page, the tools down the left are now one consistent column in a deliberate order, and they highlight when you point at them rather than staying lit after a click. Back reads as a way out rather than a seventh button.

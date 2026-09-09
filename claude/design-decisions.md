@@ -3702,6 +3702,94 @@ Both audio tiers support this natively: `HTMLAudioElement.pause()` and `speechSy
 
 ---
 
+## Decision D-100 - The answer cache is keyed on the question, not on its meaning
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Three caches were asked for: answers, query embeddings and synthesised audio. The audio one already existed on disk. The answer one is the interesting decision, because `docs/ideas.md` P4-01 describes it as semantic caching on embedding similarity above roughly 0.95, and lists it as a P4 item that both earlier SRS documents defer.
+
+### Options considered
+
+1. Key on the exact normalised question within its scope: snapshot, contract, plan, plan year, language.
+2. Key on embedding similarity above a high threshold, as P4-01 describes.
+3. Exact now, semantic behind a flag measured against the golden set.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+`docs/ideas.md` names the failure itself: a loose threshold "collides two similar questions with different copays and returns a wrong answer". That is not hypothetical here. "What is my specialist copay" and "what is my out-of-network specialist copay" differ by one word and by ten dollars, and any similarity measure will rank them close.
+
+The product's entire claim is that an answer is grounded in a document. A cache that can return a confidently wrong amount trades the thing being sold for latency the same document says is worth nothing at demo volume.
+
+Option 2 also costs an embedding call per turn just to check the cache, which spends much of what it saves.
+
+Option 3 ships two paths and a flag that would sit at its default indefinitely.
+
+Exact keying still catches the real pattern: many members asking the same handful of questions in the same words. And the scope is in the key, so a plan, a language or a re-index cannot leak across.
+
+### Consequences
+
+- Rephrasings miss. That is the intended trade and the reason the miss is cheap: the embedding cache still absorbs part of a near-repeat.
+- Re-indexing is the invalidation. The snapshot id is part of the key, so a new corpus cannot hit an old entry and no sweep is needed.
+- Authenticated turns are excluded entirely. It is the only way one member's record could reach another, and a cached answer would make the access log record a read that never happened.
+- Every write is best-effort. A cache that cannot be written is a slower product, not a broken one, and a turn is never failed for it.
+- The disk audio cache was removed rather than kept beside the new one. On Cloud Run it was per-instance and lost on restart, so its measured hit rate would have flattered the deploy.
+
+---
+
+## Decision D-101 - Ingest clears answers only, and clears them on failure too
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The request was to reset every cache on a successful ingest, on the reasoning that a corpus change makes older responses stale. The reasoning is right for one of the three caches and does not apply to the other two.
+
+An answer cached against a snapshot id is stale when the chunks behind that id change. That happens when ingest is re-run into the **same** snapshot, which is exactly what a parser fix or a re-fetch produces, and it has already happened once in this project.
+
+A query embedding is a function of the question and the model, not of the corpus. Synthesised audio is keyed on the answer text: if an answer changes, the key changes, so the old recording is unreachable rather than wrong.
+
+### Options considered
+
+1. Clear the answers for the ingested snapshot; leave embeddings and audio.
+2. Clear answers and audio; leave embeddings.
+3. Clear all three, as asked.
+
+### Decision
+
+Option 1, and clear in a `finally` rather than on the success path.
+
+### Rationale
+
+Options 2 and 3 re-pay an embedding or synthesis bill to invalidate entries that were never capable of being wrong. Clearing a cache that cannot be stale is not conservatism, it is cost with no corresponding risk removed.
+
+The `finally` is the part worth arguing for. A run that dies part-way leaves a half-written corpus, and that is precisely the state in which a cached answer citing text that no longer exists is most likely and least expected. "On success" would have skipped the case that needs it most. This project has already had an ingest die at chunk 235 of 2737.
+
+Clearing runs last rather than first so a question asked during the run cannot repopulate the cache from the corpus being replaced.
+
+### Consequences
+
+- The first member to ask any question after an ingest pays for a fresh answer. That is the intended cost and it is bounded by the number of distinct questions, not by corpus size.
+- Audio for an answer that changed is orphaned rather than deleted. It is unreachable, small, and cheaper to leave than to identify.
+- A failed ingest now clears the cache as a side effect. That is deliberate: a partial corpus with no cache is a slow correct system, and a partial corpus with a full cache is a fast wrong one.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.
