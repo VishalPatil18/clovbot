@@ -8,7 +8,8 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
-- _<new capabilities>_
+- **Ask in Spanish and get a Spanish answer**, from Clover's own Spanish plan documents rather than a translation, cited to the Spanish document you can go and read. The assistant notices you have written Spanish and follows, and a language button beside the microphone switches it back at any time. Answers are read aloud in a Spanish voice, and the buttons, help and refusals are Spanish too.
+- The drug list is published only in English, so a Spanish answer about a medication says so and points at the English list rather than refusing.
 
 ### Changed
 

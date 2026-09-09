@@ -173,8 +173,14 @@ describe("required surfaces", () => {
     expect(tsx).toMatch(/Unaffiliated case study/i);
   });
 
-  it("states that no member data is held [NFR-SEC-01]", () => {
-    expect(tsx).toMatch(/no member data/i);
+  // Said "no member data is held" until sign-in shipped, which made it false.
+  // What holds now is that every record is invented, and it is said in both
+  // languages because a Spanish reader needs it as much as an English one.
+  it("states that every member record is demonstration data [NFR-SEC-01]", () => {
+    const strings = readFileSync("web/src/strings.ts", "utf8");
+    expect(strings).toMatch(/No real member data is held/);
+    expect(strings).toMatch(/No se guardan datos reales/);
+    expect(tsx).toContain('say("syntheticNotice")');
   });
 
   it("offers between four and six starter questions [FR-14]", () => {

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { EXCLUDED_KINDS, planIngest } from "../../src/rag/ingest.ts";
 import type { DocumentKind, ManifestEntry, Snapshot } from "../../src/corpus/types.ts";
@@ -211,5 +212,29 @@ describe("contract-wide documents [D-056]", () => {
       expect(chunk.contractId).toBe("H8010");
       expect(chunk.planId).toBe("002");
     }
+  });
+});
+
+describe("the ingest survives its own pacing", () => {
+  const cli = readFileSync("src/rag/cli.ts", "utf8");
+
+  // A 40-minute ingest died at chunk 235 of 2737: one client was held open
+  // across the loop, the pooler dropped it during a between-batch sleep, and pg
+  // raised that as an unhandled error event rather than a rejected query.
+  it("takes a connection per unit of work rather than holding one across the loop", () => {
+    const ingest = cli.slice(cli.indexOf("const existing = await withAdmin"));
+    expect(ingest).toContain("await withAdmin((client) => upsertChunks(client, batch, embeddings))");
+    expect(ingest.slice(0, ingest.indexOf("snapshot ${snapshotId}"))).not.toMatch(
+      /const client = connectAdmin\(\)/,
+    );
+  });
+
+  it("handles the drop event, which is not a rejected promise", () => {
+    expect(cli).toMatch(/client\.on\("error"/);
+  });
+
+  // Content comparison is what makes a crashed run resumable instead of wasted.
+  it("skips chunks already stored, so a re-run continues where it stopped", () => {
+    expect(cli).toMatch(/existing\.get\(chunk\.id\) !== `\$\{chunk\.contextPrefix\}/);
   });
 });

@@ -32,6 +32,25 @@ const KIND_LABEL: Record<CitableKind, string> = {
   member_record: "Your member record",
 };
 
+/**
+ * FR-P3-37. Clover publishes these under their Spanish names, so a member who
+ * reads Spanish is pointed at the document they can actually pick up. The drug
+ * list keeps its English name because there is no Spanish edition of it. D-093.
+ */
+const KIND_LABEL_ES: Record<CitableKind, string> = {
+  evidence_of_coverage: "Evidencia de Cobertura",
+  summary_of_benefits: "Resumen de Beneficios",
+  annual_notice_of_change: "Aviso Anual de Cambios",
+  formulary: "Drug List (en inglés)",
+  provider_directory: "Directorio de Proveedores (datos de demostración)",
+  pharmacy_directory: "Directorio de Farmacias",
+  corporate: "Información pública de Clover Health",
+  member_record: "Su registro de miembro",
+};
+
+const kindLabel = (kind: CitableKind, speech: Speech): string =>
+  speech === "es" ? KIND_LABEL_ES[kind] : KIND_LABEL[kind];
+
 /** Heading paths can be wrapped body sentences, so a section is trimmed for display. */
 const MAX_SECTION = 40;
 
@@ -45,7 +64,7 @@ function shortSection(section: string): string {
 }
 
 /** FR-06. A citation without a plan year is not a valid citation. */
-export function citationLabel(chunk: CitableChunk): string {
+export function citationLabel(chunk: CitableChunk, speech: Speech = "en"): string {
   if (!Number.isInteger(chunk.planYear)) {
     throw new Error(`citation for ${chunk.id} has no plan year`);
   }
@@ -57,15 +76,15 @@ export function citationLabel(chunk: CitableChunk): string {
   // "Your member record · Claim CLM-0031 · What you owe". Same three-part shape
   // as a document citation, so both kinds scan as one list. D-082.
   if (chunk.kind === "member_record") {
-    return `${KIND_LABEL.member_record} · ${chunk.documentId}${tail}`;
+    return `${kindLabel("member_record", speech)} · ${chunk.documentId}${tail}`;
   }
   // A document covering every contract has no plan to name, and "Plan *" is not
   // a source a member can look up.
   if (chunk.contractId === "*") {
-    return `${KIND_LABEL[chunk.kind]} ${chunk.planYear}${tail}`;
+    return `${kindLabel(chunk.kind, speech)} ${chunk.planYear}${tail}`;
   }
   const plan = chunk.planId === "*" ? chunk.contractId : `${chunk.contractId}-${chunk.planId}`;
-  return `${KIND_LABEL[chunk.kind]} ${chunk.planYear} · Plan ${plan}${tail}`;
+  return `${kindLabel(chunk.kind, speech)} ${chunk.planYear} · Plan ${plan}${tail}`;
 }
 
 /**
@@ -201,7 +220,11 @@ export function spokenAnswer(payload: AnswerPayload): string {
 }
 
 /** Prose is rendered by the application, never by the model. FR-32. */
-export function renderAnswer(payload: AnswerPayload, chunks: CitableChunk[]): string {
+export function renderAnswer(
+  payload: AnswerPayload,
+  chunks: CitableChunk[],
+  speech: Speech = "en",
+): string {
   const byId = new Map(chunks.map((chunk) => [chunk.id, chunk]));
   const lines: string[] = [];
 
@@ -228,9 +251,9 @@ export function renderAnswer(payload: AnswerPayload, chunks: CitableChunk[]): st
 
   if (numbered.length > 0) {
     lines.push("");
-    lines.push("Where this comes from:");
+    lines.push(`${t("sources", speech)}:`);
     for (const entry of numbered) {
-      lines.push(`  [${entry.number}] ${citationLabel(entry.chunk)}`);
+      lines.push(`  [${entry.number}] ${citationLabel(entry.chunk, speech)}`);
     }
   }
 

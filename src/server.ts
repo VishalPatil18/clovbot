@@ -653,7 +653,7 @@ async function handleAsk(
           : numberCitations(turn.payload, turn.retrieved).map((entry) => ({
               id: entry.chunk.id,
               number: entry.number,
-              label: citationLabel(entry.chunk),
+              label: citationLabel(entry.chunk, turn.language),
               documentId: entry.chunk.documentId,
             })),
       // Every cited id, including ones merged onto a shared number, so a claim

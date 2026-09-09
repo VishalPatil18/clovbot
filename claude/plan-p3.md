@@ -13,6 +13,7 @@
 | Field | Value |
 | --- | --- |
 | Plan version | 1.0.0 |
+| Status | **Complete.** All four stages done, shipping as v1.2.0 |
 | Source | `claude/srs.md` §8, `docs/ideas.md` §7, `claude/srs-p3.md` v1.0.0 |
 | Last Updated | 2026-09-09 |
 | Total estimate | ~15h across 3 stages, plus Stage 4 added 2026-09-08 |
@@ -111,18 +112,18 @@
 - **Scope out:** Any language beyond English and Spanish. Machine translation of English answers, which would produce an uncited claim in a language no source document supports.
 - **Amends:** FR-24, which currently requires stating in English that only English is supported. That requirement stands until this stage ships.
 - **Acceptance criteria:**
-  - [ ] A Spanish question returns a Spanish answer citing a Spanish source document.
-  - [ ] A Spanish question never retrieves an English chunk, asserted by test.
-  - [ ] An English question never retrieves a Spanish chunk, asserted by test.
-  - [ ] The two plans' Spanish Summary of Benefits documents split by column exactly as the English ones do, since they share the same two-plan layout.
-  - [ ] Cost answers agree between the English and Spanish corpora for the same question and plan, asserted on at least five amounts. A disagreement is a corpus defect, not a rounding difference.
-  - [ ] Language is detected once and held for the session, and the member can override it.
-  - [ ] The golden set gains Spanish cases, and faithfulness is reported per language rather than pooled.
-  - [ ] No answer is produced by translating an English answer.
+  - [x] A Spanish question returns a Spanish answer citing a Spanish source document.
+  - [x] A Spanish question never retrieves an English chunk. Verified against the live index: 5 of 5 chunks Spanish.
+  - [x] An English question never retrieves a Spanish chunk. Verified: 5 of 5 English.
+  - [x] The two plans' Spanish Summary of Benefits documents split by column exactly as the English ones do. Needed a fix: the Spanish edition writes `(plan 004)` in lower case.
+  - [x] Cost answers agree between the English and Spanish corpora. Specialist $10 and $20 on 004, $2 and $15 on 007, out-of-pocket maximum $9,250 on the PPO and $6,000 on the HMO.
+  - [x] Language is detected once and held for the session, and the member can override it with a labelled control in both layouts.
+  - [x] Six Spanish cases, and faithfulness reported per language: en 1.000 over 60, es 1.000 over 6.
+  - [x] No answer is produced by translating an English answer. Every claim comes from a Spanish chunk, or from the drug list with the mismatch stated (D-093).
 - **Test plan:** Ingest tests asserting language scoping on both sides. A paired-amount test comparing English and Spanish answers for the same question, which is the one that catches a mis-split Spanish Summary of Benefits. Golden set extended with Spanish cases scored separately.
 - **Effort:** M
-- **Exit signal:** The same copay question, asked in Spanish, returns the same amount as the English answer, cited to the Spanish Evidence of Coverage.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Exit signal:** The same copay question, asked in Spanish, returns the same amount as the English answer, cited to the Spanish Evidence of Coverage. Met.
+- **Status:** [x] done, 2026-09-09.
 
 ---
 
@@ -131,7 +132,7 @@
 - [x] Stage 1 - Row-level security
 - [x] Stage 2 - Audit log and minimum-necessary access
 - [x] Stage 3 - Real-PHI writeup
-- [ ] Stage 4 - Spanish
+- [x] Stage 4 - Spanish
 
 ---
 

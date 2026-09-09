@@ -631,6 +631,19 @@
 
 .help__title:first-child { margin-top: 0; }
 .help__list { margin: 0; padding-left: var(--spacing-24); font-size: var(--text-message); line-height: var(--leading-message); }
+
+/* The synthetic-record statement. Set apart from the lists because it is a fact
+   about the whole product rather than another thing you can ask. */
+.help__note {
+  margin: var(--spacing-16) 0 0;
+  padding: var(--spacing-12);
+  border-radius: var(--radius-sm);
+  background: var(--color-keylime-wash);
+  font-size: var(--text-body);
+  line-height: 1.45;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-forest-ink);
+}
 .help__list li { margin-bottom: var(--spacing-8); }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--spacing-8); margin-bottom: var(--spacing-12); }

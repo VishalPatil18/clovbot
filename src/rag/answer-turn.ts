@@ -373,7 +373,7 @@ async function runTurn(
 
   return {
     question,
-    answer: answered || payload.refusal !== null ? renderAnswer(payload, retrieved) : refusalText(t("notFound", speech), speech),
+    answer: answered || payload.refusal !== null ? renderAnswer(payload, retrieved, speech) : refusalText(t("notFound", speech), speech),
     payload,
     retrieved,
     citedIds: [...new Set(payload.claims.flatMap((claim) => claim.citationIds))],

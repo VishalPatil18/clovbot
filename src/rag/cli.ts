@@ -1,3 +1,4 @@
+import type pg from "pg";
 import { existsSync, readFileSync } from "node:fs";
 import { redactIdentifiers } from "../logging.ts";
 import { bboxPath, latestSnapshotId, readSnapshot } from "../corpus/snapshot.ts";
@@ -35,6 +36,26 @@ async function recordFreshness(snapshotId: string, documentsFetchedAt: string): 
     await client.end();
   }
   console.log(`  corpus: documents fetched ${documentsFetchedAt}`);
+}
+
+/**
+ * One connection per unit of work, never one held across the loop.
+ *
+ * The embedding loop sleeps between batches to stay under the token budget, and
+ * the pooler drops a connection left idle through those sleeps. `pg` raises that
+ * as an unhandled error event, which killed a 40-minute ingest at chunk 235 with
+ * no cleanup and no way to tell how far it had got.
+ */
+async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
+  const client = connectAdmin();
+  // An idle-timeout drop arrives as an error event, not a rejected query.
+  client.on("error", (error) => console.warn(`  database connection dropped: ${error.message}`));
+  await client.connect();
+  try {
+    return await work(client);
+  } finally {
+    await client.end().catch(() => {});
+  }
 }
 
 /** D-007's typed half: the drug list as rows, not as prose. D-060. */
@@ -89,38 +110,34 @@ async function ingest(): Promise<void> {
     chunk.embedText = `${described}\n\n${chunk.content}`;
   }
 
-  const client = connectAdmin();
-  await client.connect();
-  try {
-    const existing = await existingChunkContent(client, snapshotId);
-    const changed = chunks.filter(
-      (chunk) => existing.get(chunk.id) !== `${chunk.contextPrefix}\n${chunk.content}`,
-    );
-    console.log(`${chunks.length} chunks, ${changed.length} new or changed`);
+  const existing = await withAdmin((client) => existingChunkContent(client, snapshotId));
+  const changed = chunks.filter(
+    (chunk) => existing.get(chunk.id) !== `${chunk.contextPrefix}\n${chunk.content}`,
+  );
+  console.log(`${chunks.length} chunks, ${changed.length} new or changed`);
 
-    // Persist each batch, so a rate-limit failure costs one batch rather than all of them.
-    let done = 0;
-    for (const batch of batchByTokens(changed, BATCH_TOKEN_BUDGET)) {
-      const tokens = batch.reduce((sum, chunk) => sum + estimateTokens(chunk.embedText), 0);
-      const vectors = await embed(batch.map((chunk) => chunk.embedText));
-      const embeddings = new Map<string, number[]>();
-      for (const [index, chunk] of batch.entries()) {
-        const vector = vectors[index];
-        if (vector !== undefined) embeddings.set(chunk.id, vector);
-      }
-      await upsertChunks(client, batch, embeddings);
-      done += batch.length;
-      console.log(`  embedded and stored ${done}/${changed.length}`);
-
-      // Stay under the per-minute token budget rather than retrying into it.
-      if (done < changed.length) await sleep((tokens / TOKENS_PER_MINUTE) * 60_000);
+  // Persist each batch, so a rate-limit failure costs one batch rather than all of them.
+  let done = 0;
+  for (const batch of batchByTokens(changed, BATCH_TOKEN_BUDGET)) {
+    const tokens = batch.reduce((sum, chunk) => sum + estimateTokens(chunk.embedText), 0);
+    const vectors = await embed(batch.map((chunk) => chunk.embedText));
+    const embeddings = new Map<string, number[]>();
+    for (const [index, chunk] of batch.entries()) {
+      const vector = vectors[index];
+      if (vector !== undefined) embeddings.set(chunk.id, vector);
     }
+    await withAdmin((client) => upsertChunks(client, batch, embeddings));
+    done += batch.length;
+    console.log(`  embedded and stored ${done}/${changed.length}`);
 
-    const pruned = await pruneChunks(client, snapshotId, chunks.map((chunk) => chunk.id));
-    if (pruned > 0) console.log(`pruned ${pruned} chunks no longer produced`);
-  } finally {
-    await client.end();
+    // Stay under the per-minute token budget rather than retrying into it.
+    if (done < changed.length) await sleep((tokens / TOKENS_PER_MINUTE) * 60_000);
   }
+
+  const pruned = await withAdmin((client) =>
+    pruneChunks(client, snapshotId, chunks.map((chunk) => chunk.id)),
+  );
+  if (pruned > 0) console.log(`pruned ${pruned} chunks no longer produced`);
   console.log(`snapshot ${snapshotId}: ${chunks.length} chunks indexed`);
 }
 
@@ -152,7 +169,7 @@ async function ask(): Promise<void> {
       console.log("Sources:");
       for (const id of turn.citedIds) {
         const chunk = turn.retrieved.find((candidate) => candidate.id === id);
-        if (chunk !== undefined) console.log(`  ${citationLabel(chunk)}`);
+        if (chunk !== undefined) console.log(`  ${citationLabel(chunk, turn.language)}`);
       }
     }
 

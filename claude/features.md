@@ -1568,3 +1568,61 @@ Two visible changes. A member whose session ran out is told which limit was reac
 **Tech specs:** a Markdown document in `docs/`, reviewer-facing. No UI, no schema, no dependency. `tests/unit/real-phi-writeup.test.ts` asserts source integrity: every regulation named in the body appears in the sources list, every control section carries both halves, and the section on Azure retention states no period the project did not verify.
 
 **What measuring found that reading the code would not.** The pooler accepts plaintext, so TLS is a client-side convention rather than a server-side rule, and `pg_stat_ssl` shows the pooler-to-database hop unencrypted. Three outbound paths carry answer content to vendors with no agreement, none of which appears on the briefing's five-item HIPAA list.
+
+---
+
+## Feature: Spanish, end to end (P3 Stage 4)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-31 to FR-P3-44, NFR-P3-06, NFR-P3-09, NFR-P3-12. **Decisions:** D-093, D-095, D-096.
+
+### What a member sees
+
+A language control beside the voice control, in the panel header and in the full-page rail, labelled in the language it switches to: **Español** when reading English, **English** when reading Spanish. Named that way so a member who cannot read the current language can still find it, with `lang` set so a screen reader pronounces the label correctly.
+
+A Spanish question is answered in Spanish without touching the control at all. Detection seeds the setting on the first Spanish turn, and the member can override it afterwards.
+
+### UX flow
+
+1. Member types or speaks a question in Spanish.
+2. The detector reads it as Spanish and the setting follows the answer.
+3. Retrieval is scoped to Spanish chunks before ranking, alongside the plan.
+4. The model is asked, on the user message only, to answer in Spanish.
+5. The answer renders with Spanish citations: `Evidencia de Cobertura 2026 · Plan H5141-004`, under `De dónde viene esto`.
+6. Read aloud, it uses the Spanish voice.
+
+### Backend entities
+
+- `QuestionLanguage` - `"en" | "es" | "other"`. The third is still handed over, because no source document supports it.
+- `Speech` and `corpusLanguage()` in `src/i18n.ts` - the interface code and the corpus tag.
+- `COPY` in `src/i18n.ts` - refusals, handovers, staleness and the drug-list disclosure, authored in both languages.
+- `explanationEs` on every guardrail rule, and Spanish alternatives inside every pattern.
+- `web/src/strings.ts` - panel chrome and help prose.
+
+### DB schema
+
+`chunks` gains `language` with a check constraint, an index, and a `search_vector` that picks its text-search configuration per row. `search_hybrid` gains a `p_language` parameter and scopes on it inside the ranking CTE.
+
+### Tech specs
+
+- **Instruction placement:** the user message. Rejected: the system prompt, because D-069 measured that changing its bytes moves faithfulness on English answers.
+- **Scoping:** a column, filtered in SQL before ranking. Rejected: post-filtering, which is D-033's mistake in a new dimension; and separate tables, which duplicates every index and policy for one column.
+- **Copy:** authored. Rejected: runtime machine translation, which would produce a claim no source supports.
+- **Drug list:** cited across languages with the mismatch stated. Rejected: refusing, which fails a question the system can answer; and silent bilingual tagging, which hides it.
+
+### Verification
+
+Against the live index, 2737 chunks (1913 English over 19 documents, 824 Spanish over 9):
+
+- A Spanish question retrieved 5 chunks, all Spanish, from the `-es` documents. The paired English question retrieved 5, all English.
+- The paired amounts agree: `$10` in-network and `$20` out-of-network for plan 004, in both languages, from different source documents.
+- Guardrails fire in Spanish (`dolor en el pecho` breaks out to 911, `puede aprobar mi cobertura` refuses) with no false positives on answerable questions in either language.
+
+### What building it surfaced
+
+**The Spanish Summary of Benefits writes `(plan 004)` in lower case** where English writes `(Plan 004)`. One character, and the only reason it did not silently merge two columns of amounts is that D-031 fails loudly when a money row cannot be attributed.
+
+**A conversion failure was sticky.** `convertAll` skipped any entry not marked `ok`, so a fixed parser kept reporting the reason from the run that broke it.
+
+**Translating the guardrail explanations was not enough.** The match patterns were English-only, so a Spanish emergency fired no rule and the translated copy was never reached. The golden set caught it; nothing else would have.
+
+**The help panel claimed the assistant "holds no member data and never signs you in".** True in P1, false since P2 shipped sign-in. Found while translating it, and replaced with what is actually true: every record here is demonstration data.

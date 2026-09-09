@@ -1,4 +1,4 @@
-import { s, type StringKey } from "../strings.ts";
+import { help, s, type StringKey } from "../strings.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -624,43 +624,22 @@ export function Assistant({
           <section
             id="assistant-help"
             className="help"
-            aria-label="What you can ask"
+            aria-label={say("whatYouCanAsk")}
           >
-            <h3 className="help__title">What you can ask</h3>
+            <h3 className="help__title">{say("whatYouCanAsk")}</h3>
             <ul className="help__list">
-              <li>
-                What a service costs under your plan: copays, coinsurance, the
-                out-of-pocket maximum.
-              </li>
-              <li>
-                Whether a service or a drug is covered, and what tier a drug is
-                on.
-              </li>
-              <li>
-                How a process works: prior authorization, referrals, appeals and
-                grievances.
-              </li>
-              <li>
-                What your supplemental benefits include: dental, vision,
-                hearing, over-the-counter.
-              </li>
+              {help("canAsk", language).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
             </ul>
-            <h3 className="help__title">What it cannot do</h3>
+            <h3 className="help__title">{say("whatItCannotDo")}</h3>
             <ul className="help__list">
-              <li>
-                Anything about you personally. It holds no member data and never
-                signs you in.
-              </li>
-              <li>
-                Medical advice, or deciding whether something will be covered
-                for you.
-              </li>
-              <li>
-                Tell you whether a named doctor is in network. That directory is
-                demonstration data.
-              </li>
+              {help("cannotDo", language).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
             </ul>
-            <h3 className="help__title">The buttons</h3>
+            <p className="help__note">{say("syntheticNotice")}</p>
+            <h3 className="help__title">{say("theButtons")}</h3>
             <ul className="help__list">
               <li>
                 <strong>Talk to a person</strong> calls Member Services at{" "}
@@ -791,6 +770,7 @@ export function Assistant({
                     headline={turn.headline}
                     staleness={turn.staleness}
                     fallback={turn.answer}
+                    sourcesTitle={say("sourcesTitle")}
                   />
 
                   {/* FR-27, on answered turns only. */}

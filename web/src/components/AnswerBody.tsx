@@ -17,6 +17,8 @@ interface Props {
   staleness?: string | null;
   /** Used when there is no structured payload: refusals and upstream failures. */
   fallback: string;
+  /** FR-P3-37. The heading over the source list follows the answer's language. */
+  sourcesTitle?: string;
 }
 
 /**
@@ -34,6 +36,7 @@ export function AnswerBody({
   headline = null,
   staleness = null,
   fallback,
+  sourcesTitle = "Where this comes from",
 }: Props): React.JSX.Element {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -146,7 +149,7 @@ export function AnswerBody({
 
       {citations.length > 0 && (
         <div className="citations">
-          <h4 className="citations__title">Where this comes from</h4>
+          <h4 className="citations__title">{sourcesTitle}</h4>
           {/* Attached to the source block, so it survives print, copy and speech
               rather than living in chrome the member may never scroll to. D-067. */}
           {staleness !== null && <p className="citations__staleness">{staleness}</p>}

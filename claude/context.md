@@ -682,3 +682,26 @@ Both would have been written up as "encryption: done" from the code alone, becau
 **Open:** migration 014 is not applied and the Spanish corpus is not ingested. The answering half is not built: session language, the Spanish prompt, Spanish refusal and guardrail copy, the English-drug-list exception (FR-P3-36), the language control, the Spanish voice ids, and the Spanish golden cases.
 
 **Next:** apply 014, ingest, then the answering and interface half.
+
+## 2026-09-09 - P3 Stage 4: Spanish, and P3 complete
+
+**Did:** the answering and interface half of Spanish. A Spanish question is answered in Spanish, from Spanish source documents, with Spanish citations, read in a Spanish voice, inside a panel whose own chrome is Spanish. All four P3 stages are done.
+
+**Files:** added `src/i18n.ts`, `web/src/strings.ts`, `tests/unit/spanish-surface.test.ts`, `migrations/014_language_scoped_retrieval.sql` and its down script. Changed the corpus pipeline, `src/language.ts`, `src/guardrails.ts`, `src/rag/{answer-turn,payload,router,store,chunk,ingest,cli}.ts`, `src/voice/providers.ts`, `src/server.ts`, the web panel, the eval harness and the golden set. 756 tests pass.
+
+**One eval run, four gates, all green:** faithfulness 1.000, structural 100%, refusal 9.1%, bucket A 41/44, B 8/8, C 12/12. **Per language, en 1.000 over 60 cases and es 1.000 over 6.** Router 32/32. Login detection zero false negatives and zero false positives. Regression gate met. The corpus is 2737 chunks: 1913 English over 19 documents, 824 Spanish over 9.
+
+**Verified against the live index, not asserted:** a Spanish question retrieved 5 chunks, all Spanish, from the `-es` documents; the paired English question retrieved 5, all English. The amounts agree across languages from different source documents.
+
+**What building it surfaced:**
+
+- **`(plan 004)` in lower case.** The Spanish Summary of Benefits differs from the English by one character, and the parser found no headers at all. D-031's loud failure is the only reason two columns of amounts were not silently merged.
+- **A conversion failure was sticky**, so a fixed parser kept reporting the reason from the run that broke it. Fixed: an entry whose raw file still exists is retried.
+- **Translating the guardrails was not enough.** The patterns were English-only, so a Spanish emergency fired nothing and the Spanish copy was never reached. The golden set caught it.
+- **A 40-minute ingest died at chunk 235.** One connection held across a loop that sleeps between batches; the pooler dropped it and `pg` raised an unhandled error event. Now one connection per unit of work, and the run resumed rather than restarting.
+- **The help panel was lying.** It said the assistant "holds no member data and never signs you in", which stopped being true when P2 shipped. Found while translating it.
+- **A generated column will not take `language::regconfig`.** Casting text to a regconfig is a catalog lookup, so only stable. A `case` over constants is immutable and accepted.
+
+**Open:** the local default snapshot is whatever directory sorts last, so a half-finished ingest silently becomes the one served locally. Production pins it at deploy time. Citations for chunks with no heading read "Unlabelled" in both languages, which is a pre-existing chunking artifact rather than a Spanish regression.
+
+**Next:** cut v1.2.0, or P4.

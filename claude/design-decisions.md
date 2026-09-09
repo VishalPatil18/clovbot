@@ -3507,6 +3507,85 @@ The email lookup has nothing to establish an identity from, so it gets a functio
 
 ---
 
+## Decision D-095 - The Spanish instruction rides on the user message, not the system prompt
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+A Spanish answer needs the model told to answer in Spanish. The obvious place is the system prompt, which is where every other standing rule lives.
+
+D-069 measured what that costs. Adding one display rule to the system prompt moved faithfulness from 1.000 to 0.989 and flipped A-31 from refused to answered. Rewording it did not help; even naming a nullable field in the shape moved another case to 0.667. The answering prompt is measurably sensitive to its own bytes.
+
+### Options considered
+
+1. Append the instruction to the user message, only on a Spanish turn.
+2. Add a language rule to the system prompt.
+3. Two system prompts, one per language.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 changes the bytes of the prompt every English answer is produced from, to serve a feature English answers do not use. The cost is not hypothetical; it is the one thing about this prompt that has been measured twice.
+
+Option 3 doubles the surface that has to stay in step. Two prompts drift, and the drift shows up as a faithfulness difference between languages that looks like a retrieval problem.
+
+An English prompt is now byte-for-byte what it was before Spanish existed, which is asserted by test rather than assumed. Spanish costs English nothing, and that is provable rather than argued.
+
+### Consequences
+
+- The instruction is further from the model's attention than a system rule would be. Measured behaviour says it is heeded; if a Spanish answer ever comes back in English, this is the first place to look.
+- Any future per-turn instruction now has an obvious home, and a precedent for not reaching for the system prompt.
+
+---
+
+## Decision D-096 - The corpus keeps one language per chunk, and retrieval scopes on it
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Clover publishes a Spanish Evidence of Coverage, Summary of Benefits and Annual Notice of Change for all three indexed plans, and no Spanish drug list. Both editions have to be indexed without a Spanish question ever retrieving an English chunk, or the reverse.
+
+### Options considered
+
+1. A `language` column on every chunk, scoped in SQL beside the plan, before ranking.
+2. One index, and filter the results by language after ranking.
+3. Separate tables per language.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 is the same mistake D-033 already recorded for plan scoping, in a new dimension. The two editions describe the same benefits in near-identical structure; ranking first means competing for the same slots, and filtering after leaves fewer results than asked for, sometimes none.
+
+Option 3 duplicates every index, every policy and every query for a distinction that is one column wide.
+
+The lexical half matters more than expected. Spanish text under the English text-search configuration strips English stopwords and stems nothing, which would have made the lexical half of hybrid retrieval useless on a third of the corpus while still returning plausible dense results. The generated column picks its configuration per row with a `case` over constants, because casting the column itself is a catalog lookup and only stable, which a generated column will not accept.
+
+### Consequences
+
+- The drug list is the one deliberate exception, and it is written as an exception at the single place it applies rather than by loosening the scope. D-093.
+- The eight-argument `search_hybrid` had to be dropped rather than left beside the nine-argument one: an eight-argument call would become ambiguous. The grant does not follow a function through a signature change either.
+- Every future document dimension, an older plan year for instance, now has a pattern to copy.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

@@ -303,3 +303,17 @@ _<How this concept will apply to future work in this project.>_
 **State the limit of your own control.** Row-level security here filters on a value the application sets, so the trust boundary moved rather than left. Writing that down is worth more than the control is, because a reader who finds it themselves stops believing the rest.
 
 **A document can have a regression test.** Every regulation named in the body must appear in the sources list, and the one control section that skipped the "what exists today" half failed the check. Both were real defects in the writing, caught the same way a code defect would be.
+
+## P3 Stage 4 - what a second language taught
+
+**A translated string on an untranslated rule refuses nothing.** The guardrail explanations were authored in Spanish and the match patterns stayed English, so a Spanish emergency reached no rule at all and the careful Spanish copy was unreachable. Translation is the visible half of internationalising a rule and the smaller half.
+
+**Fetch the other edition and run it through the parser before assuming it is the same document.** The Spanish Summary of Benefits differs from the English by one character of case in its column header. Everything downstream depended on that character, and a parser that fails loudly instead of guessing is what turned it into a build error rather than two plans' amounts merged into one.
+
+**A failure that is recorded as state will outlive its cause.** The conversion step skipped anything not marked `ok`, so after fixing the parser the same three documents kept reporting the old reason. Ten minutes were spent debugging a parser that was already correct.
+
+**Do not hold a connection across a loop that sleeps.** The embedding loop pauses deliberately to stay under a token budget, and a pooler drops an idle connection. `pg` surfaces that as an unhandled error event rather than a rejected query, so a 40-minute job died at chunk 235 with no cleanup. One connection per unit of work costs a couple of hundred milliseconds and removes the failure mode.
+
+**Translating an interface is an audit of what it claims.** The help panel said the assistant holds no member data and never signs you in. That was true when it was written and false for two stages. Nobody re-read it until somebody had to write it again in another language.
+
+**A measured cost changes where new code goes.** D-069 measured that touching the answering system prompt moves faithfulness. So the Spanish instruction went on the user message instead, and an English prompt is byte-for-byte what it was. The measurement paid for itself a second time, in a stage written weeks later.

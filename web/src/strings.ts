@@ -18,6 +18,14 @@ const STRINGS = {
     "Pregunte sobre costos, medicamentos, proveedores o apelaciones",
   ],
   copy: ["Copy", "Copiar"],
+  sourcesTitle: ["Where this comes from", "De dónde viene esto"],
+  // Was "it holds no member data", which stopped being true when sign-in
+  // shipped. What is true, and what NFR-SEC-01 wants stated, is that every
+  // record here is invented.
+  syntheticNotice: [
+    "Every member record here is demonstration data. No real member data is held.",
+    "Todo registro de miembro aquí son datos de demostración. No se guardan datos reales de ningún miembro.",
+  ],
   didThisAnswer: ["Did this answer your question?", "¿Esto respondió su pregunta?"],
   yes: ["Yes", "Sí"],
   no: ["No", "No"],
@@ -42,6 +50,59 @@ const STRINGS = {
   readingAloud: ["Reading this answer aloud", "Leyendo esta respuesta en voz alta"],
   signInAndAnswer: ["Sign in and answer this", "Inicie sesión y responda esto"],
 } as const satisfies Record<string, readonly [string, string]>;
+
+/**
+ * The help panel's prose. Lists rather than single strings, because splitting a
+ * bulleted list into numbered keys makes it impossible to see the whole thing
+ * in one language while translating it.
+ */
+const HELP = {
+  canAsk: [
+    [
+      "What a service costs under your plan: copays, coinsurance, the out-of-pocket maximum.",
+      "Cuánto cuesta un servicio bajo su plan: copagos, coseguro y el máximo de gastos de bolsillo.",
+    ],
+    [
+      "Whether a service or a drug is covered, and what tier a drug is on.",
+      "Si un servicio o un medicamento está cubierto, y en qué nivel está un medicamento.",
+    ],
+    [
+      "How a process works: prior authorization, referrals, appeals and grievances.",
+      "Cómo funciona un trámite: autorización previa, referencias, apelaciones y quejas.",
+    ],
+    [
+      "What your supplemental benefits include: dental, vision, hearing, over-the-counter.",
+      "Qué incluyen sus beneficios complementarios: dental, visión, audición y de venta libre.",
+    ],
+    [
+      "Your own record, once you sign in: a claim, a prior authorisation, what is left of an allowance.",
+      "Su propio registro, una vez que inicie sesión: un reclamo, una autorización previa, cuánto queda de una asignación.",
+    ],
+  ],
+  cannotDo: [
+    [
+      "Medical advice, or deciding whether something will be covered for you.",
+      "Consejos médicos, ni decidir si algo estará cubierto para usted.",
+    ],
+    [
+      "Change anything on your record, or act on someone else's behalf.",
+      "Cambiar algo en su registro, ni actuar en nombre de otra persona.",
+    ],
+    [
+      "Tell you whether a named doctor is in network. That directory is demonstration data.",
+      "Decirle si un médico específico está en la red. Ese directorio son datos de demostración.",
+    ],
+    [
+      "Answer in a language other than English or Spanish. A person can help in yours.",
+      "Responder en un idioma que no sea inglés o español. Una persona puede ayudarle en el suyo.",
+    ],
+  ],
+} as const satisfies Record<string, readonly (readonly [string, string])[]>;
+
+export type HelpKey = keyof typeof HELP;
+
+export const help = (key: HelpKey, speech: Speech): readonly string[] =>
+  HELP[key].map((pair) => pair[speech === "es" ? 1 : 0]);
 
 export type StringKey = keyof typeof STRINGS;
 
