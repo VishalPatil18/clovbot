@@ -1,13 +1,8 @@
 /*
- * Tokens from design/DESIGN.md.
+ * Two tiers on purpose: the message thread holds the 18px floor, chrome uses the
+ * design scale, and the gap between them is the hierarchy.
  *
- * Two tiers, on purpose. The message thread is the reading surface and holds the
- * 18px floor NFR-A11Y-03 asks for; interface chrome uses the DESIGN.md scale.
- * The gap between them is the hierarchy: the answer should dominate the frame.
- *
- * The citation sits at UI body size rather than the mock's 11px chip. It is the
- * surface the product's trustworthiness rests on, and the smallest type on the
- * screen is the wrong place for it.
+ * The citation sits at body size, not the mock's 11px chip.
  */
 :root {
   --color-forest-ink: #0f3e17;
@@ -20,11 +15,7 @@
   --color-border-mist: #efeeeb;
   --color-forest-shadow: #0c2f10;
 
-  /*
-   * The two faces design/DESIGN.md names. Both are licensed, so the stacks fall
-   * back to the system sans exactly as DESIGN.md writes them. Faire Octave is a
-   * sans, which is why a Garamond substitute read wrong as the display face.
-   */
+  /* Both licensed, so the stacks fall back to the system sans. Neither is a serif. */
   --font-display:
     "Faire Octave", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, sans-serif;
@@ -70,11 +61,11 @@
   --radius-lg: 22px;
   --radius-pill: 999px;
 
-  /* NFR-A11Y-02: the AAA target size, not the AA minimum. */
+  /* The AAA target size, not the AA minimum. */
   --target-min: 44px;
   /* One height for the composer field, the mic and the send control. */
   --composer-height: 48px;
-  /* NFR-A11Y-04: at least 2px at 3:1 contrast. */
+  /* At least 2px at 3:1 contrast. */
   --focus-ring: 3px solid #0f3e17;
   --focus-offset: 2px;
 }
@@ -116,7 +107,7 @@ button, a[role="button"], .target {
   white-space: nowrap;
 }
 
-/* NFR-A11Y-03: reflow at 200% zoom without horizontal scroll. */
+/* Reflow at 200% zoom without horizontal scroll. */
 html, body { overflow-x: hidden; }
 
 @media (prefers-reduced-motion: reduce) {

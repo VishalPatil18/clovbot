@@ -4,7 +4,6 @@ import { citationLabel } from "../../src/rag/payload.ts";
 
 const record: MemberRecord = {
   id: 1,
-  displayName: "Demo Member One",
   contractId: "H5141",
   planId: "004",
   planYear: 2026,
@@ -15,10 +14,11 @@ const chunk = memberFactAsChunk(record, {
   item: "Claim CLM-0031",
   field: "What you owe",
   text: "Billed $210, the plan paid $200, and $10 is owed.",
+  sources: [{ table: "member_claims", column: "member_owes", rowId: "CLM-0031" }],
 });
 
 describe("member record as a citable source [FR-P2-28, D-080, D-082]", () => {
-  // D-082: same three-part shape as a document citation, so a combined answer
+  // Same three-part shape as a document citation, so a combined answer
   // reads as one list rather than two vocabularies.
   it("names the record, the item and the field", () => {
     expect(citationLabel(chunk)).toBe("Your member record · Claim CLM-0031 · What you owe");
@@ -28,7 +28,7 @@ describe("member record as a citable source [FR-P2-28, D-080, D-082]", () => {
     expect(citationLabel(chunk)).not.toMatch(/member_owes|_/);
   });
 
-  // FR-P2-24: the label is visible in output, not only present in the schema.
+  // The label is visible in output, not only present in the schema.
   it("marks the content as synthetic wherever it is read", () => {
     expect(chunk.content).toMatch(/synthetic/i);
   });
@@ -49,6 +49,7 @@ describe("member record as a citable source [FR-P2-28, D-080, D-082]", () => {
       item: "Claim CLM-0031",
       field: "Status",
       text: "Paid.",
+      sources: [{ table: "member_claims", column: "status", rowId: "CLM-0031" }],
     });
     expect(other.id).not.toBe(chunk.id);
   });

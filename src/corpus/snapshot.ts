@@ -10,7 +10,7 @@ export const rawPath = (id: string, documentId: string, ext: string): string =>
 export const markdownPath = (id: string, documentId: string): string =>
   join(snapshotDir(id), "markdown", `${documentId}.md`);
 
-/** Word coordinates, kept for documents whose tables need typed extraction. D-058. */
+/** Word coordinates, kept for documents whose tables need typed extraction. */
 export const bboxPath = (id: string, documentId: string): string =>
   join(snapshotDir(id), "bbox", `${documentId}.xhtml`);
 
@@ -19,11 +19,7 @@ export function newSnapshotId(now: Date): string {
   return `${now.toISOString().slice(0, 16).replace(/:/g, "")}Z`;
 }
 
-/**
- * At query time only the id is needed: chunks come from Postgres. A deployed
- * host has no snapshot directory, so the id is configurable and the directory
- * listing is the local fallback.
- */
+/** A deployed host has no snapshot directory, so the id is configurable. */
 export function latestSnapshotId(): string {
   const configured = process.env["CORPUS_SNAPSHOT_ID"];
   if (configured !== undefined && configured.length > 0) return configured;

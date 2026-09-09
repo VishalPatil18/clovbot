@@ -30,6 +30,7 @@ const turn = (id: number) => ({
   staleness: null,
   outcome: "answered" as const,
   feedback: null,
+  feedbackReason: null,
   turnId: "t",
 });
 
@@ -149,6 +150,19 @@ describe("signing out on a shared device [FR-P2-39]", () => {
       },
     ]);
     expect(clearMemberTurns()).toEqual([]);
+  });
+
+  // The citation is written in the answer's language, so a Spanish member's
+  // claim data survived a sign-out while only the English label was matched.
+  it("removes a turn cited in Spanish to the member's record [FR-P2-39]", () => {
+    install(fakeStorage());
+    writeHistory([
+      cited(1, "Resumen de Beneficios 2026 · Plan H5141-004 · Consultorio"),
+      cited(2, "Su registro de miembro · Reclamo CLM-0031 · Lo que usted debe"),
+    ]);
+    const kept = clearMemberTurns();
+    expect(kept.map((t) => t.id)).toEqual([1]);
+    expect(JSON.stringify(readHistory())).not.toContain("registro de miembro");
   });
 
   it("does nothing harmful when storage is unavailable", () => {

@@ -17,6 +17,12 @@ export interface Headline {
   citationIds: string[];
 }
 
+/**
+ * Lives here rather than in voice.ts: a test pulls api.ts into the Node-typed
+ * program, and importing from voice.ts drags its DOM globals in with it.
+ */
+export type Speech = "en" | "es";
+
 export interface PlanOption {
   contractId: string;
   id: string;
@@ -29,6 +35,8 @@ export type AskEvent =
   | {
       type: "answer";
       answer: string;
+      /** What the assistant answered in, so the control can follow. */
+      language?: Speech;
       /** The answer without citation markers or the source list. Read aloud. */
       spokenAnswer?: string;
       outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
@@ -36,7 +44,7 @@ export type AskEvent =
       unanswered: string[];
       refusal: { trigger: string; explanation: string } | null;
       headline: Headline | null;
-      /** Non-null once the calendar has passed the corpus plan year. FR-P2-17. */
+      /** Non-null once the calendar has passed the corpus plan year. */
       staleness: string | null;
       citations: Citation[];
       /** Cited chunk id to display number, including ids merged onto one source. */
@@ -63,7 +71,7 @@ export interface CallbackDraft {
   refusalTrigger: string | null;
 }
 
-/** FR-22. Validates, stores and confirms; nothing is sent anywhere. */
+/** Validates, stores and confirms; nothing is sent anywhere. */
 export async function requestCallback(
   draft: CallbackDraft,
   note: string,
@@ -79,13 +87,27 @@ export async function requestCallback(
     : { ok: false, message: body.error ?? "The request could not be saved." };
 }
 
-/** FR-27. Recorded against the turn, so a "no" can be traced to its answer. */
-export async function sendFeedback(turnId: string, resolved: boolean): Promise<boolean> {
+/** Recorded against the turn, so a "no" traces to its answer. */
+/** The four the member can pick after saying no. Never free text. */
+export const FEEDBACK_REASONS = [
+  "wrong_plan",
+  "not_what_i_asked",
+  "hard_to_understand",
+  "think_it_is_covered",
+] as const;
+
+export type FeedbackReason = (typeof FEEDBACK_REASONS)[number];
+
+export async function sendFeedback(
+  turnId: string,
+  resolved: boolean,
+  reason: FeedbackReason | null = null,
+): Promise<boolean> {
   try {
     const response = await fetch("/api/feedback", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ turnId, resolved }),
+      body: JSON.stringify({ turnId, resolved, reason }),
     });
     return response.ok;
   } catch {
@@ -99,7 +121,7 @@ export interface PlansResponse {
   corpus: { documentsFetchedAt: string; ingestedAt: string; planYear: number } | null;
 }
 
-/** What the corpus covers and when it was collected. FR-P2-16. */
+/** What the corpus covers and when it was collected. */
 export async function fetchPlans(): Promise<PlansResponse | null> {
   try {
     const response = await fetch("/api/plans");
@@ -117,11 +139,17 @@ export async function ask(
   plan: PlanOption | null,
   onEvent: (event: AskEvent) => void,
   signal?: AbortSignal,
+  language: Speech = "en",
 ): Promise<void> {
   const response = await fetch("/api/ask", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ question, planId: plan?.id ?? null, contractId: plan?.contractId ?? null }),
+    body: JSON.stringify({
+      question,
+      planId: plan?.id ?? null,
+      contractId: plan?.contractId ?? null,
+      language,
+    }),
     ...(signal === undefined ? {} : { signal }),
   });
 
@@ -155,7 +183,7 @@ export interface SessionState {
   signedInAs: string | null;
 }
 
-/** FR-P2-37. Asked on load so the indicator is right in every state. */
+/** Asked on load, so the indicator is right in every state. */
 export async function fetchSession(): Promise<SessionState> {
   try {
     const response = await fetch("/api/session");

@@ -23,7 +23,7 @@
 }
 .cl-disclaimer p { margin: 0; font-size: 15px; text-align: center; }
 
-/* Collapsed form of the notice. FR-30 needs it present, not necessarily open. */
+/* Collapsed form of the notice. needs it present, not necessarily open. */
 .cl-notice-chip {
   display: flex; align-items: center; gap: 8px; width: 100%;
   min-height: 34px; padding: 6px 16px;
@@ -205,4 +205,45 @@
     position: static; transform: none; width: auto; margin: -40px 16px 0;
   }
   .cl-guide__row { grid-template-columns: 1fr; }
+}
+
+/* ---------------------------------------------------------------------------
+   Phones. The floor is 393 CSS pixels.
+   --------------------------------------------------------------------------- */
+@media (max-width: 48rem) {
+  .cl-head { padding: 12px 16px; gap: 12px; }
+  .cl-logo { font-size: 24px; }
+  .cl-head__actions { width: 100%; gap: 8px; }
+  .cl-head__actions > * { flex: 1 1 auto; justify-content: center; }
+
+  /*
+   * A wrapping row produced ragged half-rows. One column, one target per row,
+   * and no hamburger: hiding primary navigation fails this audience.
+   */
+  /* Two separate lists, so the gap between them read as a missing row. */
+  .cl-nav { padding: 0; gap: 0; }
+  .cl-nav__list { flex-direction: column; width: 100%; }
+  .cl-nav__list li { width: 100%; }
+  .cl-nav__list a {
+    padding: 12px 16px; width: 100%;
+    border-bottom: 1px solid rgb(255 255 255 / 12%);
+  }
+  .cl-nav__list--end li:last-child a { border-bottom: 0; }
+
+  /* Two banners above the fold is most of a phone screen before any content. */
+  .cl-promo { padding: 10px 44px 10px 12px; font-size: 15px; }
+  /* The horizontal padding is what keeps the text clear of the dismiss control.
+     Shrinking it on a phone put the X on top of the last word. */
+  .cl-disclaimer { padding: 10px 44px; }
+  .cl-disclaimer p { font-size: 14px; }
+
+  .cl-hero { padding: 24px 16px; }
+  .cl-hero__title { font-size: 32px; line-height: 1.15; }
+  .cl-section { padding: 24px 16px; }
+
+  /* Only as wide as its words, in the corner a launcher is looked for. */
+  .launcher {
+    left: auto; right: var(--spacing-16); bottom: var(--spacing-16);
+    width: auto; padding: var(--spacing-12) var(--spacing-16);
+  }
 }

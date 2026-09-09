@@ -8,9 +8,8 @@ const storePath = (snapshotId: string): string =>
   join(snapshotDir(snapshotId), "context-prefixes.json");
 
 /**
- * Generated prefixes are frozen to disk. The model is not deterministic, so
- * regenerating each run would make ingest report unchanged chunks as changed
- * and re-embed them forever. docs/testing-strategy.md section 4.
+ * Frozen to disk: the model is not deterministic, so regenerating each run would
+ * report unchanged chunks as changed and re-embed them forever.
  */
 export function readGeneratedContext(snapshotId: string): Record<string, string> {
   const path = storePath(snapshotId);
@@ -31,11 +30,7 @@ const SYSTEM =
   "State only what the excerpt shows. Never invent a benefit name, an amount or a plan detail. " +
   "Reply with the sentence alone, no preamble.";
 
-/**
- * D-006, for the minority of chunks with no heading to inherit context from.
- * Headings cover the rest deterministically, which keeps this off the hot path
- * and off the bill for ~95% of the corpus.
- */
+/** Only chunks with no heading: the rest are covered deterministically. */
 export async function describeChunk(chunk: CorpusChunk): Promise<string> {
   const scope = `${chunk.contractId}-${chunk.planId}, plan year ${chunk.planYear}`;
   try {

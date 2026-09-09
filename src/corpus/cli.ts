@@ -29,7 +29,7 @@ const DELAY_MS = 1_500;
 const { countyId: COUNTY_ID, zipcode: ZIPCODE, planYear: PLAN_YEAR } = CORPUS_SCOPE;
 const { stateAbbrev: STATE, countyName: COUNTY_NAME } = CORPUS_SCOPE;
 
-/** Public prose pages. FR-01 includes corporate and investor-relations content. */
+/** Public prose pages. includes corporate and investor-relations content. */
 const CORPORATE_PAGES = [
   "/about-us/about-clover",
   // /about-us/investors redirects off-domain to an external IR host that does not
@@ -161,20 +161,23 @@ function convertAll(): void {
   const updated: ManifestEntry[] = [];
 
   for (const entry of snapshot.entries) {
-    if (entry.status !== "ok") {
+    const isHtml = entry.kind === "corporate";
+    const source = rawPath(id, entry.documentId, isHtml ? "html" : "pdf");
+    // A conversion failure is retried when the file is still there. Skipping it
+    // made a fixed parser report the stale reason from the run that broke.
+    if (entry.status !== "ok" && !(entry.status === "failed" && existsSync(source))) {
       updated.push(entry);
       continue;
     }
-    const isHtml = entry.kind === "corporate";
-    const source = rawPath(id, entry.documentId, isHtml ? "html" : "pdf");
     if (!existsSync(source)) {
       updated.push({ ...entry, status: "failed", failureReason: `missing raw file ${source}` });
       continue;
     }
 
     try {
+      const retried: ManifestEntry = { ...entry, status: "ok", failureReason: null };
       // One Summary of Benefits PDF serves both plans, and each plan has its own
-      // entry, so each converts to its own column. D-031.
+      // entry, so each converts to its own column.
       const text = isHtml
         ? extractHtmlText(readFileSync(source, "utf8"))
         : entry.kind === "summary_of_benefits"
@@ -186,7 +189,7 @@ function convertAll(): void {
 
       const convertedBytes = Buffer.byteLength(text, "utf8");
       updated.push({
-        ...entry,
+        ...retried,
         pages: isHtml ? null : pdfPageCount(source),
         convertedBytes,
         ...(meetsByteFloor(entry.kind, convertedBytes)

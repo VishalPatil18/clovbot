@@ -13,9 +13,8 @@ interface Props {
 }
 
 /**
- * FR-P2-34. Entirely inside the panel: no navigation, so the conversation is
- * still there afterwards. Two steps, one field each, because two fields on one
- * screen invites filling both before either is possible.
+ * Inside the panel, so the conversation survives. Two steps, one field each:
+ * both on one screen invites filling the second before it is possible.
  */
 export function SignIn({ onSignedIn, onCancel }: Props): React.JSX.Element {
   const [step, setStep] = useState<"email" | "code">("email");

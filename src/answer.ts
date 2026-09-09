@@ -11,7 +11,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * Validates the model payload at the trust boundary. FR-32.
+ * Validates the model payload at the trust boundary.
  * Hand-rolled: CLAUDE.md section 5 specifies Zod here, deferred pending dependency approval.
  */
 export function validateAnswerPayload(raw: unknown): ValidationResult {
@@ -37,7 +37,7 @@ export function validateAnswerPayload(raw: unknown): ValidationResult {
   return { ok: true, value: { claims, unanswered, refusal, headline } };
 }
 
-/** Absent is the normal case: most answers are not a single amount. D-065. */
+/** Absent is the normal case: most answers are not a single amount. */
 function parseHeadline(raw: unknown, errors: string[]): Headline | null {
   if (raw === undefined || raw === null) return null;
   if (!isRecord(raw)) {
@@ -120,8 +120,7 @@ function parseRefusal(raw: unknown, errors: string[]): Refusal | null {
     errors.push("refusal has no explanation");
     return null;
   }
-  // FR-22: a refusal states the boundary and offers the human path. One without
-  // the human path is a dead end, which is the failure D-010 exists to prevent.
+  // A refusal states the boundary and offers the human path, or it is a dead end.
   if (raw["humanPathOffered"] !== true) {
     errors.push("refusal offers no human path");
     return null;

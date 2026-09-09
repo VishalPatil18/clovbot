@@ -1,5 +1,7 @@
+import type pg from "pg";
 import { existsSync, readFileSync } from "node:fs";
 import { redactIdentifiers } from "../logging.ts";
+import { clearAnswers } from "../cache.ts";
 import { bboxPath, latestSnapshotId, readSnapshot } from "../corpus/snapshot.ts";
 import { parseFormulary } from "../corpus/formulary.ts";
 import { CORPUS_SCOPE, findPlanRef, formatPlanRef } from "../corpus/scope.ts";
@@ -10,6 +12,7 @@ import { citationLabel } from "./payload.ts";
 import { embed, generate } from "./providers.ts";
 import {
   connect,
+  connectAdmin,
   existingChunkContent,
   pruneChunks,
   recordCorpusSnapshot,
@@ -24,9 +27,9 @@ const TOKENS_PER_MINUTE = Number(process.env["AZURE_EMBEDDING_TPM"] ?? "29000");
 const BATCH_TOKEN_BUDGET = 5_000;
 const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
 
-/** FR-P2-16. The manifest is on a disk the server does not have. D-066. */
+/** The manifest is on a disk the server does not have. */
 async function recordFreshness(snapshotId: string, documentsFetchedAt: string): Promise<void> {
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     await recordCorpusSnapshot(client, { snapshotId, documentsFetchedAt, planYear: PLAN_YEAR });
@@ -36,7 +39,23 @@ async function recordFreshness(snapshotId: string, documentsFetchedAt: string): 
   console.log(`  corpus: documents fetched ${documentsFetchedAt}`);
 }
 
-/** D-007's typed half: the drug list as rows, not as prose. D-060. */
+/**
+ * One connection per unit of work, never held across the loop: the pooler drops
+ * one left idle through the paced sleeps, which killed an ingest at chunk 235.
+ */
+async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
+  const client = connectAdmin();
+  // An idle-timeout drop arrives as an error event, not a rejected query.
+  client.on("error", (error) => console.warn(`  database connection dropped: ${error.message}`));
+  await client.connect();
+  try {
+    return await work(client);
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+/**'s typed half: the drug list as rows, not as prose. */
 async function ingestDrugs(snapshotId: string, snapshot: { entries: { documentId: string; kind: string }[] }): Promise<void> {
   const formulary = snapshot.entries.find((entry) => entry.kind === "formulary");
   if (formulary === undefined) return;
@@ -46,7 +65,7 @@ async function ingestDrugs(snapshotId: string, snapshot: { entries: { documentId
     return;
   }
   const rows = parseFormulary(readFileSync(path, "utf8"));
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     await upsertDrugs(
@@ -70,7 +89,7 @@ async function ingest(): Promise<void> {
   await ingestDrugs(snapshotId, snapshot);
   await recordFreshness(snapshotId, snapshot.createdAt);
 
-  // D-006: headings carry context for most chunks; only the orphans need the model,
+  // Headings carry context for most chunks; only the orphans need the model,
   // and their generated text is frozen so a second run does not churn.
   const orphans = chunks.filter((chunk) => chunk.needsGeneratedContext);
   const generated = readGeneratedContext(snapshotId);
@@ -88,17 +107,19 @@ async function ingest(): Promise<void> {
     chunk.embedText = `${described}\n\n${chunk.content}`;
   }
 
-  const client = connect();
-  await client.connect();
-  try {
-    const existing = await existingChunkContent(client, snapshotId);
-    const changed = chunks.filter(
-      (chunk) => existing.get(chunk.id) !== `${chunk.contextPrefix}\n${chunk.content}`,
-    );
-    console.log(`${chunks.length} chunks, ${changed.length} new or changed`);
+  const existing = await withAdmin((client) => existingChunkContent(client, snapshotId));
+  const changed = chunks.filter(
+    (chunk) => existing.get(chunk.id) !== `${chunk.contextPrefix}\n${chunk.content}`,
+  );
+  console.log(`${chunks.length} chunks, ${changed.length} new or changed`);
 
+  /*
+   * In a finally, not on success: a half-written corpus is exactly when a stale
+   * cached answer is most likely. Last, so a question mid-run cannot repopulate it.
+   */
+  let done = 0;
+  try {
     // Persist each batch, so a rate-limit failure costs one batch rather than all of them.
-    let done = 0;
     for (const batch of batchByTokens(changed, BATCH_TOKEN_BUDGET)) {
       const tokens = batch.reduce((sum, chunk) => sum + estimateTokens(chunk.embedText), 0);
       const vectors = await embed(batch.map((chunk) => chunk.embedText));
@@ -107,7 +128,7 @@ async function ingest(): Promise<void> {
         const vector = vectors[index];
         if (vector !== undefined) embeddings.set(chunk.id, vector);
       }
-      await upsertChunks(client, batch, embeddings);
+      await withAdmin((client) => upsertChunks(client, batch, embeddings));
       done += batch.length;
       console.log(`  embedded and stored ${done}/${changed.length}`);
 
@@ -115,10 +136,15 @@ async function ingest(): Promise<void> {
       if (done < changed.length) await sleep((tokens / TOKENS_PER_MINUTE) * 60_000);
     }
 
-    const pruned = await pruneChunks(client, snapshotId, chunks.map((chunk) => chunk.id));
+    const pruned = await withAdmin((client) =>
+      pruneChunks(client, snapshotId, chunks.map((chunk) => chunk.id)),
+    );
     if (pruned > 0) console.log(`pruned ${pruned} chunks no longer produced`);
   } finally {
-    await client.end();
+    if (done > 0 || changed.length === 0) {
+      const cleared = await withAdmin((client) => clearAnswers(client, snapshotId));
+      console.log(`cleared ${cleared} cached answers for this snapshot`);
+    }
   }
   console.log(`snapshot ${snapshotId}: ${chunks.length} chunks indexed`);
 }
@@ -151,7 +177,7 @@ async function ask(): Promise<void> {
       console.log("Sources:");
       for (const id of turn.citedIds) {
         const chunk = turn.retrieved.find((candidate) => candidate.id === id);
-        if (chunk !== undefined) console.log(`  ${citationLabel(chunk)}`);
+        if (chunk !== undefined) console.log(`  ${citationLabel(chunk, turn.language)}`);
       }
     }
 

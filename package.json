@@ -1,6 +1,6 @@
 {
   "name": "clovbot",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -23,7 +23,10 @@
     "insights": "node --env-file=.env --experimental-strip-types src/ops.ts insights",
     "deploy:api": "./scripts/deploy-api.sh",
     "seed:members": "node --env-file=.env --experimental-strip-types src/members/cli.ts seed",
-    "ask:member": "node --env-file=.env --experimental-strip-types src/members/cli.ts ask"
+    "ask:member": "node --env-file=.env --experimental-strip-types src/members/cli.ts ask",
+    "check:rls": "node --env-file=.env --experimental-strip-types scripts/rls-check.ts",
+    "check:audit": "node --env-file=.env --experimental-strip-types scripts/audit-check.ts",
+    "shoot": "node --experimental-strip-types scripts/shoot.ts"
   },
   "devDependencies": {
     "@types/node": "26.5.0",
@@ -31,6 +34,7 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@vitejs/plugin-react": "6.1.1",
+    "playwright": "1.63.0",
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vitest": "5.0.0"
@@ -38,6 +42,7 @@
   "dependencies": {
     "@huggingface/transformers": "4.2.0",
     "framer-motion": "13.2.0",
+    "jspdf": "4.2.1",
     "pg": "8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

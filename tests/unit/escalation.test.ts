@@ -8,7 +8,7 @@ const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
 
 describe("callback request [FR-22]", () => {
   it("is pre-filled with the question, the plan and the documents searched", () => {
-    // The plan reads as its name; the raw id stays on the stored record. D-055.
+    // The plan reads as its name; the raw id stays on the stored record.
     for (const field of ["question", "planName", "documentsSearched"]) {
       expect(panel).toContain(`draft.${field}`);
     }
@@ -20,7 +20,7 @@ describe("callback request [FR-22]", () => {
     expect(panel).toMatch(/href=\{`tel:/);
   });
 
-  // NFR-SEC-01: no member identity. A callback form that asks for a phone number
+  // No member identity. A callback form that asks for a phone number
   // would collect exactly the identity the system promises not to hold.
   it("collects no name, phone or email", () => {
     expect(panel).not.toMatch(/type="(tel|email)"/);
@@ -29,7 +29,7 @@ describe("callback request [FR-22]", () => {
 
   it("redacts the stored text [FR-31]", () => {
     expect(server).toMatch(/question: redactIdentifiers\(question\)/);
-    expect(server).toMatch(/redactIdentifiers\(parsed\["note"\]/);
+    expect(server).toMatch(/redactIdentifiers\(request\.note\)/);
   });
 
   it("says plainly that nothing is sent anywhere [D-026]", () => {
@@ -85,6 +85,7 @@ describe("upstream failures are excluded from the refusal rate [FR-25]", () => {
     faithfulness: 1,
     structural: { compliant: true, uncitedSentences: [] },
     note: "",
+  language: "en" as const,
     ...over,
   });
 

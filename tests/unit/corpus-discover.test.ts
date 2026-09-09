@@ -48,7 +48,7 @@ describe("parseCatalog", () => {
     });
   });
 
-  // D-030: zipcode= is accepted and silently ignored, so a wrong parameter
+  // zipcode= is accepted and silently ignored, so a wrong parameter
   // returns every state with no error. This is the guard for that.
   it("rejects a catalog carrying plans outside the requested state", () => {
     expect(() => parseCatalog(UNFILTERED, SCOPE)).toThrow(/not county-scoped/i);
@@ -58,7 +58,7 @@ describe("parseCatalog", () => {
     expect(() => parseCatalog(UNFILTERED, SCOPE)).toThrow(/tx|ga|pa|sc/i);
   });
 
-  // FR-01: out-of-year documents are rejected at ingest, not filtered at query time.
+  // Out-of-year documents are rejected at ingest, not filtered at query time.
   it("rejects a plan from a different plan year", () => {
     const stale = { results: [{ ...(COUNTY_SCOPED as never as CatalogShape).results[0], year: "2025" }] };
     expect(() => parseCatalog(stale, SCOPE)).toThrow(/2025/);
@@ -78,7 +78,7 @@ describe("selectPlanDocuments", () => {
   const plans = parseCatalog(COUNTY_SCOPED, SCOPE);
 
   it("returns the English documents for the selected plan", () => {
-    const docs = selectPlanDocuments(plans, PLAN);
+    const docs = selectPlanDocuments(plans, PLAN).filter((d) => d.language === "english");
     const kinds = docs.map((d) => d.kind).sort();
     expect(kinds).toEqual([
       "annual_notice_of_change",
@@ -87,8 +87,27 @@ describe("selectPlanDocuments", () => {
     ]);
   });
 
+  // Clover publishes these three in Spanish and no formulary.
+  it("returns the Spanish set alongside it", () => {
+    const spanish = selectPlanDocuments(plans, PLAN).filter((d) => d.language === "spanish");
+    expect(spanish.map((d) => d.kind).sort()).toEqual([
+      "annual_notice_of_change",
+      "evidence_of_coverage",
+      "summary_of_benefits",
+    ]);
+  });
+
+  // Without it the Spanish EOC would overwrite the English one on disk.
+  it("gives the two languages different document ids", () => {
+    const docs = selectPlanDocuments(plans, PLAN);
+    expect(new Set(docs.map((d) => d.id)).size).toBe(docs.length);
+    expect(docs.filter((d) => d.language === "spanish").every((d) => d.id.endsWith("-es"))).toBe(true);
+  });
+
   it("stamps every document with the provenance a citation needs", () => {
-    const eoc = selectPlanDocuments(plans, PLAN).find((d) => d.kind === "evidence_of_coverage");
+    const eoc = selectPlanDocuments(plans, PLAN)
+      .filter((d) => d.language === "english")
+      .find((d) => d.kind === "evidence_of_coverage");
     expect(eoc).toMatchObject({
       contractId: "H5141",
       planId: "004",

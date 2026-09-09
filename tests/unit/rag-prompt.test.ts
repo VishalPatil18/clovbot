@@ -43,7 +43,7 @@ describe("buildPrompt", () => {
     expect(prompt.user).toContain("Doctor’s Office");
   });
 
-  // FR-09: never answer from parametric knowledge.
+  // Never answer from parametric knowledge.
   it("forbids answering from anything but the sources", () => {
     expect(prompt.system).toMatch(/only.*(source|document|chunk)/i);
   });
@@ -52,7 +52,7 @@ describe("buildPrompt", () => {
     expect(prompt.system).toMatch(/cite/i);
   });
 
-  // NFR-SEC-04: retrieved content is data, never instructions.
+  // Retrieved content is data, never instructions.
   it("fences the sources so their content cannot act as instructions", () => {
     expect(prompt.system).toMatch(/never.*instruction|ignore.*instruction|data, not instruction/i);
     expect(prompt.user).toContain("<sources>");
@@ -96,9 +96,7 @@ describe("parseCitations", () => {
     expect(parseCitations("see [the document] for detail")).toEqual([]);
   });
 
-  // Stage 4 ids carry the document kind, which contains underscores. A regex
-  // allowing only letters, digits and hyphens silently parsed these as no
-  // citation at all, so correct cited answers were logged as refusals.
+  // Chunk ids carry underscores; a hyphens-only regex logged cited answers as refusals.
   it("finds a real chunk id containing underscores", () => {
     const id = "H5141-004-2026-summary_of_benefits-section-ii-doctor-s-office-001";
     expect(parseCitations(`The copay is $10 [${id}].`)).toEqual([id]);
@@ -134,19 +132,14 @@ describe("headline instruction [FR-P2-13, D-064]", () => {
     },
   ]).system;
 
-  // Even naming the field in the declared shape moved A-22's faithfulness from
-  // 1.000 to 0.667 with retrieval unchanged. Nothing fills it, so the model is
-  // told nothing about it and the prompt stays byte-identical to Stage 2. D-069.
+  // Naming the field alone moved faithfulness 1.000 to 0.667, retrieval unchanged.
   it("does not mention the field at all, since nothing fills it", () => {
     expect(system).not.toContain("headline");
   });
 
   /*
-   * Measured: adding an eighth rule describing the headline diluted rule 4, the
-   * refusal rule. A-31 flipped from refusing a pharmacy question the corpus
-   * cannot answer to answering it, and faithfulness fell from 1.000 to 0.989.
-   * Rewording it as "display only" did not help; only removing it restored the
-   * behaviour. The field stays in the contract and nothing fills it. D-069.
+   * An eighth rule diluted the refusal rule: a question the corpus cannot answer
+   * was answered, and faithfulness fell 1.000 to 0.989. Only removing it helped.
    */
   it("gives the model no instruction that could change what it answers", () => {
     expect(system).not.toMatch(/Leave headline null|invent a headline|display only/);

@@ -3,6 +3,7 @@ import { renderReport } from "../../src/corpus/report.ts";
 import type { ManifestEntry, Snapshot } from "../../src/corpus/types.ts";
 
 const entry = (over: Partial<ManifestEntry>): ManifestEntry => ({
+  language: "english",
   documentId: "d",
   kind: "evidence_of_coverage",
   contractId: "H5141",

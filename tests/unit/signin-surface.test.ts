@@ -4,11 +4,12 @@ import { describe, expect, it } from "vitest";
 const signin = readFileSync("web/src/components/SignIn.tsx", "utf8");
 const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
 const css = readFileSync("web/src/app.css", "utf8");
+const strings = readFileSync("web/src/strings.ts", "utf8");
 const rule = (selector: string): string =>
   new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`, "s").exec(css)?.[1] ?? "";
 
 describe("inline sign-in [FR-P2-33, FR-P2-34]", () => {
-  // FR-P2-34: no navigation, so the conversation survives the detour.
+  // No navigation, so the conversation survives the detour.
   it("signs in inside the panel with no link away", () => {
     expect(signin).not.toMatch(/window\.location|<a href|history\.push/);
     expect(assistant).toContain("<SignIn");
@@ -59,16 +60,18 @@ describe("inline sign-in [FR-P2-33, FR-P2-34]", () => {
 
 describe("session visibility [FR-P2-37, FR-P2-38, FR-P2-39]", () => {
   it("shows who is signed in, or that nobody is, in every state", () => {
-    expect(assistant).toContain("Not signed in");
+    expect(strings).toMatch(/notSignedIn: \["Not signed in", ".+"\]/);
+    expect(assistant).toContain('say("notSignedIn")');
     expect(assistant).toMatch(/Signed in as \{signedInAs\}/);
   });
 
   it("offers sign out in one tap beside the indicator", () => {
     expect(assistant).toMatch(/onClick=\{\(\) => void leave\(\)\}/);
-    expect(assistant).toContain("Sign out");
+    expect(strings).toMatch(/signOut: \["Sign out", ".+"\]/);
+    expect(assistant).toContain('say("signOut")');
   });
 
-  // FR-P2-39: a shared device must not keep the previous member's record data.
+  // A shared device must not keep the previous member's record data.
   it("clears record-sourced turns when signing out", () => {
     expect(assistant).toMatch(/const leave[\s\S]*?clearMemberTurns\(\)/);
   });

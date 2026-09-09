@@ -11,19 +11,19 @@ interface Props {
   /** Cited chunk id to display number. Falls back to list position if absent. */
   citationNumbers?: Record<string, number>;
   unanswered: string[];
-  /** Present only when the answer is a single amount. Absent is the prose path. D-065. */
+  /** Present only when the answer is a single amount. Absent is the prose path. */
   headline?: Headline | null;
-  /** Plain-language notice that the calendar has passed the plan year. FR-P2-17. */
+  /** Plain-language notice that the calendar has passed the plan year. */
   staleness?: string | null;
   /** Used when there is no structured payload: refusals and upstream failures. */
   fallback: string;
+  /** The heading over the source list follows the answer's language. */
+  sourcesTitle?: string;
 }
 
 /**
- * Renders claims from the structured payload rather than the joined prose, so a
- * claim carries a short marker instead of a hundred characters of provenance.
- * Choosing a marker highlights its source below for five seconds, because a
- * numbered reference is only useful if the eye can find the target.
+ * Claims from the payload, so each carries a marker rather than its provenance
+ * inline. Choosing one highlights its source: a reference the eye cannot find is none.
  */
 export function AnswerBody({
   turnId,
@@ -34,6 +34,7 @@ export function AnswerBody({
   headline = null,
   staleness = null,
   fallback,
+  sourcesTitle = "Where this comes from",
 }: Props): React.JSX.Element {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -146,7 +147,7 @@ export function AnswerBody({
 
       {citations.length > 0 && (
         <div className="citations">
-          <h4 className="citations__title">Where this comes from</h4>
+          <h4 className="citations__title">{sourcesTitle}</h4>
           {/* Attached to the source block, so it survives print, copy and speech
               rather than living in chrome the member may never scroll to. D-067. */}
           {staleness !== null && <p className="citations__staleness">{staleness}</p>}

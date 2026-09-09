@@ -3315,6 +3315,657 @@ Anchoring also removes a duplicate state. `heldQuestion` existed only to carry t
 
 ---
 
+## Decision D-090 - The application connects as a role that cannot bypass row-level security
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The application connects as `postgres`, which owns every table and carries `rolbypassrls = true`. Row-level security policies written against that connection would be inert. `FORCE ROW LEVEL SECURITY` fixes the table-owner case and does not touch `BYPASSRLS`, so the plan's Stage 1 could have been built in full and proved nothing.
+
+### Options considered
+
+1. A `clovbot_app` login role with `NOBYPASSRLS`, `DATABASE_URL` repointed to it, and the existing postgres URL kept as `DATABASE_ADMIN_URL` for migrations, ingest and seeding.
+2. Keep `DATABASE_URL` as postgres and open a second connection as the restricted role for member-scoped reads only.
+3. Do not build the control; document the gap in Stage 3 instead.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 leaves a connection in every request that can read every member, which is the thing the stage exists to remove. Two code paths also means the wrong one gets used eventually.
+
+Option 3 is honest but abandons the exit signal, and the gap is already documented in `NFR-P2-10`.
+
+### Consequences
+
+- A `DATABASE_URL` change and a redeploy. The password is set by the operator and never enters the repository.
+- Migrations, `npm run ingest` and `npm run seed:members` move to `DATABASE_ADMIN_URL`. A command pointed at the wrong URL now fails on privilege rather than succeeding quietly.
+- The identity is set transaction-locally, not with `SET`. The pooler is in session mode, so a connection returned to the pool with a session-level setting would carry one member's identity into whichever request borrows it next.
+
+---
+
+## Decision D-091 - The rule that gates a question is the rule that decides what is read
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 2 |
+| Status | accepted |
+| Supersedes | the read half of D-080 |
+
+### Context
+
+`chooseRoute` adds the `member` path whenever a member is identified, never because the question needs it, and `loadMemberRecord` then runs `select *` across five tables. A signed-in member asking their specialist copay has their claims, prior authorisations and appointments read to answer a question from the plan documents.
+
+### Options considered
+
+1. Read only when `needsMemberData(question)` returns a topic, and only that topic's columns.
+2. The same, plus an always-read identity slice of plan and assigned provider.
+3. Keep reading everything and audit only what the answer cited.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 3 fails the minimum-necessary criterion by construction: the query still reads the whole record, so the audit would understate the access it is supposed to record.
+
+Option 2's identity slice is a read on every question, including ones that need nothing, and the audit log would then show an access for each of them.
+
+The property that makes Option 1 worth more than its strictness: `needsMemberData` already decides whether a signed-out member is asked to sign in. Making it decide the read as well means the gate and the access can never disagree, because they are one call evaluated once per turn.
+
+### Consequences
+
+- A question the login rules do not recognise gets no record read. That is consistent in both directions: the same question would not have prompted a login when signed out.
+- Adding a member topic now has two effects at once, which is the point, and must be tested as such.
+
+---
+
+## Decision D-092 - An audit record names the column and the row, never the value
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The audit record has to be specific enough to replay against an answer's citations and empty enough not to become a second copy of the data it audits.
+
+### Options considered
+
+1. Column plus the row's business id: `member_claims.member_owes @ CLM-0031`.
+2. Column only: `member_claims.member_owes`.
+3. The citation label already shown to the member: `Claim CLM-0031 - What you owe`.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 cannot distinguish which of three claims was read, so the reconstruction criterion can only be partly met.
+
+Option 3 reads well and is presentation text. A wording change to a citation label would silently change the audit format, which is the wrong thing to couple an audit trail to.
+
+A claim id locates a row. A claim amount is the protected thing. Recording the first is not recording the second.
+
+### Consequences
+
+- Every member-scoped table needs a stable business id to name rows by. Each already has one.
+- The test asserting no value appears has to know what the values are, so it seeds a known amount and asserts its absence.
+
+---
+
+## Decision D-093 - A Spanish drug question is answered from the English drug list, and says so
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Clover publishes the Evidence of Coverage, Summary of Benefits and Annual Notice of Change in Spanish for all three indexed plans, confirmed in the catalog. It publishes no Spanish formulary. A Spanish drug-tier question therefore has no Spanish source.
+
+### Options considered
+
+1. Answer in Spanish, cite the English drug list, and state that the list is published in English only.
+2. Refuse, since there is no Spanish source.
+3. Tag the drug rows as valid in both languages and treat them as language-neutral.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 refuses a question the system can answer correctly, which is the failure `FR-24` already produces today and the reason Stage 4 exists.
+
+Option 3 hides the mismatch. The tier is a number and the drug name is a proper noun, but the requirements text on a row is English prose, and presenting it inside a Spanish answer without saying where it came from is the kind of quiet inconsistency that costs trust.
+
+Cite-or-refuse is satisfied either way. The difference is whether the member is told the source is in a language they may not read, and they should be.
+
+### Consequences
+
+- The one deliberate exception to language-scoped retrieval, and it must be written as an exception rather than a leak, or the scoping test will be weakened to accommodate it.
+- The disclosure sentence is Spanish interface copy, authored rather than translated at runtime.
+
+---
+
+## Decision D-094 - The sign-in lookups get a definer function, not a policy
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 2, repairing Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+D-090 exempted `login_codes` and `member_sessions` from the policies because they are read before an identity exists. It missed that both sign-in paths then read `members`, which is behind a policy. Verified against the live database after the fact: the session join returned zero rows and the email lookup returned zero rows, so nobody could sign in and no code could be issued. Neither the test suite nor `check:rls` caught it, because both tested member-scoped reads and neither tested the path that creates an identity.
+
+### Options considered
+
+1. A policy on `members` allowing a row to be read when a live session references it.
+2. A `security definer` function for the email lookup, and a two-step read for the session lookup.
+3. Move `display_name` and `email` out of `members` into a table exempt from the policies.
+
+### Decision
+
+Option 2.
+
+### Rationale
+
+Option 1 is a hole wearing a policy's clothes: any member with a live session would have their row readable by anyone, which is what the policy exists to prevent.
+
+Option 3 is schema churn that splits a member's identity across two tables to work around one lookup, and the exempt table then holds the two most identifying columns in the system.
+
+The session lookup needs nothing new. It reads its exempt row first, which names the member, and that name is the identity every later read is filtered by. That is exactly what the exemption was for; Stage 1 simply did not follow it through to the join.
+
+The email lookup has nothing to establish an identity from, so it gets a function narrow enough to be safe on its own terms: one address in, at most an id and the matching address out. No name, no plan, no record. `search_path` is pinned, because a definer function that resolves names through the caller's path runs whatever the caller put there first, and `execute` is revoked from public.
+
+### Consequences
+
+- One `security definer` function in the schema, which is one more thing to review than zero. Its whole body is a single select and its comment says why it exists.
+- `check:rls` now covers the sign-in path, so this gap cannot reopen silently.
+- The failure mode is worth remembering: a policy that is correct for the data path can still be wrong for the path that creates the identity, and the symptom is silence rather than an error.
+
+---
+
+## Decision D-095 - The Spanish instruction rides on the user message, not the system prompt
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+A Spanish answer needs the model told to answer in Spanish. The obvious place is the system prompt, which is where every other standing rule lives.
+
+D-069 measured what that costs. Adding one display rule to the system prompt moved faithfulness from 1.000 to 0.989 and flipped A-31 from refused to answered. Rewording it did not help; even naming a nullable field in the shape moved another case to 0.667. The answering prompt is measurably sensitive to its own bytes.
+
+### Options considered
+
+1. Append the instruction to the user message, only on a Spanish turn.
+2. Add a language rule to the system prompt.
+3. Two system prompts, one per language.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 changes the bytes of the prompt every English answer is produced from, to serve a feature English answers do not use. The cost is not hypothetical; it is the one thing about this prompt that has been measured twice.
+
+Option 3 doubles the surface that has to stay in step. Two prompts drift, and the drift shows up as a faithfulness difference between languages that looks like a retrieval problem.
+
+An English prompt is now byte-for-byte what it was before Spanish existed, which is asserted by test rather than assumed. Spanish costs English nothing, and that is provable rather than argued.
+
+### Consequences
+
+- The instruction is further from the model's attention than a system rule would be. Measured behaviour says it is heeded; if a Spanish answer ever comes back in English, this is the first place to look.
+- Any future per-turn instruction now has an obvious home, and a precedent for not reaching for the system prompt.
+
+---
+
+## Decision D-096 - The corpus keeps one language per chunk, and retrieval scopes on it
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Clover publishes a Spanish Evidence of Coverage, Summary of Benefits and Annual Notice of Change for all three indexed plans, and no Spanish drug list. Both editions have to be indexed without a Spanish question ever retrieving an English chunk, or the reverse.
+
+### Options considered
+
+1. A `language` column on every chunk, scoped in SQL beside the plan, before ranking.
+2. One index, and filter the results by language after ranking.
+3. Separate tables per language.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 is the same mistake D-033 already recorded for plan scoping, in a new dimension. The two editions describe the same benefits in near-identical structure; ranking first means competing for the same slots, and filtering after leaves fewer results than asked for, sometimes none.
+
+Option 3 duplicates every index, every policy and every query for a distinction that is one column wide.
+
+The lexical half matters more than expected. Spanish text under the English text-search configuration strips English stopwords and stems nothing, which would have made the lexical half of hybrid retrieval useless on a third of the corpus while still returning plausible dense results. The generated column picks its configuration per row with a `case` over constants, because casting the column itself is a catalog lookup and only stable, which a generated column will not accept.
+
+### Consequences
+
+- The drug list is the one deliberate exception, and it is written as an exception at the single place it applies rather than by loosening the scope. D-093.
+- The eight-argument `search_hybrid` had to be dropped rather than left beside the nine-argument one: an eight-argument call would become ambiguous. The grant does not follow a function through a signature change either.
+- Every future document dimension, an older plan year for instance, now has a pattern to copy.
+
+---
+
+## Decision D-097 - On a phone the assistant is the whole page, and the panel is not offered
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 5 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The product had two responsive rules and had never been rendered at a phone size. At 393x852 the assistant laid out 726px of content inside a 393px frame. It did not scroll sideways, because `html, body { overflow-x: hidden }` clipped it, which is worse: the Ask button was simply unreachable.
+
+### Options considered
+
+1. Below the breakpoint, switch the component to the full-page route. The launcher navigates rather than opening an overlay.
+2. Keep the panel and size it to the viewport with CSS alone.
+3. A phone-specific component.
+
+### Decision
+
+Option 1, with the breakpoint as a single constant shared by the CSS and the code that reads it.
+
+### Rationale
+
+Option 2 leaves the panel's own chrome in place: an expand control with nothing to expand to, a close control that returns to a page the member never chose to leave, and no home for the rail's human-contact card. It is a panel pretending to be a page.
+
+Option 3 doubles the surface for a layout difference, and the two would drift.
+
+The breakpoint being one constant matters more than it sounds. A CSS breakpoint and a JavaScript `matchMedia` string that disagree by a pixel produce a state where the layout is the page and the component thinks it is a panel, which is not a bug anyone finds by reading.
+
+### Consequences
+
+- A panel left open while the window narrows converts to the page, rather than becoming a clipped overlay.
+- The rail's controls move into the header by passing no rail id, reusing the branch the panel already had. No new rendering path.
+- The rail's human card is dropped on a phone rather than relocated, because "Talk to a person" is already the first chip above the composer and on screen at all times. Repeating it would cost a screen of height to say the same thing twice.
+
+---
+
+## Decision D-098 - The width floor was fixed at every viewport, not behind the phone breakpoint
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 5 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The cause of the phone overflow was one rule: `.assistant__bar` was `flex-wrap: nowrap`, so its min-content width - the title plus every control - became a floor that propagated up the flex and grid tree. A flex item's default `min-width` is `auto`, so nothing below it could shrink.
+
+Measuring the desktop panel afterwards found the same floor: 726px of content in a 576px frame at 1440, 512px at 1280, 410px at 1024.
+
+### Options considered
+
+1. Clear the floor unconditionally, at every width.
+2. Clear it inside the phone media query, where it was found.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 2 would have left the desktop panel clipping its own content, which it had been doing since it was built. The bug was never a phone bug; the phone is only where it became impossible to miss.
+
+Putting the fix behind a breakpoint would also have encoded a false claim about where the problem lives, which the next person to read the stylesheet would have believed.
+
+### Consequences
+
+- The desktop panel gained back roughly 150px of usable width at 1440, and more at narrower windows.
+- A comment beside the rule states that it is not a phone bug, because the surrounding media queries invite exactly that assumption.
+- The screenshot harness now renders a desktop viewport as well, so the same class of regression is caught above the breakpoint too.
+
+---
+
+## Decision D-099 - Playback is pause and resume, and Stop is gone
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 5, device pass |
+| Status | accepted |
+| Supersedes | the playback half of D-045 |
+
+### Context
+
+The spoken answer had two controls: "Play the answer again" and "Stop". Stop was disabled when nothing was playing and looked identical to an enabled button, so it read as broken rather than unavailable. Stop also discarded the position, so a member who silenced it mid-sentence had to hear the whole answer again.
+
+### Options considered
+
+1. Keep both buttons and their positions; the second becomes Pause, and Resume while paused. Disabled only when there is nothing to pause or resume.
+2. One control that cycles Play, Pause and Resume.
+3. Keep Stop, and only fix its disabled appearance.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+Option 3 leaves the real problem: Stop's only behaviour beyond pausing was resetting the position, which the button beside it already does. It was a second control for a job already covered.
+
+Option 2 is the cheaper design and the worse one here. A single button that relabels itself under a finger asks the member to track state before they act, and this audience is the reason the product avoids that everywhere else. Two buttons in fixed positions with fixed jobs cost one more control and no thought.
+
+Both audio tiers support this natively: `HTMLAudioElement.pause()` and `speechSynthesis.pause()`. No new dependency and no state machine of our own.
+
+### Consequences
+
+- A paused answer keeps its place, which is what a member reaching for silence actually wants.
+- The recorded tier's `pause` listener had to go: it could not tell a member pausing from playback ending, and with a resume path those are different states.
+- Disabled controls are now visibly disabled everywhere, with `cursor: not-allowed`. The pause button spends most of its life unavailable and was the surface that made this obvious.
+
+---
+
+## Decision D-100 - The answer cache is keyed on the question, not on its meaning
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Three caches were asked for: answers, query embeddings and synthesised audio. The audio one already existed on disk. The answer one is the interesting decision, because `docs/ideas.md` P4-01 describes it as semantic caching on embedding similarity above roughly 0.95, and lists it as a P4 item that both earlier SRS documents defer.
+
+### Options considered
+
+1. Key on the exact normalised question within its scope: snapshot, contract, plan, plan year, language.
+2. Key on embedding similarity above a high threshold, as P4-01 describes.
+3. Exact now, semantic behind a flag measured against the golden set.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+`docs/ideas.md` names the failure itself: a loose threshold "collides two similar questions with different copays and returns a wrong answer". That is not hypothetical here. "What is my specialist copay" and "what is my out-of-network specialist copay" differ by one word and by ten dollars, and any similarity measure will rank them close.
+
+The product's entire claim is that an answer is grounded in a document. A cache that can return a confidently wrong amount trades the thing being sold for latency the same document says is worth nothing at demo volume.
+
+Option 2 also costs an embedding call per turn just to check the cache, which spends much of what it saves.
+
+Option 3 ships two paths and a flag that would sit at its default indefinitely.
+
+Exact keying still catches the real pattern: many members asking the same handful of questions in the same words. And the scope is in the key, so a plan, a language or a re-index cannot leak across.
+
+### Consequences
+
+- Rephrasings miss. That is the intended trade and the reason the miss is cheap: the embedding cache still absorbs part of a near-repeat.
+- Re-indexing is the invalidation. The snapshot id is part of the key, so a new corpus cannot hit an old entry and no sweep is needed.
+- Authenticated turns are excluded entirely. It is the only way one member's record could reach another, and a cached answer would make the access log record a read that never happened.
+- Every write is best-effort. A cache that cannot be written is a slower product, not a broken one, and a turn is never failed for it.
+- The disk audio cache was removed rather than kept beside the new one. On Cloud Run it was per-instance and lost on restart, so its measured hit rate would have flattered the deploy.
+
+---
+
+## Decision D-101 - Ingest clears answers only, and clears them on failure too
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The request was to reset every cache on a successful ingest, on the reasoning that a corpus change makes older responses stale. The reasoning is right for one of the three caches and does not apply to the other two.
+
+An answer cached against a snapshot id is stale when the chunks behind that id change. That happens when ingest is re-run into the **same** snapshot, which is exactly what a parser fix or a re-fetch produces, and it has already happened once in this project.
+
+A query embedding is a function of the question and the model, not of the corpus. Synthesised audio is keyed on the answer text: if an answer changes, the key changes, so the old recording is unreachable rather than wrong.
+
+### Options considered
+
+1. Clear the answers for the ingested snapshot; leave embeddings and audio.
+2. Clear answers and audio; leave embeddings.
+3. Clear all three, as asked.
+
+### Decision
+
+Option 1, and clear in a `finally` rather than on the success path.
+
+### Rationale
+
+Options 2 and 3 re-pay an embedding or synthesis bill to invalidate entries that were never capable of being wrong. Clearing a cache that cannot be stale is not conservatism, it is cost with no corresponding risk removed.
+
+The `finally` is the part worth arguing for. A run that dies part-way leaves a half-written corpus, and that is precisely the state in which a cached answer citing text that no longer exists is most likely and least expected. "On success" would have skipped the case that needs it most. This project has already had an ingest die at chunk 235 of 2737.
+
+Clearing runs last rather than first so a question asked during the run cannot repopulate the cache from the corpus being replaced.
+
+### Consequences
+
+- The first member to ask any question after an ingest pays for a fresh answer. That is the intended cost and it is bounded by the number of distinct questions, not by corpus size.
+- Audio for an answer that changed is orphaned rather than deleted. It is unreachable, small, and cheaper to leave than to identify.
+- A failed ingest now clears the cache as a side effect. That is deliberate: a partial corpus with no cache is a slow correct system, and a partial corpus with a full cache is a fast wrong one.
+
+---
+
+## Decision D-102 - Feedback stores the answer, four fixed reasons, and no free text
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 7 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+"Did this answer your question?" already recorded a yes or a no against the turn, and the operator report already printed the split. Neither was useful: the turn holds the question but not the answer, so a thumbs-down said an answer failed without saying which answer, and a bare count of no's says nothing about what to change.
+
+### Options considered
+
+Three forks, decided together.
+
+**What is stored.** Every answer; only answers from turns with no member; or none, relying on `npm run reproduce`.
+
+**How the reason is captured.** Free text; four fixed reasons; or nothing beyond yes and no.
+
+**What the data drives.** A report feeding the golden set; a report alone; or a shape a future fine-tune could consume.
+
+### Decision
+
+Store the answer for turns with no member id. Four fixed reasons, never free text. A report that names rated-wrong answers as golden-set candidates.
+
+### Rationale
+
+**On storing answers.** A signed-in member's answer holds a claim amount or a prior-authorisation status. Writing it into `turns`, which has no policy over it, would rebuild the durable copy of member data that P3 Stage 2 spent its effort removing, and `docs/real-phi.md` would owe an account of a second store. Keeping it out is cheaper than writing it and protecting it. Replay was rejected because `reproduce` re-runs the model: it returns an answer, not the one the member disliked.
+
+**On free text.** It is the richest signal and the only surface in this product that could put a diagnosis into the database. Identifier redaction catches a member id and a date of birth. It does not catch "my doctor said I have diabetes". Four fixed reasons are countable, are enforced by a check constraint rather than by the form alone, and are faster to answer than typing for an audience that finds typing hard.
+
+**On fine-tuning.** The request asked for it. This project has no training pipeline, and its answers come from retrieval and a prompt rather than from weights, so building toward one would be scaffolding for an imagined need. What actually moves faithfulness here is the golden set, so a rated-wrong answer becomes a candidate case with its reason and route attached.
+
+**On anonymity.** The request asked for anonymised data. The turn log is pseudonymous: a session id links every question in one visit, and the loop breaker counts consecutive refusals within it, so the column cannot simply go. Analysis reads a view that excludes it, and the documentation says pseudonymous rather than anonymous. Nulling the id on rated rows was rejected because it would silently break the escalation path; hashing was rejected because a hash of a low-cardinality id reads more anonymous than it is.
+
+### Consequences
+
+- A thumbs-down on a signed-in turn records the rating and the reason but no answer text. The report says so rather than showing an empty column.
+- The reason set is now in three places that must agree: the check constraint, the server filter, and the interface. A test pins the wire values against the labels so they cannot drift.
+- The no is sent before the reason is asked, so abandoning the follow-up still records that the answer failed.
+
+---
+
+## Decision D-103 - The transcript is a generated PDF, built on the device
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 8 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The export control has shipped since P2 as `window.print()` over a print stylesheet (FR-P2-20), and the browser dialog can save the page as a PDF. The request was for a **downloaded file**. No browser API steers the print dialog to a file, so honouring it means generating the bytes.
+
+### Options considered
+
+Two forks, decided together.
+
+**Where the bytes are made.** A client library; a hand-rolled writer; or keep the dialog.
+
+**Where the rendering happens.** On the device, or on the server from a posted transcript.
+
+| Option | For | Against |
+| --- | --- | --- |
+| jsPDF, dynamically imported | Text wrapping, pagination and Latin-1 for Spanish for free; a separate chunk, so nobody who does not export pays for it | A new dependency, and 130 kB gzipped on first press |
+| Hand-rolled PDF writer | No dependency at all; a text-only PDF over base-14 Helvetica is a plain format | ~150 lines plus a font width table, and every pagination bug is ours |
+| Keep the print dialog | No change at all | Does not do what was asked; this audience has to find "Save as PDF" in a dialog |
+| Server-side rendering | One renderer, no client weight | Puts a signed-in member's own record back on the wire, for nothing |
+
+### Decision
+
+jsPDF 4.2.1, MIT, fetched by dynamic import on first press. The document is rendered **on the device** from the conversation already in memory. Nothing is posted anywhere.
+
+### Why
+
+The server option was rejected before the library question was even reached. The transcript holds a signed-in member's claim amounts and prior-authorisation status; posting it to a renderer would put that on the wire and into request logs, which is the transit path Stage 2 removed for the same data. Everything the file needs is already in the browser, so there is no reason to send it.
+
+Between the library and the hand-rolled writer: the writer is genuinely feasible, and for a monospaced English-only file it would win. It stops being lazy at the Helvetica width table, which is what proportional line-breaking needs, and again at Spanish, where the encoding has to be right. The dynamic import removes the usual reason to refuse the dependency, which is bundle weight on people who never use it.
+
+### Consequences
+
+- A member who presses the control on a slow connection waits for 130 kB before the file appears. The initial bundle is unchanged, which is the trade that was chosen.
+- The file is text, not a picture of the page. Amounts stay selectable and a screen reader can read it. It does not look like the panel, and no logo, colour or layout from the interface survives.
+- The print stylesheet stays and is now the failure path: if the library cannot be fetched, the member is told in a sentence and the print view opens.
+- The document model is separate from the renderer, so what the file says is asserted directly in tests rather than by parsing a PDF.
+
+---
+
+## Decision D-104 - Comments carry no identifiers, and a gate keeps it that way
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 9 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`CLAUDE.md` §5 requires comments to explain why in at most 15 words and to carry no spec or phase references. 411 comment lines across 116 files did the opposite, naming requirement ids, decision ids and stage numbers.
+
+### Options considered
+
+Three forks, decided together.
+
+**Scope.** Everything including `claude/` and `docs/`; or code, SQL, CSS and config only.
+
+**Length.** A hard 15 words; 15 with a two-line exemption for traps; or 15 inline with module headers spared.
+
+**References.** Drop requirement ids and keep decision ids as pointers; drop both; or keep both.
+
+### Decision
+
+Code, SQL, CSS and config only. 15 words, with two lines allowed where the code looks wrong but is right and the mistake has already been made once. **Both** requirement ids and decision ids removed. A test fails the build on any reintroduction.
+
+### Why
+
+The scope question came back to the user once, because "everything" contradicted the same request's instruction to add a stage entry to `plan-p3.md`: a build plan made of stage headings cannot have its stage headings removed and a stage added. The user chose to leave the planning documents alone.
+
+Dropping decision ids as well as requirement ids is the stricter reading and the right one here. A `D-102` pointer is only useful to a reader holding this repository's `claude/` directory; for anyone else it is a dead reference where the reasoning used to be. The rule is therefore that the reason goes **into** the comment or is not worth keeping.
+
+The two-line exemption exists because several comments mark traps that have already cost time: the flex `min-width: auto` width floor, the `normaliseQuestion` trim order, `language::regconfig` being only stable and so rejected by a generated column. Deleting those invites the bug back, and no test covers the ones about CSS specificity.
+
+### Consequences
+
+- Tracing a comment to its requirement now means searching `claude/` for the file name. That is a real loss, taken deliberately.
+- A mechanical strip is not safe on prose: the first pass left 30 broken sentences and turned `0..1` into `0.1`. Every changed line was reviewed in the diff afterwards.
+- Three tests were anchored on comment text and broke. Two are now anchored on code; the third still asserts a sentence, because "the source says why" is what it checks.
+- Test names keeping `[FR-xx]` and `scripts/stageN-checks.ts` filenames are out of scope: neither is a comment, and renaming the scripts would dangle references in `claude/` that this stage does not touch.
+
+---
+
+## Decision D-105 - Validation stays hand-written, and the advisory gate blocks on critical only
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P3 Stage 10 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+A security review found five gaps. Two needed a decision rather than a fix: `CLAUDE.md` rule 5 requires Zod at every trust boundary and Zod is not installed, and four high-severity advisories are open with no fix available in any published version.
+
+### Options considered
+
+**Validation.** Adopt Zod everywhere the rule names; adopt it at the HTTP boundary only; centralise the existing narrowing into one module; or leave it scattered.
+
+**Advisories.** Block CI on high; block on critical and report high; drop the dependency; or add no audit step.
+
+### Decision
+
+Centralise the hand-written narrowing into `src/validate.ts` with its own tests, and record that Zod was not adopted. Run `npm audit` on every push, failing the build on **critical** and printing **high** as a warning, with each open advisory documented individually.
+
+### Why
+
+Zod would replace working, tested code to satisfy a contract rather than to close a risk. The model-output validator in `src/answer.ts` does something a schema alone does not: it accumulates *which* constraints a payload broke, and rejects a payload that both refuses and makes claims, which is a cross-field rule rather than a shape. The HTTP boundary genuinely was scattered, and consolidating it gets the real benefit — one place, one behaviour, one set of tests — without a dependency.
+
+Blocking on high would fail every build from today, because `@huggingface/transformers@4.2.0` is the latest version and `npm audit` reports `fixAvailable: false` on all four advisories. The predictable outcome is an `--omit` flag that hides them permanently. Blocking on critical means a red build is always actionable, and the highs stay visible in the log and in `docs/security.md` with the reason each path is unreachable: nothing in this application decodes an image or unpacks an archive.
+
+Dropping `@huggingface/transformers` would clear all four, and would remove the cross-encoder the confidence floor is calibrated against. That trades a documented, unreachable advisory for a measurable change in answer quality.
+
+### Consequences
+
+- `CLAUDE.md` rule 5's Zod clause is not satisfied by this project, deliberately and on the record.
+- The four advisories are accepted risk with a written reachability argument, re-checked when `@huggingface/transformers` publishes past 4.2.0 or at the next release.
+- The residual risk is the supply chain rather than these code paths: if the pinned model artefact were replaced upstream, the reachability argument stops holding. That is why the audit runs on every push rather than never.
+- `SECURITY.md` keeps a placeholder contact and a CSRF claim that is not accurate, at the user's direction. `docs/security.md` states the real position, so the two documents disagree.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

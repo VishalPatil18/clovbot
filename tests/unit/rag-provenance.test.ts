@@ -27,7 +27,7 @@ describe("buildProvenance [FR-04, FR-06]", () => {
     expect(() => buildProvenance(rest)).toThrow(/contract id/i);
   });
 
-  // D-033: contract alone does not identify a plan, and the two plans differ on price.
+  // contract alone does not identify a plan, and the two plans differ on price.
   it("raises when plan id is missing", () => {
     const { planId: _omitted, ...rest } = PROVENANCE;
     expect(() => buildProvenance(rest)).toThrow(/plan id/i);
@@ -79,7 +79,7 @@ describe("isInPlanScope [FR-P2-03, D-056]", () => {
     expect(isInPlanScope(scope, { contractId: "*", planId: "*", planYear: 2026 })).toBe(true);
   });
 
-  // The failure this stage exists to prevent: another plan's copay, stated confidently.
+  // The failure to prevent: another plan's copay, stated confidently.
   it("rejects another plan on the same contract", () => {
     expect(isInPlanScope(scope, { contractId: "H8010", planId: "003", planYear: 2026 })).toBe(false);
   });

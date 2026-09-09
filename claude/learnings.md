@@ -265,3 +265,121 @@ _<How this concept will apply to future work in this project.>_
 **A failure after the answer is a different failure.** The answer had already streamed when the insert threw, and the catch sent an error event over the top of it. The member watched a correct, cited answer turn into "something went wrong". Once output is delivered, an error in what follows is an operator's problem, not the reader's.
 
 **Manual testing finds placement bugs that a static test cannot see.** Every assertion about the sign-in form passed while it was rendering above the fold of a scrolled conversation. "Is it in the document" and "can the member see it" are different questions, and only one of them was being asked.
+
+## Cutting v1.1.0 - what the deploy taught
+
+**A config file read by two parsers has to satisfy the stricter one.** `.env` is read by Node's `--env-file` when the app runs and by bash `source` when the deploy runs. Node accepts an unquoted `Clovbot <bot@domain>`; bash reads it as two redirections and dies. Every test exercised the tolerant reader, so the file was wrong for weeks and only the deploy noticed.
+
+**A template that ships broken breaks every copy of it.** The fault was in `.env.example`, so it was not one machine misconfigured. Anyone following the setup instructions would reproduce it exactly. `bash -n` on the template is a one-line test for the whole class.
+
+## P3 Stage 1 - what enforcing it in the database taught
+
+**Check who you are connected as before writing a policy.** Row-level security is silently inert for a role with `BYPASSRLS`, and `FORCE ROW LEVEL SECURITY` does not override it. The entire stage could have been written, reviewed and merged, and the first test would have passed for the wrong reason.
+
+**A connection pooler turns a session setting into a cross-request leak.** Session mode hands the same server connection to the next client. An identity set with `SET` rides along; one set with `set_config(..., true)` dies with its transaction.
+
+**The obvious way to prove a security check works can be the wrong way.** Disabling a policy to watch the leak appear needs an exclusive lock that the reading connection then waits on, and it puts a "turn off security on the live table" path into a script. Proving the check is not vacuous is what actually matters, and running the identical query as the member who owns the rows does that with no DDL at all.
+
+**Some tables cannot be protected by the thing they establish.** The sign-in tables are read to discover who the member is, so a policy keyed on that identity would lock out the only path that can create it. The answer is a different control, named and recorded, not a permissive policy that makes the schema check pass while protecting nothing.
+
+## P3 Stage 2 - what the audit log taught
+
+**A security control can break the path that creates the thing it protects.** Putting `members` behind a policy locked out sign-in, because both sign-in paths read that table before any identity exists to satisfy the policy. Nothing failed loudly: a join simply returned zero rows, and every caller read that as "nobody is signed in".
+
+**Test the path that establishes identity, not only the paths that use it.** The row-level security check was thorough about member-scoped reads and said nothing about login, which is how a broken sign-in passed a green security check.
+
+**Derive the audit from the thing being audited.** Each fact carries the columns it was built from, and the log is the union of those. Compiling the log separately from the read would let the two drift, and the requirement that a record reconstruct an answer's citations would become a thing to maintain rather than a property that holds.
+
+**A guard proves itself the first time it fires on your own work.** Adding the audit table made the schema check fail, because the table carried a `member_id` and had not been declared. That is the check working, and it cost thirty seconds to satisfy honestly.
+
+**Minimum-necessary finds reads nobody defended.** Being signed in was enough to read the whole record, on every question. Nothing chose that; it accumulated. Asking what each question actually needs removed four table reads from a plan-document answer and stopped the member's name being read at all.
+
+## P3 Stage 3 - what writing the gap analysis taught
+
+**Measure the deployment before describing it, even when the code is right in front of you.** The code pins a CA and verifies it, so "encryption in transit" would have been written up as done. The server accepts plaintext from any client that does not ask for TLS, and the pooler-to-database hop has none. Both facts took one query each and neither was visible in the source.
+
+**A checklist of five controls will not name the paths the product added later.** The briefing's HIPAA list predates voice and email. A spoken answer containing a claim amount leaves to a vendor with no agreement, and no item on the list would have caught it. Walking the outbound calls found in a minute what re-reading the list would never have.
+
+**State the limit of your own control.** Row-level security here filters on a value the application sets, so the trust boundary moved rather than left. Writing that down is worth more than the control is, because a reader who finds it themselves stops believing the rest.
+
+**A document can have a regression test.** Every regulation named in the body must appear in the sources list, and the one control section that skipped the "what exists today" half failed the check. Both were real defects in the writing, caught the same way a code defect would be.
+
+## P3 Stage 4 - what a second language taught
+
+**A translated string on an untranslated rule refuses nothing.** The guardrail explanations were authored in Spanish and the match patterns stayed English, so a Spanish emergency reached no rule at all and the careful Spanish copy was unreachable. Translation is the visible half of internationalising a rule and the smaller half.
+
+**Fetch the other edition and run it through the parser before assuming it is the same document.** The Spanish Summary of Benefits differs from the English by one character of case in its column header. Everything downstream depended on that character, and a parser that fails loudly instead of guessing is what turned it into a build error rather than two plans' amounts merged into one.
+
+**A failure that is recorded as state will outlive its cause.** The conversion step skipped anything not marked `ok`, so after fixing the parser the same three documents kept reporting the old reason. Ten minutes were spent debugging a parser that was already correct.
+
+**Do not hold a connection across a loop that sleeps.** The embedding loop pauses deliberately to stay under a token budget, and a pooler drops an idle connection. `pg` surfaces that as an unhandled error event rather than a rejected query, so a 40-minute job died at chunk 235 with no cleanup. One connection per unit of work costs a couple of hundred milliseconds and removes the failure mode.
+
+**Translating an interface is an audit of what it claims.** The help panel said the assistant holds no member data and never signs you in. That was true when it was written and false for two stages. Nobody re-read it until somebody had to write it again in another language.
+
+**A measured cost changes where new code goes.** D-069 measured that touching the answering system prompt moves faithfulness. So the Spanish instruction went on the user message instead, and an English prompt is byte-for-byte what it was. The measurement paid for itself a second time, in a stage written weeks later.
+
+## P3 Stage 6 - what caching taught
+
+**Read the idea's own warning before implementing it.** `docs/ideas.md` proposed semantic caching and, in the same sentence, described the failure it causes: two similar questions with different copays. The document that asked for the feature also contained the reason not to build it that way.
+
+**A cache is only safe when emptying it changes nothing.** That property is worth asserting as a test rather than believing, because every shortcut that would break it looks like a performance win at the time.
+
+**Do not run a formatter the repository does not use.** Prettier rewrote 330 lines of a file where the change needed ten, and broke three tests that match source text. There was no config and no other file was prettier-clean, which was checkable in one command before running it rather than after.
+
+**Order matters in a chain of string replaces.** Stripping trailing punctuation before trimming leaves the punctuation on any input with a trailing space. The test caught it; reading the chain would also have caught it.
+
+**Invalidate what can be wrong, not everything you can reach.** "Clear the caches on ingest" sounds prudent and is half wrong: two of the three could not go stale, and clearing them re-pays a provider bill to remove entries that were always correct. Working out which one actually depends on the thing that changed took less time than implementing the wrong answer would have.
+
+**Put invalidation in a `finally`.** The state that needs the cache cleared most is the failed run: a half-written corpus with a full cache is a fast wrong system. "On success" skips exactly the case that matters.
+
+## P3 Stage 7 - what feedback taught
+
+**Check whether the feature exists before building it.** Feedback had been recorded since v1.0.0, and the operator report had shown the split just as long. The real gap was one column: the answer that was rated. Half an hour of reading turned a feature request into a much smaller change.
+
+**"Anonymised" is usually a word, not a property.** A session id links every question in one visit and the loop breaker needs it, so the store is pseudonymous whatever the documentation says. The useful move was to make the analysis surface blind to it and then use the accurate word, rather than claim the stronger one.
+
+**Free text is the hole in a zero-PHI boundary.** Every other field in this system is a number, an enum or a redacted question. A text box invites a member to type a diagnosis, and no amount of identifier redaction catches that. Four fixed reasons are less rich and are the only version that keeps the boundary intact.
+
+**Do not build toward a pipeline that does not exist.** The request asked for data shaped for fine-tuning. There is no training path here and the answers come from retrieval and a prompt, so the honest destination was the golden set, which already gates every release.
+
+## P3 Stage 8 - what the export taught
+
+**Check whether the button already works, twice in a row now.** The request opened with "if not already", and it already did: `window.print()` over a print stylesheet, tested, shipped since P2. The feature was not "make the button work" but "the dialog is not a download", which is a much narrower change and a different justification.
+
+**A dynamic import is the answer to "we cannot afford that dependency".** The reflex objection to jsPDF is 130 kB gzipped on an audience with slow connections. Loading it on press moves that cost onto the people who asked for it and leaves the initial bundle untouched, which turned a refusal into a one-line `await import`.
+
+**Ask where the rendering happens before asking which library.** The server option was the tempting one and was wrong for a reason that has nothing to do with PDFs: it would have posted a signed-in member's claim amounts to an endpoint and into its logs, undoing Stage 2 for exactly that data. The library question only mattered after that was settled.
+
+**Separate the document from its typesetting.** Making `transcriptBlocks` return plain data meant every assertion about what the file says is a string comparison, and not one test parses a PDF. The renderer then holds nothing but sizes and spacing, which is the part a test could not usefully check anyway.
+
+**Read the artifact, not the test output.** Rendering a sample and looking at it caught two things no test would have: body type set smaller than the 18px the product holds itself to on screen, and a cited headline amount dropped from the export because it lives in its own field rather than in a claim.
+
+**A shared predicate written for a new feature exposed an old bug.** The export needed to know whether a turn came from the member's record. The existing answer to that question matched only the English citation label, so signing out in Spanish left claim data in storage. One predicate, both callers, and a regression test.
+
+## P3 Stage 9 - what the comment sweep taught
+
+**A mechanical edit needs a mechanical check.** A regex stripping identifiers from 411 comment lines left "This is why exists", "failing loudly is's rule", and a punctuation rule that turned `0..1` into `0.1` in the reranker. The regex was not the mistake; running it without reading the diff would have been.
+
+**Tests that match source text are a hidden coupling.** Three broke on comment prose, one of them slicing the file from a comment string as an anchor. Two were re-anchored on code. The third stayed, because "the source explains why" is genuinely what it asserts, and that is the difference worth knowing.
+
+**A rule without a gate decays.** The comment rule has been in `CLAUDE.md` since the first commit and 411 lines ignored it. The durable output of this stage is not the sweep, it is the twenty-line test that fails on the next one.
+
+**Ask when a request contradicts itself.** "Sweep everything including `claude/`" and "add a stage entry to `plan-p3.md`" cannot both be done. Naming the contradiction took one question and changed the scope of the work.
+
+**Count before publishing a count.** The `chunks` table holds 3,345 rows, and only 2,737 belong to the current snapshot; the rest are an older ingest left unreachable. The number that was easy to reach was 22% wrong.
+
+**`--` is not always a comment.** The comment extractor treated CSS custom properties as SQL comments. It changed nothing in the end, but the first version of the gate was scanning `--color-forest-ink` as prose.
+
+## P3 Stage 10 - what the security review taught
+
+**Audit before speccing, again.** The request listed four areas as things to add. Three of them were already built and one was already built better than the request implied. The work that remained was five specific gaps, which is a different and much smaller job than "add security".
+
+**The prompt rule is the weakest anti-injection layer.** Fencing sources and telling the model they are data asks the model to police itself. What actually bounds an injection here is the answer contract: typed claims, citation containment, and the application rendering the prose. Writing the posture down forced that distinction into words, and the words are more useful than the rule.
+
+**A gate that can never pass gets ignored.** Four advisories with no fix in any published version would make `--audit-level=high` a permanently red build, and the fix people reach for is a flag that hides it. Blocking on critical and reporting high keeps a red build meaningful.
+
+**"No fix available" is not the end of the analysis.** The useful question is whether the vulnerable path is reachable. Neither an image decoder nor an archive extractor is on any path here, and writing that down per advisory is worth more than a version bump that does not exist.
+
+**Verify a CSP in a browser, not in a diff.** Reading the header back proves nothing about whether the page still works. Serving the built bundle under the policy and counting violations took ten minutes and is the only thing that could have caught a missing `blob:` for synthesised audio.
+
+**Deriving config beats configuring it.** The `Secure` cookie flag comes from `x-forwarded-proto`, so production sets it and local development does not, with no environment variable to set wrong and no way for the two to disagree.

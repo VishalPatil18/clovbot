@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { partDStage } from "../../src/members/stage.ts";
 
-// H5141-004, read from its Evidence of Coverage. D-081.
+// H5141-004, read from its Evidence of Coverage.
 const plan004 = { drugDeductible: 150, outOfPocketLimit: 2_100 };
 // H5141-007 sets a different deductible, which is why this is per plan.
 const plan007 = { drugDeductible: 220, outOfPocketLimit: 2_100 };

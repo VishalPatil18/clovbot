@@ -6,25 +6,48 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [1.2.0] - 2026-09-09
+
+Spanish end to end, the assistant on a phone, and the security beneath the authenticated tier moved into the database. A conversation can be saved as a PDF, a wrong answer can say what was wrong with it, and repeated questions come back without asking the model again.
+
 ### Added
 
-- _<new capabilities>_
+- **Save the whole conversation as a PDF.** One press downloads a file with every question, every answer and every source, along with the plan it was answered under and the date the plan documents were collected. It is a document, not a picture of the screen, so the text can be selected, searched and read aloud. If any answer came from your own record, the first page says so. The file is made on your device and is not sent anywhere.
+- **Telling the assistant an answer was wrong now does something.** After **No**, it asks what was wrong and offers four choices: not about my plan, not what I asked, hard to understand, or I think this is covered. There is no box to type in, on purpose. Your answer, and the reply it was about, are kept so the people running the assistant can see which answers are failing and fix them. Nothing you were shown from your own record is kept, only that you rated it.
+- **Ask in Spanish and get a Spanish answer**, from Clover's own Spanish plan documents rather than a translation, cited to the Spanish document you can go and read. The assistant notices you have written Spanish and follows, and a language button beside the microphone switches it back at any time. Answers are read aloud in a Spanish voice, and the buttons, help and refusals are Spanish too.
+- The drug list is published only in English, so a Spanish answer about a medication says so and points at the English list rather than refusing.
+- **The assistant works on a phone.** It opens as the full screen rather than a floating panel, the menu stacks into one row per item with nothing hidden behind a button, and the microphone in voice mode is centred and full size. Nothing is cut off at the edge of the screen any more, and the conversation itself now takes about half the screen instead of a third.
 
 ### Changed
 
-- _<changed behaviour>_
+- The README now documents where every plan document came from, how it was fetched and how much of it reached the index, with a full write-up in `docs/corpus.md`. Nothing about the assistant changed.
+- **Print became Save as PDF.** The old button opened your browser's print dialog and left you to find the "Save as PDF" destination in it. Printing still works from the browser's own menu, and the printed page is unchanged.
+- **Re-indexing the plan documents clears the saved answers for them**, so a change to a document is never answered from before the change.
+- **Repeated questions come back immediately.** An answer already given for the same question, on the same plan and in the same language, is served without asking the model again, and a spoken answer is only ever recorded once. Asking a *different* question never reuses another one's answer, however similar it sounds.
+- **A spoken answer can be paused and picked up where it left off.** The Stop button is gone: it threw away your place, and playing again from the start was already a button of its own. Controls that are unavailable now look unavailable instead of doing nothing when pressed.
+- The assistant panel on a desktop was quietly cutting off the right-hand edge of its own contents at narrower window sizes. It now fits whatever width it is given.
+- On the full page, the tools down the left are now one consistent column in a deliberate order, and they highlight when you point at them rather than staying lit after a click. Back reads as a way out rather than a seventh button.
+- Tidier throughout after a pass on a real phone: the controls sit on the same line as the title and against the right edge, the help panel closes with its own X, the suggested questions always form an even grid, and on a phone the voice, language and help controls move up beside the Back button so the conversation gets the room instead.
 
 ### Fixed
 
-- _<bug fixes>_
-
-### Removed
-
-- _<removed capabilities>_
+- Signing out while using the assistant in Spanish now clears the answers that came from your own record, as it already did in English.
+- Deploying no longer leaves the Spanish voice behind: answers in Spanish are read in a Spanish voice on the deployed service, not just locally.
 
 ### Security
 
-- _<security-relevant changes>_
+- **The whole security posture is now written down**, including what it does *not* protect: input validation and the ceiling on every entry point, how prompt injection is bounded by the answer contract rather than by a prompt instruction, what is logged and what is deliberately never logged, and which dependency advisories are open and why. See `docs/security.md`.
+- Every request now passes through one validation module rather than being checked in each handler. Malformed input is answered with a clear 400 instead of being defaulted field by field.
+- The page is served under a Content-Security-Policy that allows nothing from a third-party origin, and sign-in cookies are marked `Secure` whenever the connection is HTTPS.
+- Dependencies are audited on every push. A critical advisory stops the build.
+- Which member's record the assistant can read is now enforced by the database, not only by the query that asks for it. One member's session reads zero rows belonging to another, proven by a check that queries the database directly with the application bypassed. Every record is still invented demonstration data.
+- The assistant reads only the part of your record your question needs. Asking what a specialist visit costs no longer touches your claims, your prior authorisations or your appointments, and nothing it does reads your name.
+- Every read of your record is recorded: which fields, from which rows, when, and what came of it. The record holds the names of the fields and never their contents, and nothing in the assistant can alter or remove an entry once written.
+- If your sign-in runs out, the assistant says so and which limit was reached, instead of quietly showing you a sign-in form again.
 
 ---
 

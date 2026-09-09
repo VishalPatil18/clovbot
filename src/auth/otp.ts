@@ -1,9 +1,9 @@
 import { randomBytes, randomInt, scryptSync, timingSafeEqual } from "node:crypto";
 
-/** FR-P2-31. Ten minutes: long enough to find the email, short enough to matter. */
+/** Ten minutes: long enough to find the email, short enough to matter. */
 export const CODE_TTL_MS = 10 * 60 * 1_000;
 
-/** FR-P2-31. Five wrong tries and the code is dead, not the account. */
+/** Five wrong tries and the code is dead, not the account. */
 export const ATTEMPT_LIMIT = 5;
 
 export interface IssuedCode {
@@ -22,10 +22,8 @@ export const generateCode = (): string => String(randomInt(0, 1_000_000)).padSta
 export const newSalt = (): string => randomBytes(16).toString("hex");
 
 /**
- * FR-P2-41. A six-digit code has a million possibilities, so a fast hash would
- * fall to an offline sweep in seconds if the table ever leaked. scrypt is
- * deliberately slow, and one verification per attempt with at most five
- * attempts makes that cost invisible here.
+ * A million possibilities, so a fast hash falls to an offline sweep if this
+ * table leaks. At five attempts, scrypt's cost is invisible here.
  */
 export const hashCode = (code: string, salt: string): string =>
   scryptSync(normalize(code), salt, 32).toString("hex");

@@ -8,6 +8,7 @@ const base = {
   planId: "004",
   planYear: 2026,
   snapshotId: "2026-09-08T0313Z",
+  language: "english" as const,
 };
 
 const run = (text: string, kind: DocumentKind, over: Partial<typeof base> = {}) =>
@@ -178,6 +179,7 @@ describe("formulary class headings [D-059]", () => {
     chunkDocument({
       text,
       kind: "formulary",
+      language: "english" as const,
       documentId: "2026-formulary",
       contractId: "*",
       planId: "*",

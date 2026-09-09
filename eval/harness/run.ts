@@ -10,19 +10,14 @@ import type { PlanRef } from "../../src/types.ts";
 
 
 const TOP_K = 5;
-/** NFR-P2-03. Aggregate floor; the structured direction is zero-tolerance. */
+/** Aggregate floor; the structured direction is zero-tolerance. */
 const ROUTING_FLOOR = 0.9;
-/** NFR-P2-02. False positives are gated; false negatives are not tolerated. */
+/** False positives are gated; false negatives are not tolerated. */
 const LOGIN_FALSE_POSITIVE_FLOOR = 0.95;
 
 /*
- * NFR-P2-04. Regression floors, set one case below the measured baseline rather
- * than at it.
- *
- * A-21's faithfulness has scored 0 in two of six runs with no code change: the
- * model sometimes adds "before the drug will be covered", which its cited chunk
- * does not say. One case of 36 is 0.028, so a strict 1.000 gate would fail the
- * build on that alone. One flip passes here; two do not.
+ * One case below the measured baseline, not at it: one case of 36 is 0.028, and
+ * a known flake has scored 0 in two of six runs with no code change.
  */
 const BASELINE = {
   faithfulness: 0.96,
@@ -69,7 +64,7 @@ interface GoldenCase {
   enforced: boolean;
   expect: {
     outcome: "answered" | "refused" | "needs_login";
-    /** Which kind of record data the login is for. FR-P2-49. */
+    /** Which kind of record data the login is for. */
     recordTopic?: string;
     keyFact?: string | string[];
     sourceDocument?: string;
@@ -122,7 +117,7 @@ async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
 
   const refused = turn.outcome !== "answered";
 
-  // FR-32 makes an uncited claim unrenderable, so structural compliance is a
+  // An uncited claim is unrenderable, so structural compliance is a
   // property of the payload rather than something scraped back out of prose.
   const uncitedClaims = (turn.payload?.claims ?? []).filter(
     (claim) => claim.citationIds.length === 0,
@@ -147,6 +142,9 @@ async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
 
   return {
     id: testCase.id,
+    // What the turn actually answered in, not what the case asked for: a Spanish
+    // case answered in English is a failure the score has to be able to see.
+    language: turn.language,
     answer: turn.answer,
     bucket: testCase.bucket,
     driver: testCase.driver,
@@ -168,11 +166,7 @@ function evaluate(
     structural: { compliant: boolean };
   },
 ): boolean {
-  /*
-   * FR-P2-49. A gated turn is neither answered nor refused: it offered a login.
-   * Checked before the refusal branch, because a needs_login turn is not
-   * refused and would otherwise read as a failure.
-   */
+  // Neither answered nor refused, so it is checked before the refusal branch.
   if (testCase.expect.outcome === "needs_login") return actual.outcome === "needs_login";
   if (actual.outcome === "needs_login") return false;
   if (testCase.expect.outcome === "refused") return actual.refused;
@@ -244,7 +238,7 @@ interface RoutingResult {
   total: number;
   correct: number;
   accuracy: number;
-  /** The direction D-007 exists to prevent: a lookup falling through to prose. */
+  /** The direction to prevent: a lookup falling through to prose. */
   structuredMissed: string[];
   confusion: Record<string, number>;
   failed: boolean;
@@ -326,6 +320,14 @@ function print(report: ReturnType<typeof buildReport>, all: CaseOutcome[]): void
   console.log(
     `  refusal rate        ${(report.refusalRate * 100).toFixed(1)}% [${report.refusalVerdict}]`,
   );
+  // Never pooled: six Spanish cases against sixty English ones could
+  // score zero and barely move the average.
+  console.log("  per language:");
+  for (const row of report.faithfulnessByLanguage) {
+    if (row.cases === 0) continue;
+    const score = row.faithfulness === null ? "n/a" : row.faithfulness.toFixed(3);
+    console.log(`    ${row.language.padEnd(12)} ${score} over ${String(row.cases)} cases`);
+  }
   console.log("  per bucket:");
   for (const bucket of report.buckets) {
     const accuracy = bucket.accuracy === null ? "not enforced" : `${(bucket.accuracy * 100).toFixed(1)}%`;

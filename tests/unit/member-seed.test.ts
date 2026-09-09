@@ -15,7 +15,7 @@ describe("seeded members [FR-P2-24, FR-P2-25, D-047]", () => {
     expect(new Set(SEED_MEMBERS.map((m) => m.email)).size).toBe(5);
   });
 
-  // FR-P2-25: deep enough for four distinct question types.
+  // Deep enough for four distinct question types.
   it("gives every member a claim, a prior authorisation, an appointment and a provider", () => {
     for (const m of SEED_MEMBERS) {
       expect(m.claims.length, `member ${m.id}`).toBeGreaterThanOrEqual(1);
@@ -25,7 +25,7 @@ describe("seeded members [FR-P2-24, FR-P2-25, D-047]", () => {
     }
   });
 
-  // D-047. An address that could reach a real inbox is real-world contact data.
+  // An address that could reach a real inbox is real-world contact data.
   it("uses addresses that cannot leave the machine", () => {
     for (const m of SEED_MEMBERS) expect(m.email).toMatch(/@example\.invalid$/);
   });
@@ -41,7 +41,7 @@ describe("seeded members [FR-P2-24, FR-P2-25, D-047]", () => {
     for (const provider of named) expect(roster, provider).toContain(provider);
   });
 
-  // A record that contradicts itself is the failure D-081 exists to prevent.
+  // A record that contradicts itself is the failure the seed exists to prevent.
   it("keeps every accumulator's remainder inside its limit", () => {
     for (const m of SEED_MEMBERS) {
       const { dental, otc, hearing, vision, oopMaxUsedYtd, oopMaxLimit } = m.accumulators;
@@ -70,7 +70,7 @@ describe("seeded members [FR-P2-24, FR-P2-25, D-047]", () => {
     }
   });
 
-  // The corpus states a Part D deductible for these two plans only. D-081.
+  // The corpus states a Part D deductible for these two plans only.
   it("only seeds plans whose drug thresholds the corpus states", () => {
     for (const m of SEED_MEMBERS) {
       expect(`${m.contractId}-${m.planId}`).toMatch(/^H5141-(004|007)$/);

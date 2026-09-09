@@ -56,6 +56,7 @@ export function buildSyntheticProviderDirectory(scope: SyntheticScope): Syntheti
     entry: {
       documentId: `${scope.contractId}-${scope.planId}-${scope.planYear}-provider_directory`,
       kind: "provider_directory",
+    language: "english",
       contractId: scope.contractId,
       planId: scope.planId,
       status: "synthetic",

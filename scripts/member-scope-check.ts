@@ -1,23 +1,34 @@
 /**
- * Asserts FR-P2-26 against the live seed: one member's record never contains
- * another member's data. Exits non-zero on the first leak.
- *
- * This is the precursor to P3's row-level security. Until that exists, the
- * query is the only boundary, so it is worth checking rather than assuming.
+ * Asserts against the live seed that one member's record never contains
+ * another's. Exits non-zero on the first leak.
  */
 import { SEED_MEMBERS } from "../src/members/seed.ts";
 import { loadMemberRecord } from "../src/members/store.ts";
-import { connect } from "../src/rag/store.ts";
+import { connectAdmin } from "../src/rag/store.ts";
+import type { MemberTopic } from "../src/auth/login-required.ts";
 
-const client = connect();
+/** Every topic, so the check still covers the whole record after. */
+const TOPICS: readonly MemberTopic[] = [
+  "claim",
+  "prior_authorization",
+  "balance",
+  "appointment",
+  "provider",
+];
+
+const client = connectAdmin();
 await client.connect();
 
 let leaks = 0;
 try {
   for (const member of SEED_MEMBERS) {
-    const record = await loadMemberRecord(client, member.id);
-    if (record === null) throw new Error(`member ${String(member.id)} is not seeded`);
-    const body = JSON.stringify(record);
+    const records = [];
+    for (const topic of TOPICS) {
+      const record = await loadMemberRecord(client, member.id, topic);
+      if (record === null) throw new Error(`member ${String(member.id)} is not seeded`);
+      records.push(record);
+    }
+    const body = JSON.stringify(records);
 
     const foreign = SEED_MEMBERS.filter((other) => other.id !== member.id).flatMap((other) => [
       ...other.claims.map((c) => c.id),
@@ -32,7 +43,7 @@ try {
       leaks += 1;
       console.error(`LEAK: member ${String(member.id)}'s record contains "${marker}"`);
     }
-    console.log(`member ${String(member.id)}: ${String(record.facts.length)} facts, no foreign data`);
+    console.log(`member ${String(member.id)}: ${String(records.reduce((n, r) => n + r.facts.length, 0))} facts, no foreign data`);
   }
 } finally {
   await client.end();

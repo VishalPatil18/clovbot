@@ -4,9 +4,8 @@ import { needsMemberData } from "../../src/auth/login-required.ts";
 const gated = (question: string) => needsMemberData(question) !== null;
 
 describe("needsMemberData, the gating direction [FR-P2-42, NFR-P2-02]", () => {
-  // A false negative discloses nothing here - the query layer already refuses
-  // without a session - but it answers a member question without identity,
-  // which NFR-P2-02 gates at zero.
+  // Discloses nothing, since the query layer refuses without a session, but it
+  // answers a member question without identity, which the eval gates at zero.
   it("gates a question about a claim", () => {
     for (const q of [
       "what did my last claim cost",
@@ -48,7 +47,7 @@ describe("needsMemberData, the gating direction [FR-P2-42, NFR-P2-02]", () => {
 describe("needsMemberData, the direction that must not fire [FR-P2-44]", () => {
   /*
    * A possessive is not the signal. The plan documents answer all of these, and
-   * gating one behind a login is the failure NFR-P2-02 gates at 95%.
+   * gating one behind a login is the failure the eval gates at 95%.
    */
   it("never gates a cost question the plan documents answer", () => {
     for (const q of [

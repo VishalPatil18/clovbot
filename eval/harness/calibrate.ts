@@ -1,7 +1,6 @@
 /**
- * Calibrates the faithfulness judge. NFR-QUAL-01 requires a hand-checked sample,
- * because an uncalibrated judge makes every faithfulness number it produces
- * unfalsifiable. Output is committed so the numbers can be cited later.
+ * Calibrates the faithfulness judge against a hand-checked sample: an
+ * uncalibrated judge makes every number it produces unfalsifiable.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { judgeFaithfulness } from "../judges/faithfulness.ts";

@@ -27,12 +27,8 @@ const sectionOf = (citations: Citation[], claim: Claim): string | null => {
 };
 
 /**
- * Groups neighbouring claims that cite the same sources, so a long answer reads
- * as a few labelled parts rather than one run of equal sentences.
- *
- * The grouping is a fact the payload already carries - which claim cites what -
- * rather than anything inferred from the words. Order is never changed: the
- * model returned these in a sequence and reordering them changes the answer.
+ * Groups neighbouring claims citing the same sources, from what the payload
+ * already carries. Order is never changed: reordering changes the answer.
  */
 export function groupClaims(claims: Claim[], citations: Citation[]): GroupedClaims {
   const flat: GroupedClaims = { grouped: false, groups: [{ heading: null, claims }] };

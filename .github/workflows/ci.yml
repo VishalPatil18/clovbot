@@ -18,6 +18,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # A critical advisory fails the build. Highs are printed and tracked in
+      # docs/security.md, because a gate that can never pass gets ignored.
+      - name: Dependency advisories
+        run: |
+          npm audit --audit-level=critical
+          npm audit --audit-level=high || echo "::warning::high-severity advisories open; see docs/security.md"
 
   # Slower, real model and database calls. Gated on secrets being present, so a
   # fork without them reports skipped rather than a misleading pass.
@@ -40,11 +46,29 @@ jobs:
           AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
           AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_EMBEDDING_DEPLOYMENT }}
         run: node --experimental-strip-types eval/harness/calibrate.ts
+      # NFR-P3-01. The only test that proves the policies exist, and it needs a
+      # real database, so it runs here rather than in the offline job.
+      - name: Row-level security
+        env:
+          DATABASE_APP_URL: ${{ secrets.DATABASE_APP_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node --experimental-strip-types scripts/rls-check.ts
+      # FR-P3-17 to FR-P3-22. Runs real turns, so it needs the model too.
+      - name: Access log
+        env:
+          DATABASE_APP_URL: ${{ secrets.DATABASE_APP_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+          AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_EMBEDDING_DEPLOYMENT }}
+        run: node --experimental-strip-types scripts/audit-check.ts
       # Exits non-zero when faithfulness < 0.90, any answer carries an uncited
       # factual claim, or the refusal rate exceeds 35%. NFR-QUAL-01..03.
       - name: Golden set eval
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_APP_URL: ${{ secrets.DATABASE_APP_URL }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}

@@ -1,13 +1,10 @@
 /**
- * Whether an answer's plan documents have been overtaken by the calendar, and
- * what to tell the member if so. FR-P2-17.
- *
+ * Whether the calendar has overtaken the plan documents, and what to say if so.
  * The clock is a parameter so the boundary can be tested rather than waited for.
  */
 export function stalenessWarning(corpusPlanYear: number, now: Date): string | null {
-  // UTC, not local: the container runs UTC while members are in Eastern, and a
-  // local comparison would move the boundary with the deployment. Erring up to
-  // five hours early only tells a member to check sooner; late would be wrong.
+  // UTC, or the boundary moves with the deployment. Early tells a member to
+  // check sooner; late would be wrong.
   const currentYear = now.getUTCFullYear();
   if (currentYear <= corpusPlanYear) return null;
   return (

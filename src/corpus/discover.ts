@@ -120,18 +120,28 @@ export function selectPlanDocuments(
   }
 
   const documents: SourceDocument[] = [];
-  for (const [key, kind] of Object.entries(CATALOG_KEY_TO_KIND)) {
-    const url = english[key];
-    if (typeof url !== "string" || url.length === 0) continue;
-    documents.push({
-      id: `${plan.contractId}-${plan.planId}-${plan.year}-${kind}`,
-      kind: kind as DocumentKind,
-      url,
-      contractId: plan.contractId,
-      planId: plan.planId,
-      planYear: plan.year,
-      language: "english",
-    });
+  // Optional: no Spanish formulary or directory is published, so a missing key
+  // is a fact about the source. The English set still raises when absent.
+  for (const language of ["english", "spanish"] as const) {
+    const set = language === "english" ? english : plan.documents["spanish"];
+    if (!isRecord(set)) continue;
+    for (const [key, kind] of Object.entries(CATALOG_KEY_TO_KIND)) {
+      const url = set[key];
+      if (typeof url !== "string" || url.length === 0) continue;
+      documents.push({
+        // The id carries the language, or the Spanish EOC would overwrite the English one.
+        id:
+          language === "english"
+            ? `${plan.contractId}-${plan.planId}-${plan.year}-${kind}`
+            : `${plan.contractId}-${plan.planId}-${plan.year}-${kind}-es`,
+        kind: kind as DocumentKind,
+        url,
+        contractId: plan.contractId,
+        planId: plan.planId,
+        planYear: plan.year,
+        language,
+      });
+    }
   }
   return documents;
 }

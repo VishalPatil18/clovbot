@@ -587,3 +587,331 @@ Two faults, not one. The constraint is the cause; migration 010 widens it. But t
 **Open:** FR-P2-53 stays unverified until the production migrations and the deploy run. Migration 010 is required and is new since the manual test pass.
 
 **Next:** deploy the API, merge development to main for the frontend.
+
+## 2026-09-09 - The deploy died on its own template
+
+**Did:** `npm run deploy:api` failed before running a line of its own script:
+
+```
+.env: line 55: syntax error near unexpected token `newline'
+```
+
+`deploy-api.sh` reads configuration with `set -a; source .env`, and `.env.example` shipped `OTP_FROM_ADDRESS=Clovbot <clovbot@v-ai.org>` unquoted. Bash reads `<` as input redirection and `>` as an output redirection with no target. Copying the template into `.env` copied the fault. Quoting the value fixes both, and Node's `--env-file` and bash strip the quotes identically, so the From header is unchanged.
+
+**Why nothing caught it.** Every test of the login path reads the value through Node, which parses the unquoted form without complaint. Only the deploy script sources the file as shell, and no test parsed the template. `bash -n .env.example` now runs as a test, which is the whole check in one line.
+
+**Files:** `.env.example`, `tests/unit/deploy-config.test.ts`. 676 tests pass.
+
+## 2026-09-09 - P3 Stage 1: row-level security
+
+**Did:** moved member scoping from a `where` clause into the database. The application now connects as `clovbot_app`, a role that cannot bypass row-level security and owns nothing; five member-scoped tables have RLS enabled and forced with a policy each; and the proof issues raw selects with no application code in the path.
+
+**Files:** added `migrations/011_row_level_security.sql`, its down script, `scripts/rls-check.ts`, `tests/unit/migration-rls.test.ts`, `claude/srs-p3.md`. Changed `src/rag/store.ts`, `src/members/store.ts`, both CLIs, nine scripts, `.env.example`, `scripts/deploy-api.sh`, `.github/workflows/ci.yml`, `README.md`, two test files. 693 tests pass.
+
+**Verified against the live database:** every member-scoped table returns zero of another member's rows and all of the session member's own; an unfiltered `select *` returns only their rows; a connection with no identity reads nothing; the identity does not survive its transaction; every table in the catalog holding a `member_id` either has a policy or is a recorded exemption. `npm run ask:member -- --id=1` still answers, cited to the record. The down script was executed inside a transaction and rolled back: 5 tables and 5 policies removed, then restored, with no window where production sat unprotected.
+
+**What building it surfaced:**
+
+- **The whole stage was nearly built on sand.** The application connected as `postgres`, which owns every table and carries `rolbypassrls = true`. Policies would have been inert, and `FORCE` does not override `BYPASSRLS`. Checking the role before writing a policy is what caught it.
+- **A pooler in session mode makes a session `SET` a leak.** The identity is set transaction-locally, so a connection returned to the pool carries nothing into whoever borrows it next.
+- **The leak demonstration deadlocked itself.** Disabling a policy takes an `ACCESS EXCLUSIVE` lock, and reading that table from the other connection waits on a lock the first transaction will not release until the read returns. `SET ROLE` to collapse it onto one connection is refused on PostgreSQL 16+ without the `SET` membership option.
+- **The replacement is better than the thing it replaced.** The same query as the other member returns rows; as this member it returns none. That proves the empty result is the policy rather than an empty table, needs no DDL, and cannot leave a live table unprotected if it fails halfway.
+- **`login_codes` and `member_sessions` cannot have a policy.** They are read to establish the identity a policy would filter by. Protected by grant, exempted by name, with the reason in a table comment and asserted by the check.
+
+**Open:** `DATABASE_APP_URL` must be added to Cloud Run and to the CI secrets before the next deploy; the deploy script requires it and will refuse without it.
+
+**Next:** P3 Stage 2, the audit log and minimum-necessary access, on the user's word.
+
+## 2026-09-09 - P3 Stage 2: the access log, and a Stage 1 repair
+
+**Did:** narrowed what an authenticated turn reads and recorded every read. The rule that decides whether a signed-out member must sign in now also decides what is read, so the gate and the access are one call. Every authenticated turn writes exactly one access-log row naming columns and row ids, never values.
+
+**Files:** added `migrations/012_member_access_log.sql`, `013_login_path_under_rls.sql`, both down scripts, `scripts/audit-check.ts`, `tests/unit/member-audit.test.ts`. Changed `src/members/store.ts` (rewritten), `src/rag/answer-turn.ts`, `src/rag/router.ts`, `src/auth/store.ts`, `src/server.ts`, `src/members/cli.ts`, `scripts/member-scope-check.ts`, `scripts/rls-check.ts`, four test files, CI and the runbook. 717 tests pass.
+
+**Verified against the live database:** 14 audit checks green. One row per turn with the topic that caused it; eight claim columns each naming their row; no amount anywhere in the row; zero fields read for a plan-document question asked by the same signed-in member; `update` and `delete` refused by grant; the insert policy refusing a row about another member; the cited field present in the log. `check:rls` green at 38 checks.
+
+**Stage 1 had broken sign-in and nothing caught it.** 011 put `members` behind a policy, and both sign-in paths read that table before an identity exists. The session join returned zero rows and the email lookup returned zero rows, so nobody could sign in. Found by reading the code for Stage 2, not by a test. D-094 records the fix: the session lookup reads its exempt row first and sets the identity before reading the member row, and the email lookup gets a narrow `security definer` function. Both verified end to end.
+
+**What building it surfaced:**
+
+- **A policy correct for the data path can be wrong for the path that creates the identity.** The symptom is silence: a join returns zero rows and every caller reads that as "not signed in".
+- **The schema check earned itself on its first opportunity.** Adding `member_access_log` made `check:rls` fail, because the table carries a `member_id` and was not declared. It has policies; it just was not on the list. Exactly the failure FR-P3-10 exists for.
+- **The audit is derived from the facts, not compiled beside them.** Each fact carries the columns it was built from, and the log is the union. A cited field cannot be missing from the log because both come from the same structure.
+- **Minimum-necessary removed a read nobody had noticed.** A signed-in member asking a specialist copay used to have their claims, prior authorisations and appointments read. It now reads nothing. The member's name is read by no answer path at all.
+
+**Open:** the deployed browser flow for sign-in under the policies is unverified; `DATABASE_APP_URL` still needs to reach Cloud Run and the CI secrets.
+
+**Next:** P3 Stage 3, the real-PHI writeup, on the user's word.
+
+## 2026-09-09 - P3 Stage 3: the real-PHI writeup
+
+**Did:** wrote `docs/real-phi.md`, which states control by control what exists in this system and what a real deployment would still owe. Nothing was built. `tests/unit/real-phi-writeup.test.ts` checks it for source integrity.
+
+**Files:** added `docs/real-phi.md` and its test. 730 tests pass.
+
+**Measuring the deployment while writing it beat describing it from memory, twice:**
+
+- **The pooler accepts a plaintext connection.** A client that omits the TLS options connects successfully. Encryption in transit is a convention this application follows, not a rule the server enforces. Supabase can enforce it; nobody had.
+- **`pg_stat_ssl` reports no TLS on the backend serving our queries.** The client's TLS terminates at Supavisor, and the pooler-to-database hop runs inside Supabase's network without it.
+
+Both would have been written up as "encryption: done" from the code alone, because the code does pin a CA and does verify it.
+
+**Three outbound paths that the briefing's five-item list does not cover.** Spoken answers go to ElevenLabs, recorded questions go to speech-to-text, and sign-in mail goes through Resend. Under the authenticated tier a spoken answer can carry a claim amount. With real records each needs its own BAA, and the honest alternative for voice is dropping spoken answers for authenticated content.
+
+**The most important admission in the document.** Row-level security moved the trust boundary from every query to one function. The policies filter on a setting the application puts there, so a compromised application can still set any member id. That is a large improvement and it is not the database deciding independently, and saying so is worth more than claiming the control is complete.
+
+**Open:** unchanged. `DATABASE_APP_URL` still needs to reach Cloud Run and the CI secrets.
+
+**Next:** P3 Stage 4, Spanish, on the user's word. It is the largest of the four and the only one that changes what a member sees.
+
+## 2026-09-09 - P3 Stage 4, first half: the Spanish corpus and language scoping
+
+**Did:** the corpus and plumbing half of Spanish. Not yet member-visible. Discover walks `documents.spanish`, 26 documents fetch and convert, chunks carry a language, retrieval scopes by it, and the detector tells Spanish from other languages.
+
+**Files:** added `migrations/014_language_scoped_retrieval.sql` and its down script. Changed `src/corpus/discover.ts`, `src/corpus/columns.ts`, `src/corpus/cli.ts`, `src/corpus/fetch.ts`, `src/corpus/types.ts`, `src/corpus/synthetic.ts`, `src/rag/chunk.ts`, `src/rag/ingest.ts`, `src/rag/store.ts`, `src/language.ts`, five test files. 734 tests pass.
+
+**Two parser defects, both found by measuring rather than by a failing test:**
+
+- **The Spanish Summary of Benefits writes `(plan 004)` in lower case.** English writes `(Plan 004)`. One character, and the only reason it did not silently mis-attribute two columns of amounts is that D-031 fails loudly when it cannot attribute a money row.
+- **A conversion failure was sticky.** `convertAll` skipped any entry whose status was not `ok`, so fixing the parser re-reported the stale reason from the run that broke. A failed entry whose raw file still exists is now retried.
+
+**Verified:** the Spanish column split matches English exactly. ES 004 reads `$10` and `$20` for a specialist, ES 007 reads `$2` and `$15`, and `$175`, which belongs only to 007, appears zero times in the 004 column.
+
+**Migration 014 was dry-run inside a transaction and rolled back.** It failed the first time: `to_tsvector(language::regconfig, ...)` in a generated column is rejected because casting text to regconfig is a catalog lookup and therefore only stable. A `case` over constant configurations is immutable and accepted. The old eight-argument `search_hybrid` has to be dropped rather than left beside the new one, or an eight-argument call becomes ambiguous, and the grant does not follow the function.
+
+**Open:** migration 014 is not applied and the Spanish corpus is not ingested. The answering half is not built: session language, the Spanish prompt, Spanish refusal and guardrail copy, the English-drug-list exception (FR-P3-36), the language control, the Spanish voice ids, and the Spanish golden cases.
+
+**Next:** apply 014, ingest, then the answering and interface half.
+
+## 2026-09-09 - P3 Stage 4: Spanish, and P3 complete
+
+**Did:** the answering and interface half of Spanish. A Spanish question is answered in Spanish, from Spanish source documents, with Spanish citations, read in a Spanish voice, inside a panel whose own chrome is Spanish. All four P3 stages are done.
+
+**Files:** added `src/i18n.ts`, `web/src/strings.ts`, `tests/unit/spanish-surface.test.ts`, `migrations/014_language_scoped_retrieval.sql` and its down script. Changed the corpus pipeline, `src/language.ts`, `src/guardrails.ts`, `src/rag/{answer-turn,payload,router,store,chunk,ingest,cli}.ts`, `src/voice/providers.ts`, `src/server.ts`, the web panel, the eval harness and the golden set. 756 tests pass.
+
+**One eval run, four gates, all green:** faithfulness 1.000, structural 100%, refusal 9.1%, bucket A 41/44, B 8/8, C 12/12. **Per language, en 1.000 over 60 cases and es 1.000 over 6.** Router 32/32. Login detection zero false negatives and zero false positives. Regression gate met. The corpus is 2737 chunks: 1913 English over 19 documents, 824 Spanish over 9.
+
+**Verified against the live index, not asserted:** a Spanish question retrieved 5 chunks, all Spanish, from the `-es` documents; the paired English question retrieved 5, all English. The amounts agree across languages from different source documents.
+
+**What building it surfaced:**
+
+- **`(plan 004)` in lower case.** The Spanish Summary of Benefits differs from the English by one character, and the parser found no headers at all. D-031's loud failure is the only reason two columns of amounts were not silently merged.
+- **A conversion failure was sticky**, so a fixed parser kept reporting the reason from the run that broke it. Fixed: an entry whose raw file still exists is retried.
+- **Translating the guardrails was not enough.** The patterns were English-only, so a Spanish emergency fired nothing and the Spanish copy was never reached. The golden set caught it.
+- **A 40-minute ingest died at chunk 235.** One connection held across a loop that sleeps between batches; the pooler dropped it and `pg` raised an unhandled error event. Now one connection per unit of work, and the run resumed rather than restarting.
+- **The help panel was lying.** It said the assistant "holds no member data and never signs you in", which stopped being true when P2 shipped. Found while translating it.
+- **A generated column will not take `language::regconfig`.** Casting text to a regconfig is a catalog lookup, so only stable. A `case` over constants is immutable and accepted.
+
+**Open:** the local default snapshot is whatever directory sorts last, so a half-finished ingest silently becomes the one served locally. Production pins it at deploy time. Citations for chunks with no heading read "Unlabelled" in both languages, which is a pre-existing chunking artifact rather than a Spanish regression.
+
+**Next:** cut v1.2.0, or P4.
+
+## 2026-09-09 - P3 Stage 5: the mobile layout
+
+**Did:** made every surface work on a phone, with the floor at an iPhone 14 Pro. Added Playwright so the result could be looked at rather than reasoned about.
+
+**Files:** added `web/src/viewport.ts`, `scripts/shoot.ts`, `tests/unit/responsive.test.ts`. Changed `web/src/app.css`, `web/src/landing.css`, `web/src/App.tsx`, `web/src/components/Assistant.tsx`, `web/src/strings.ts`, `claude/srs-p3.md` (to v1.1.0), `claude/plan-p3.md`. 773 tests pass.
+
+**What measurement found that reading the CSS would not:**
+
+- **726px of content in a 393px frame.** Not scrolling sideways, clipped: `html, body { overflow-x: hidden }` hid it, so the Ask button was unreachable rather than off-screen.
+- **One declaration caused it.** `.assistant__bar` was `flex-wrap: nowrap`, and a flex item's default `min-width` is `auto`, so its min-content width became a floor for the entire tree.
+- **The same floor clipped the desktop panel.** 726px inside 576px at 1440, 410px at 1024. It had been there since the panel was built and was simply less obvious on a large screen. D-098 keeps the fix unconditional for that reason.
+- **The conversation had 287px of 852.** Now 401px, bought back from bands that were reserving space they did not use, including a status line holding a blank row against a jump that happens occasionally.
+- **The landing nav was ragged.** A wrapping flex row with `space-between` puts two links on one row and one on the next. Stacked, one tap target per row, no hamburger.
+
+**Two of my own regressions, caught by looking:** shrinking the disclaimer padding on a phone put the dismiss X on top of the last word, and the nav's two separate lists left a seam that read as a missing row.
+
+**Open:** landscape phone is usable but not optimised; at 393px tall a pinned header and composer leave little for the conversation. Screenshots live in the scratch directory rather than the repository.
+
+**Next:** cut v1.2.0.
+
+## 2026-09-09 - Ten fixes from a device pass
+
+**Did:** worked through ten specific layout problems found on a real phone and a real desktop, verified each with the screenshot harness.
+
+**Files:** `web/src/app.css`, `web/src/landing.css`, `web/src/App.tsx`, `web/src/components/Assistant.tsx`, `web/src/strings.ts`, `scripts/shoot.ts`, three test files. 781 tests pass.
+
+**The header was my regression.** `.assistant__bar` was built to hold one line with the title truncating; hoisting `flex-wrap: wrap` to fix the width floor broke that intent and dropped the controls under the title, hard left. Restored to nowrap with an explicit ellipsis on the title and `margin-left: auto` on the controls, so they hold the right edge in either case.
+
+**And I made the same class of mistake twice.** Putting the phone's controls in the rail as a `nowrap` row made the rail's min-content the page's width floor, clipping every surface exactly as `.assistant__bar` had. The rail now wraps and carries `min-width: 0`, and a test asserts it, because this is the second time one nowrap row has done this.
+
+**What changed:**
+
+- Controls right-aligned on the title's line, and the help panel gained a close control of its own.
+- The starter grid is fixed at two columns, centred. `auto-fit` gave three across and one orphan below, which reads as a mistake rather than a grid.
+- On a phone the controls sit in the top bar beside Back, with short labels: the long forms did not fit and made the bar a width floor.
+- The actions stay above the composer where a thumb is. Print and Clear saved shrink to their icons; the two a member reaches for under pressure keep their words.
+- The mic sits beside its words rather than above them, down from about 40% of the screen to 108px, which is also what gave the plan prompt room to scroll.
+- Starter cards put the icon beside the words, halving each card.
+- The full-page route locks the page scroll. `100vh` counts browser chrome that `100dvh` does not, and the difference was a screen of white below the composer.
+- The launcher is as wide as its words, in the corner.
+
+**Not reproduced:** the page overflow and the unscrollable plan prompt did not appear headless at 393x852. The scroll lock addresses the first at its cause; the second had 294px of content in a 449px region once the mic shrank.
+
+## 2026-09-09 - Second device pass, and playback becomes pause
+
+**Did:** five more fixes from a real phone, and replaced Stop with Pause and Resume. 789 tests pass.
+
+**Files:** `web/src/app.css`, `web/src/voice.ts`, `web/src/components/Assistant.tsx`, `web/src/strings.ts`, three test files.
+
+**Two of the five were my own bugs from the previous pass:**
+
+- **`.chips .chip` (0,2,0) beat `.chip--compact` (0,1,0).** The width landed and the font-size did not, so Print and Clear saved became 44px buttons holding their whole label. Specificity, again.
+- **The halo was sized for a 128px well.** I shrank the well to 84px and left the ring at 148px, so it swept past the card and off the side of the screen.
+
+Two more were the same shape: `.assistant--page > .assistant__foot` out-specified my gap override, and the phone's help control was an `assistant__mode`, so the icon rule I wrote for it never matched.
+
+**Then nowrap cost what it saved.** Forcing the actions onto one row wrapped each label to two lines, so the row was the same height with worse typography. Fixed with `white-space: nowrap` and tighter padding: one row at 393, and below 24.5rem the row wraps rather than clips, because a 375 phone is four pixels short and a cut-off button is worse than a second row.
+
+**Stop became Pause and Resume.** D-099. Stop's only behaviour beyond pausing was resetting the position, which the button beside it already did. Both audio tiers support pause natively. The two buttons keep their positions and their jobs, because a single control that relabels itself under a finger asks this audience to track state before acting.
+
+**Open:** desktop was untouched by this pass and re-verified unchanged.
+
+## 2026-09-09 - The full-page rail as one set of tools
+
+**Did:** the desktop rail's controls were three separate groups rendered in whatever order the chips row happened to be, at three different widths. They are now one column with an explicit order. 795 tests pass.
+
+**Order, decided rather than inherited:** mode and language first because they change how the whole conversation behaves, the destructive pair beside each other, help last where a reference belongs.
+
+**Ground changes on hover only.** A tool that stays highlighted after a click looks selected, and none of these is a selection: they act and finish. `aria-pressed` and `aria-expanded` no longer paint the button.
+
+**Back is not a tool.** It leaves the page the others act on, so it lost its box and reads as navigation. The extra 16px between it and the set is gone.
+
+**Two specificity traps in one change.** The Back override sat earlier in the file than the base rule it was meant to beat, so it silently did nothing until moved and given a `.rail >` prefix. And a first measurement showed the pressed state still painting keylime, which turned out to be the harness leaving the pointer on the button after clicking: `:hover` was correctly applying. Moving the mouse away first showed the rule working. Worth remembering before chasing a CSS bug that is not there.
+
+**Side effect worth naming:** the desktop full page no longer renders the chips row at all, so its "Talk to a person" chip is gone. FR-13 still holds through the rail's human card, which is on screen at all times and larger.
+
+## 2026-09-09 - P3 Stage 6: caching
+
+**Did:** three caches over one store. Answers keyed on the exact question inside its scope, query embeddings keyed on text and model, and the audio cache moved off the container filesystem. 808 tests pass.
+
+**Files:** added `src/cache.ts`, `migrations/015_caches.sql` and its down script, `tests/unit/cache.test.ts`. Changed `src/rag/answer-turn.ts`, `src/server.ts`, `scripts/stage9-checks.ts`, `tests/unit/voice-chain.test.ts`, the SRS to v1.2.0, plan-p3, README, architecture, deployment runbook and the changelog. Removed `src/voice/cache.ts`.
+
+**Two of the three were already there or nearly so.** The audio cache shipped in v1.0.0; what was wrong with it was the store, not the idea. Embeddings were never cached.
+
+**The answer cache is the decision.** `docs/ideas.md` describes P4-01 as semantic caching above a similarity threshold and warns in the same line that a loose one returns a wrong copay. Keying on the exact question inside its scope removes the question entirely, and the scope is what stops a plan, a language or a re-index leaking across. D-100.
+
+**I ran prettier on `src/server.ts` and it reformatted 330 lines** in a change that needed about ten. This repo has no prettier config and other files fail its check too, so the formatter is not the project's. Reverted and re-applied the one edit by hand: 58 lines, most of them the re-indentation the new try block genuinely requires. Do not run a formatter this repo does not use.
+
+**One real bug in my own normaliser**, caught by its test: trailing punctuation was stripped before trimming, so `"copay??  "` kept its question marks and keyed differently from `"copay"`. Order matters in a chain of replaces.
+
+**Open:** migration 015 is the operator's to apply, and until then the answer and embedding caches are inert and audio falls back to synthesising every time.
+
+**Next:** cut v1.2.0.
+
+## 2026-09-09 - Cache invalidation on ingest
+
+**Did:** ingest now clears the answers cached against the snapshot it writes. Embeddings and audio are left alone. 812 tests pass.
+
+**The request was to clear all three; only one of them can be stale.** An answer cached against a snapshot is wrong once the chunks behind that id change, which happens when ingest re-runs into the **same** snapshot after a parser fix. A query embedding is a function of the question and the model, not the corpus. Audio is keyed on the answer text, so a changed answer produces a new key and the old recording is unreachable rather than wrong. Clearing either would re-pay a provider bill to invalidate something that was never capable of being wrong. D-101.
+
+**Clearing runs in a `finally`, not on the success path.** A run that dies part-way leaves a half-written corpus, and that is exactly when a cached answer citing text that no longer exists is most likely and least expected. This project has already had an ingest die at chunk 235 of 2737. It runs last so a question asked mid-run cannot repopulate the cache from the corpus being replaced.
+
+**Verified against the live table**: two entries under different snapshot ids, delete one, the other survives.
+
+**Next:** cut v1.2.0.
+
+## 2026-09-09 - P3 Stage 7: feedback that goes somewhere
+
+**Did:** made the yes/no control useful. The rating now carries the answer it rated and, after a no, one of four fixed reasons; the operator report turns rated-wrong answers into golden-set candidates. 827 tests pass.
+
+**Files:** added `migrations/016_feedback.sql` and its down script, `tests/unit/feedback.test.ts`. Changed `src/rag/store.ts`, `src/server.ts`, `src/ops.ts`, the web panel, `web/src/api.ts`, `web/src/history.ts`, `web/src/strings.ts`, `web/src/app.css`, the SRS to v1.3.0, plan-p3, README, architecture, real-phi, the runbook and the changelog.
+
+**The feature was half-built already.** Feedback has been recorded since v1.0.0 and the split has been in `insights` just as long. The gap was that the turn holds the question and not the answer, so a thumbs-down named a failure without naming what failed.
+
+**Three requests I did not implement as asked, and why.** Free text was asked for implicitly by "collect the data on what the user answers": it is the one surface in this product that could put a condition into the database, so it is four fixed reasons enforced by a check constraint instead. "Anonymised" is not achievable here and is not claimed: a session id links a visit and the loop breaker needs it, so analysis reads a view without it and the documentation says pseudonymous. "Fine-tune the model" has no pipeline here and the answers come from retrieval and a prompt, so the data feeds the golden set, which is what actually moves faithfulness. D-102.
+
+**The one that mattered most:** a signed-in member's answer is never stored. Writing it into `turns` would have rebuilt exactly the durable copy of member data that Stage 2 spent its effort removing.
+
+**Verified against the live table:** the view has no `session_id`, the database rejects a reason outside the four, and a turn with a null answer still records its rating and reason.
+
+**Open:** migration 016 is the operator's to apply. Until then the answer column does not exist and feedback records as it did before.
+
+**Next:** cut v1.2.0.
+
+## 2026-09-09 - P3 Stage 8: a transcript the member can keep
+
+**Did:** the export control now downloads a PDF of the conversation instead of opening the print dialog. 851 tests pass.
+
+**Files:** added `web/src/transcript.ts`, `web/src/pdf.ts`, `tests/unit/transcript.test.ts`. Changed the web panel, `web/src/strings.ts`, `web/src/history.ts`, `package.json`, three test files, the SRS to v1.4.0, plan-p3, D-103, README, architecture, real-phi and the changelog.
+
+**The button already worked.** `window.print()` and the print stylesheet have shipped since P2 as FR-P2-20, and the browser dialog's "Save as PDF" destination was the export path. What no browser API offers is a way to steer that dialog to a file, so a download meant generating the bytes. jsPDF 4.2.1, fetched by dynamic import so the initial bundle is unchanged and only a member who exports pays the 130 kB.
+
+**Rendered on the device, never on the server.** Everything the file needs is already in the browser. Posting a transcript to a renderer would put a signed-in member's claim amounts back on the wire and into request logs, which is the transit path Stage 2 removed for exactly that data. D-103.
+
+**The document model is separate from the renderer**, so what the file says is asserted directly rather than by parsing a PDF. The renderer is text-only: an HTML-to-canvas rasteriser would produce a large file of unselectable pixels that a screen reader cannot read and a member cannot copy an amount out of.
+
+**Found a real bug on the way in.** `clearMemberTurns` matched only the English citation label `"Your member record"`, so signing out in Spanish left the member's claim data in `localStorage`. The predicate now matches both labels and is shared with the export, which needs the same question answered. FR-P2-39, regression test added.
+
+**Verified by looking at the artifact**, in both languages and end to end: the built bundle served, history seeded, the control pressed, the download captured and the PDF read back.
+
+**Next:** cut v1.2.0.
+
+## 2026-09-09 - P3 Stage 9: comments that earn their place, and a documented corpus
+
+**Did:** swept every comment in the code under the rule `CLAUDE.md` §5 already stated, added a test that keeps it, and documented where the corpus came from. 857 tests pass.
+
+**Files:** added `tests/unit/comments.test.ts` and `docs/corpus.md`. Rewrote comments across 116 files in `src`, `web/src`, `tests`, `scripts`, `eval`, `migrations` and the stylesheets. Regenerated `docs/corpus-report.md`. Changed README, architecture, the SRS to v1.5.0, plan-p3, D-104 and the changelog.
+
+**411 comment lines carried a requirement id, a decision id or a stage number.** They were written with the plan open on the next screen. A reader without it gets a dead pointer and a paragraph where a line would do, which is what `CLAUDE.md` §5 has said since the beginning.
+
+**The gate is the durable part.** A test enumerates every comment in the swept trees and fails on an id, a stage, a phase, a build pass or a release. Without it the sweep is a one-off that decays on the next commit.
+
+**A bulk regex was the wrong tool and the diff proved it.** Stripping the ids mechanically left 30 mangled sentences ("This is why exists", "failing loudly is's rule") and silently corrupted `0..1` into `0.1` in the reranker. Every one was repaired by hand after reading the diff. The lesson is not that regex is wrong; it is that a mechanical edit needs a mechanical check, and reading the diff was it.
+
+**Three tests were anchored on comment prose** and broke: a feedback test sliced the source from a comment string, and two responsive tests matched sentences in the stylesheet. Two were re-anchored on code; the third kept a comment assertion, because "the source says why" is the thing it exists to check.
+
+**Left alone deliberately:** `claude/` and `docs/`, whose subject is the plan; test names carrying `[FR-xx]`, which are traceability rather than comments; and `scripts/stageN-checks.ts` filenames, because renaming them would dangle references in `claude/context.md`, which this stage does not touch.
+
+**The corpus documentation is measured, not recalled.** Counting exposed that `chunks` holds 3,345 rows across two snapshots, of which 2,737 belong to the current one. Publishing the larger number would have overstated the corpus by 22%.
+
+**Next:** cut v1.2.0.
+
+## 2026-09-09 - P3 Stage 10: security review and posture
+
+**Did:** audited what is actually enforced, fixed four things the audit found, and wrote the posture down including its gaps. 891 tests pass.
+
+**Files:** added `src/validate.ts`, `tests/unit/validate.test.ts` and `docs/security.md`. Changed `src/server.ts`, `vercel.json`, `.github/workflows/ci.yml`, three tests, README, architecture, the runbook, real-phi, the SRS to v1.6.0, plan-p3, D-105 and the changelog.
+
+**The controls were strong and undocumented.** Body ceilings on every entry point, rate limits at three levels, row-level security with FORCE on a NOBYPASSRLS role, redaction before both the model call and the log write, scrypt OTPs, an append-only audit log enforced by grant, and a secret scan in CI all existed. Nothing stated the posture in one place.
+
+**The prompt-injection answer was already structural, and now says so.** The prompt sentence fencing sources as data is the weakest layer. The control is the answer contract: typed claims carrying citation ids, citation containment rejecting any id not retrieved that turn, and the application rendering the prose. The ceiling on a successful injection is a refusal or a claim cited to a document that was actually retrieved.
+
+**Five gaps found, four fixed.** Validation was scattered across handlers and is now one module with 27 tests. Cookies had no `Secure` flag and now derive it from `x-forwarded-proto`, so production sets it and a local plaintext port does not, with nothing to configure. There was no Content-Security-Policy and now there is, verified by loading the built page in a real browser under it rather than by reading the header. There was no `npm audit` in CI at all.
+
+**Four high-severity CVEs are open and unfixable.** All reach through `@huggingface/transformers@4.2.0`, which is the latest published version, with `fixAvailable: false` on every one: `sharp`/libvips CVE-2026-33327 and -33328, and `adm-zip` via `onnxruntime-node`. Nothing in this application decodes an image or unpacks an archive, so the paths are unreachable; that argument is written down per advisory with a re-check trigger. CI blocks on critical and warns on high, because a gate that can never pass gets ignored.
+
+**Zod was not adopted**, though `CLAUDE.md` names it. The model-output validator accumulates why a payload failed and rejects one that both refuses and makes claims, which a schema alone does not; replacing working tested code with a dependency for contract compliance is the wrong trade. Recorded in D-105.
+
+**`SECURITY.md` left alone at the user's direction.** It still carries a placeholder contact and claims CSRF protection where the actual control is `SameSite=Lax` with no token. `docs/security.md` states that accurately.
+
+**Next:** cut v1.2.0.
+
+## 2026-09-09 - v1.2.0 released
+
+**Did:** cut v1.2.0. Version bumped, changelog closed, plan and SRS marked shipped, stale counts corrected. 892 tests pass.
+
+**Found a deploy blocker while writing the steps.** `scripts/deploy-api.sh` forwarded `ELEVENLABS_VOICE_ID` and `FISH_AUDIO_VOICE_ID` but neither `_SPANISH` variant, so the deployed service would have fallen back to the English voice and read every Spanish answer in it. A silent degrade, not an error, and it would have shipped the Spanish tier half-working. Both added, with a test asserting the forwarded set.
+
+**Ten stages: row-level security, audit log and minimum-necessary reads, the real-PHI writeup, Spanish end to end, the mobile layout, three caches, feedback that goes somewhere, a PDF transcript, the comment sweep with its gate, and the security review.**
+
+**Migrations 011 to 016 are the operator's to apply**, in order, with 014 followed by a re-ingest.
+
+**README brought up to the release.** Spanish and the phone layout had no feature block of their own despite being half of v1.2.0; row-level security was one line under Operations and is now its own block plus a row in the decisions table. Corrected three stale counts: 26 documents to 28, 756 tests to 892, ninety-four decisions to 105. `docs/future-work.md` claimed the help panel's Spanish copy was outstanding; the lists are bilingual and only the four button descriptions are not, so the entry now says that.
+
+**Next:** P4, or whatever the next brief is.
+
+## 2026-09-09 - Browser performance scan
+
+**Did:** ran Lighthouse 12.8.2 against the deployed site, four scans, and wrote up the results. No application code changed.
+
+**Files:** added `docs/performance.md`. Changed README and `docs/future-work.md`.
+
+**Results:** desktop 100 performance on both routes, throttled mobile 94 on the landing and 97 on the assistant. Accessibility 100 on all four. **Total blocking time 0 ms everywhere**, which follows from having no third-party origin, no webfont and no analytics rather than from any optimisation. Confirmed from the scan's own network records: one host, 10 requests on the landing and 6 on the assistant.
+
+**No dependency added.** Lighthouse runs from `npx` against the Chromium Playwright already installs, so nothing entered `package.json`. The reproduction command is in the doc.
+
+**Three findings left open rather than fixed**, so the published numbers keep matching production: 481 KiB recoverable from three landing JPEGs served full-size and scaled by CSS, one layout shift on the assistant at mobile width (CLS 0.101, element is the page container), and a missing meta description, which is the whole SEO deduction on both routes.
+
+**No changelog entry.** Nothing user-facing changed.

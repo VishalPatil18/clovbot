@@ -3,14 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * NFR-SEC-03: no credential, key or endpoint appears in the repository.
- *
- * Environment variables stop a key being *needed* in the repo; they do not stop
- * one being committed. This scans what git actually tracks, so a key pasted into
- * a source file or an accidentally committed .env fails the build rather than
- * being published.
- *
- * Deliberately not a new tool: it runs in the suite that already gates CI.
+ * No credential, key or endpoint in the repository. Environment variables stop a
+ * key being needed, not committed, so this scans what git actually tracks.
  */
 const tracked = execFileSync("git", ["ls-files"], { encoding: "utf8" })
   .split("\n")
@@ -71,7 +65,7 @@ describe("no secrets in the repository [NFR-SEC-03]", () => {
    * empty or obviously a placeholder.
    */
   it("carries no real credential in .env.example", () => {
-    const secretish = /_(API_KEY|TOKEN|SECRET|PASSWORD)$|^DATABASE_URL$/;
+    const secretish = /_(API_KEY|TOKEN|SECRET|PASSWORD)$|^DATABASE(_APP)?_URL$/;
     const placeholder = /YOUR|PLACEHOLDER|REPLACE|PROJECT_REF|PASSWORD|REGION|xxx/i;
 
     const filled = read(".env.example")
@@ -88,11 +82,11 @@ describe("no secrets in the repository [NFR-SEC-03]", () => {
 
   it("names every secret the deploy needs, so nothing is passed by accident", () => {
     const script = read("scripts/deploy-api.sh");
-    for (const name of ["DATABASE_URL", "AZURE_OPENAI_API_KEY", "ELEVENLABS_API_KEY"]) {
+    for (const name of ["DATABASE_APP_URL", "AZURE_OPENAI_API_KEY", "ELEVENLABS_API_KEY"]) {
       expect(script).toContain(name);
     }
     // Values come from the environment at deploy time, never from the image.
     expect(read("Dockerfile")).not.toMatch(/API_KEY=\S/);
-    expect(read("Dockerfile")).not.toMatch(/DATABASE_URL=\S/);
+    expect(read("Dockerfile")).not.toMatch(/DATABASE(_APP)?_URL=\S/);
   });
 });

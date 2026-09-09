@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { IoArrowBack, IoCall, IoChatbubbleEllipses, IoClose } from "react-icons/io5";
 import { Assistant, MEMBER_SERVICES_DISPLAY as MEMBER_SERVICES } from "./components/Assistant.tsx";
+import { useIsPhone } from "./viewport.ts";
 import { Landing } from "./components/Landing.tsx";
 
 type Route = "home" | "assistant";
@@ -11,9 +12,18 @@ const readRoute = (): Route => (window.location.pathname === "/assistant" ? "ass
 export function App(): React.JSX.Element {
   const [route, setRoute] = useState<Route>(readRoute);
   const [panelOpen, setPanelOpen] = useState(false);
+  const isPhone = useIsPhone();
+
+  // On a phone the panel navigates instead, so it never becomes a clipped overlay.
+  useEffect(() => {
+    if (isPhone && panelOpen) {
+      setPanelOpen(false);
+      go("assistant");
+    }
+  }, [isPhone, panelOpen]);
   const launcher = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
-  // Held above the panel so a close never discards a half-typed question. D-076.
+  // Held above the panel, so a close never discards a half-typed question.
   const [draft, setDraft] = useState("");
   const reduceMotion = useReducedMotion();
 
@@ -33,13 +43,8 @@ export function App(): React.JSX.Element {
     setRoute(next);
   };
 
-  // Escape closes the panel and returns focus to the control that opened it,
-  // so keyboard users are never stranded. NFR-A11Y-04.
-  /*
-   * The panel dims and covers the page, so it holds focus while it is open.
-   * A dialog that blocks the page visually must block it for the keyboard too,
-   * or it is only a dialog for people using a mouse. D-075.
-   */
+  // Escape returns focus to the control that opened it, so nobody is stranded.
+  // A dialog that blocks the page visually must block it for the keyboard too.
   useEffect(() => {
     if (!panelOpen) return;
     const onKey = (event: KeyboardEvent): void => {
@@ -68,13 +73,12 @@ export function App(): React.JSX.Element {
   }, [panelOpen, closePanel]);
 
   /*
-   * Both elements, not just body. `html, body { overflow-x: hidden }` makes the
-   * other axis compute to auto, so the document element owns the scroll and
-   * locking body alone leaves the page scrolling behind the backdrop.
-   * Released on unmount, or the page stays frozen after a close.
+   * Both elements: overflow-x hidden makes the other axis auto, so the document
+   * owns the scroll and locking body alone leaves the page scrolling behind.
    */
+  // 100vh counts browser chrome that 100dvh does not: a screen of white below.
   useEffect(() => {
-    if (!panelOpen) return;
+    if (!panelOpen && route !== "assistant") return;
     const root = document.documentElement;
     const previous = { root: root.style.overflow, body: document.body.style.overflow };
     root.style.overflow = "hidden";
@@ -83,7 +87,7 @@ export function App(): React.JSX.Element {
       root.style.overflow = previous.root;
       document.body.style.overflow = previous.body;
     };
-  }, [panelOpen]);
+  }, [panelOpen, route]);
 
   useEffect(() => {
     if (panelOpen) panel.current?.focus();
@@ -129,7 +133,7 @@ export function App(): React.JSX.Element {
 
   return (
     <>
-      <Landing onAsk={() => setPanelOpen(true)} />
+      <Landing onAsk={() => (isPhone ? go("assistant") : setPanelOpen(true))} />
 
       {/* FR-12: launcher bottom right; panel 40% of viewport, full width on mobile. */}
       <button
@@ -190,7 +194,7 @@ export function App(): React.JSX.Element {
   );
 }
 
-/** FR-30. Persistent, on every route. */
+/** Persistent, on every route. */
 function Disclaimer(): React.JSX.Element {
   return (
     <p className="disclaimer" role="note">

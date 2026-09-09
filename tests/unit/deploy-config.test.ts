@@ -5,9 +5,8 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * A deploy that hands Cloud Run a malformed environment produces a service that
- * answers /api/plans and 503s on every question, because only the question path
- * reads the database. Both checks here catch that at build time instead.
+ * A malformed environment produces a service that answers /api/plans and 503s
+ * every question, because only the question path reads the database.
  */
 
 /** Splits a --set-env-vars value the way gcloud does: a leading ^X^ sets the separator. */
@@ -45,13 +44,15 @@ function runDeploy(): string[] {
     [
       "GCP_PROJECT_ID=stub-project",
       "CORPUS_SNAPSHOT_ID=2026-01-01T0000Z",
-      "DATABASE_URL=postgresql://user:PASSWORD@host:5432/postgres?options=a,b",
+      "DATABASE_APP_URL=postgresql://user:PASSWORD@host:5432/postgres?options=a,b",
       "AZURE_OPENAI_ENDPOINT=https://stub.invalid",
       "AZURE_OPENAI_API_KEY=stub-azure-key",
       "AZURE_OPENAI_API_VERSION=2025-01-01-preview",
       "AZURE_OPENAI_DEPLOYMENT=gpt-4o",
       "AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small",
       "ELEVENLABS_API_KEY=stub-voice-key",
+      "ELEVENLABS_VOICE_ID=stub-english-voice",
+      "ELEVENLABS_VOICE_ID_SPANISH=stub-spanish-voice",
       "",
     ].join("\n"),
   );
@@ -73,7 +74,7 @@ describe("deploy passes an environment Cloud Run can read", () => {
   });
 
   it("carries the database URL under its own name, commas intact", () => {
-    expect(env["DATABASE_URL"]).toBe(
+    expect(env["DATABASE_APP_URL"]).toBe(
       "postgresql://user:PASSWORD@host:5432/postgres?options=a,b",
     );
   });
@@ -81,11 +82,18 @@ describe("deploy passes an environment Cloud Run can read", () => {
   it("leaves no separator fragment in a value", () => {
     expect(Object.values(env).filter((value) => value.includes("^"))).toEqual([]);
   });
+
+  // Without these the service falls back to the English voice and reads a
+  // Spanish answer in it, which is a silent degrade rather than an error.
+  it("carries the Spanish voice ids", () => {
+    expect(env["ELEVENLABS_VOICE_ID"]).toBe("stub-english-voice");
+    expect(env["ELEVENLABS_VOICE_ID_SPANISH"]).toBe("stub-spanish-voice");
+  });
 });
 
 describe("the server refuses to start on a broken environment", () => {
-  it("exits rather than listening when DATABASE_URL is absent", () => {
-    const { DATABASE_URL: _omitted, ...env } = process.env;
+  it("exits rather than listening when DATABASE_APP_URL is absent", () => {
+    const { DATABASE_APP_URL: _omitted, ...env } = process.env;
     const result = spawnSync("node", ["--experimental-strip-types", "src/server.ts"], {
       env: { ...env, PORT: "0" },
       encoding: "utf8",
@@ -93,6 +101,16 @@ describe("the server refuses to start on a broken environment", () => {
     });
     expect(result.stdout).not.toContain("api listening");
     expect(result.status).not.toBe(0);
+  });
+});
+
+// The deploy sources .env, so a value bash cannot parse kills the script before
+// it runs a line of its own. Copying the template is how that value gets there.
+describe("the env template is safe to source", () => {
+  it("parses as shell", () => {
+    const result = spawnSync("bash", ["-n", ".env.example"], { encoding: "utf8" });
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
   });
 });
 
@@ -108,7 +126,7 @@ describe("Stage 6 secrets reach the deployed service", () => {
 
   // The separator-safe loop is the one listing names, not the required-vars check.
   it("keeps them inside the separator-safe loop rather than appending by hand", () => {
-    const loop = /for name in DATABASE_URL([\s\S]*?); do/.exec(script)?.[1] ?? "";
+    const loop = /for name in DATABASE_APP_URL([\s\S]*?); do/.exec(script)?.[1] ?? "";
     expect(loop).toContain("RESEND_API_KEY");
     expect(loop).toContain("OPERATOR_MEMBER_EMAILS");
   });

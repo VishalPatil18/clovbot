@@ -1,13 +1,9 @@
-import { connect, readChunksByIds, readTurn } from "./rag/store.ts";
+import { connectAdmin, readChunksByIds, readTurn } from "./rag/store.ts";
 
-/**
- * Operator tools. Both read the turn log, which holds redacted member questions,
- * so neither is exposed as a route: publishing a question log would undo what
- * NFR-SEC-01 promises.
- */
+/** Command line only: both read the turn log, which holds redacted questions. */
 
 async function reproduce(turnId: string): Promise<void> {
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     const turn = await readTurn(client, turnId);
@@ -50,7 +46,7 @@ async function reproduce(turnId: string): Promise<void> {
 }
 
 async function insights(days: number): Promise<void> {
-  const client = connect();
+  const client = connectAdmin();
   await client.connect();
   try {
     const since = `${days} days`;
@@ -85,7 +81,7 @@ async function insights(days: number): Promise<void> {
       console.log(`    ${String(row["refusal_trigger"]).padEnd(24)} ${row["n"]}`);
     }
 
-    // The list that says where the corpus is thin. NFR-QUAL-03 treats a high
+    // The list that says where the corpus is thin. A high
     // refusal rate as a corpus deficiency to fix, and this is how it is found.
     const unanswered = await one(
       `select question, count(*) n from turns
@@ -107,6 +103,37 @@ async function insights(days: number): Promise<void> {
     const no = Number(feedback.find((row) => row["member_feedback"] === "not_resolved")?.["n"] ?? 0);
     console.log("\n  Did this answer your question?");
     console.log(`    yes ${yes}   no ${no}   ${yes + no === 0 ? "(no responses yet)" : ""}`);
+
+    // Through the view, which drops the session id the loop breaker still needs.
+    const reasons = await one(
+      `select feedback_reason, count(*) n from feedback_report
+        where asked_at > now() - $1::interval and feedback_reason is not null
+        group by feedback_reason order by n desc`,
+    );
+    if (reasons.length > 0) {
+      console.log("\n  Why not, when they said");
+      for (const row of reasons) {
+        console.log(`    ${String(row["n"]).padStart(3)}  ${String(row["feedback_reason"])}`);
+      }
+    }
+
+    // A rated-wrong answer is a golden-set candidate: the answer is on the row.
+    const rejected = await one(
+      `select question, answer, plan_context, route, feedback_reason
+         from feedback_report
+        where asked_at > now() - $1::interval
+          and member_feedback = 'not_resolved'
+        order by feedback_at desc limit 10`,
+    );
+    console.log("\n  Answers a member rated wrong (candidates for the golden set)");
+    if (rejected.length === 0) console.log("    none");
+    for (const row of rejected) {
+      const why = row["feedback_reason"] === null ? "no reason given" : String(row["feedback_reason"]);
+      console.log(`    ${String(row["plan_context"])} [${String(row["route"])}] ${why}`);
+      console.log(`      Q: ${String(row["question"]).slice(0, 84)}`);
+      const answer = row["answer"] === null ? "(not stored: a signed-in turn)" : String(row["answer"]);
+      console.log(`      A: ${answer.replace(/\s+/g, " ").slice(0, 84)}`);
+    }
 
     const callbacks = await one(
       "select count(*) n from callbacks where created_at > now() - $1::interval",

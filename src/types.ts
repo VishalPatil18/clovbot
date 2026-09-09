@@ -8,9 +8,8 @@ export type DocumentKind =
   | "corporate";
 
 /**
- * Which benefit package a caller is scoping to. Contract and plan travel together
- * because plan ids repeat across contracts: H5141-002 and H8010-002 are different
- * plans, and a bare "002" cannot tell them apart. D-049, D-054.
+ * Contract and plan travel together: ids repeat across contracts, so a bare
+ * "002" cannot tell H5141-002 from H8010-002.
  */
 export interface PlanRef {
   contractId: string;
@@ -19,18 +18,17 @@ export interface PlanRef {
 }
 
 /**
- * What a citation can point at. A member's own record is citable but is not a
- * corpus document: it has no byte floor, no snapshot and no plan year of its
- * own, so it widens the citation layer rather than DocumentKind. D-080.
+ * A member's record is citable but is not a corpus document, so it widens this
+ * rather than DocumentKind.
  */
 export type CitableKind = DocumentKind | "member_record";
 
-/** A citation without a plan year is not a valid citation. FR-06. */
+/** A citation without a plan year is not a valid citation. */
 export interface Provenance {
   document: DocumentKind;
   planYear: number;
   contractId: string;
-  /** Contract alone does not identify a plan, and two plans differ on price. D-033. */
+  /** Contract alone does not identify a plan, and two plans differ on price. */
   planId: string;
   section: string;
 }
@@ -38,7 +36,7 @@ export interface Provenance {
 export interface Chunk {
   id: string;
   text: string;
-  /** Generated at ingest and frozen into fixtures so tests stay deterministic. D-006. */
+  /** Frozen into fixtures at ingest, so tests stay deterministic. */
   contextPrefix: string;
   provenance: Provenance;
   snapshotId: string;
@@ -70,11 +68,8 @@ export interface Refusal {
   humanPathOffered: boolean;
 }
 
-/** FR-32. Claims carry their own citations, so an uncited claim cannot be represented. */
-/**
- * The one number a cost answer is about, rendered as the dominant element. Cited
- * like a claim, because the largest thing on the screen cannot be uncited. D-064.
- */
+/** Claims carry citations, so an uncited claim cannot be represented. */
+/** Cited like a claim: the largest thing on the screen cannot be uncited. */
 export interface Headline {
   /** What the amount measures. "$10" alone does not say copay or deductible. */
   label: string;
@@ -84,7 +79,7 @@ export interface Headline {
 
 export interface AnswerPayload {
   claims: Claim[];
-  /** Null when the answer is not a single amount, which is the prose path. D-065. */
+  /** Null when the answer is not a single amount: the prose path. */
   headline: Headline | null;
   unanswered: string[];
   refusal: Refusal | null;
@@ -96,7 +91,7 @@ export type ValidationResult =
 
 export interface TurnLog {
   id: string;
-  /** Redacted per FR-31. Raw member text is never persisted. */
+  /** Redacted. Raw member text is never persisted. */
   question: string;
   bucket: "A" | "B" | "C" | "unknown";
   retrievedChunkIds: string[];

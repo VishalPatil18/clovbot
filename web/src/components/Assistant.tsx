@@ -1,3 +1,5 @@
+import { MEMBER_SERVICES_DISPLAY, help, s, type StringKey } from "../strings.ts";
+import { useIsPhone } from "../viewport.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -6,6 +8,7 @@ import {
   fetchSession,
   signOut,
   sendFeedback,
+  type FeedbackReason,
   type AskEvent,
   type CallbackDraft,
   type Citation,
@@ -26,14 +29,15 @@ import {
   IoExpand,
   IoHelpCircleOutline,
   IoLockClosedOutline,
+  IoLanguage,
   IoMic,
   IoMicOff,
-  IoPrint,
+  IoDownloadOutline,
   IoRefresh,
   IoTrash,
   IoPlay,
   IoSend,
-  IoStop,
+  IoPause,
   IoThumbsDown,
   IoThumbsUp,
   IoVolumeHigh,
@@ -44,27 +48,34 @@ import { DictateButton } from "./DictateButton.tsx";
 import { CallbackPanel } from "./CallbackPanel.tsx";
 import { VoiceComposer } from "./VoiceComposer.tsx";
 import {
+  readLanguage,
   readMode,
   speak,
+  writeLanguage,
   writeMode,
   type Spoken,
+  type Speech,
   type VoiceMode,
 } from "../voice.ts";
 import { clearHistory, clearMemberTurns, readHistory, writeHistory } from "../history.ts";
+import { transcriptBlocks, transcriptFilename } from "../transcript.ts";
 import { SignIn } from "./SignIn.tsx";
 import { answerAsText } from "../copy.ts";
 import { STEP_MS, progressMessage, type Stage } from "../progress.ts";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
-/**
- * FR-14. Four, not six: the highest-volume bucket A drivers in
- * docs/call-drivers.md, one per kind of question this assistant answers, so the
- * set teaches what it is for rather than listing everything it can do.
- */
+/** One per kind of question, so the set teaches what this is for. */
+/** Paired with the copy keys so the wire value and the label cannot drift. */
+const REASONS = [
+  { value: "wrong_plan", key: "reasonWrongPlan" },
+  { value: "not_what_i_asked", key: "reasonNotAsked" },
+  { value: "hard_to_understand", key: "reasonHardToRead" },
+  { value: "think_it_is_covered", key: "reasonThinkCovered" },
+] as const satisfies readonly { value: FeedbackReason; key: StringKey }[];
+
 const STARTERS = [
   {
-    // The title is the question that gets asked. A card that sends something
-    // other than what it shows is a small lie on a cite-or-refuse product.
+    // A card that sends something other than what it shows is a small lie.
     question: "What is my specialist copay?",
     caption: "Costs for visits, urgent care and the emergency room.",
     icon: IoCashOutline,
@@ -90,7 +101,7 @@ const STARTERS = [
   },
 ];
 
-export const MEMBER_SERVICES_DISPLAY = "1-555-0100";
+export { MEMBER_SERVICES_DISPLAY };
 
 interface Turn {
   id: number;
@@ -104,7 +115,9 @@ interface Turn {
   staleness: string | null;
   outcome: "answered" | "refused" | "upstream_failure" | "needs_login" | "pending";
   feedback: "yes" | "no" | null;
-  /** Server id, so a feedback response can name the turn it answers. FR-27. */
+  /** Why they said no, once they have said. */
+  feedbackReason: FeedbackReason | null;
+  /** Server id, so feedback can name the turn it answers. */
   turnId: string | null;
 }
 
@@ -145,6 +158,10 @@ export function Assistant({
   const [callback, setCallback] = useState<CallbackDraft | null>(null);
   const [limited, setLimited] = useState<string | null>(null);
   const [mode, setMode] = useState<VoiceMode>(() => readMode());
+  const [language, setLanguage] = useState<Speech>(() => readLanguage());
+  const isPhone = useIsPhone();
+  /** Panel chrome follows the answer's language, not a separate setting. */
+  const say = useCallback((key: StringKey): string => s(key, language), [language]);
   const [spoken, setSpoken] = useState<Spoken | null>(null);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [dictateError, setDictateError] = useState<string | null>(null);
@@ -154,18 +171,21 @@ export function Assistant({
   const [voiceReset, setVoiceReset] = useState(0);
   const [signedInAs, setSignedInAs] = useState<string | null>(null);
   /**
-   * FR-P2-46. The id of the turn the sign-in was asked for, so the form sits
-   * under that question and its text is what gets asked again on return.
+   * The turn the sign-in was asked for, so the form sits under that question.
    */
   const [signingInFor, setSigningInFor] = useState<number | null>(null);
   const [stage, setStage] = useState<Stage | null>(null);
   const [stageElapsed, setStageElapsed] = useState(0);
   const reduceMotion = useReducedMotion();
   const [speakingTurn, setSpeakingTurn] = useState<number | null>(null);
+  /** Distinct from "not speaking": paused audio still has a place to return to. */
+  const [paused, setPaused] = useState(false);
   const threadEnd = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
 
   useEffect(() => {
+    // Scrolling an empty thread pushed its own heading off a phone screen.
+    if (turns.length === 0 && planPrompt === null) return;
     threadEnd.current?.scrollIntoView({ block: "end" });
   }, [turns, planPrompt]);
 
@@ -209,11 +229,16 @@ export function Assistant({
           staleness: null,
           outcome: "pending",
           feedback: null,
+          feedbackReason: null,
           turnId: null,
         },
       ]);
 
       const apply = (event: AskEvent): void => {
+        if (event.type === "answer" && event.language !== undefined && event.language !== language) {
+          setLanguage(event.language);
+          writeLanguage(event.language);
+        }
         if (event.type === "answer" && event.outcome === "needs_login") {
           setSigningInFor(id);
         }
@@ -222,7 +247,7 @@ export function Assistant({
           setTurns((previous) => previous.filter((turn) => turn.id !== id));
           setPlanPrompt({ plans: event.plans, question: event.question });
           setStage(null);
-          setStatus("Which plan are you on?");
+          setStatus(say("whichPlan"));
           return;
         }
         if (event.type === "progress") {
@@ -242,7 +267,7 @@ export function Assistant({
           setLimited(event.message);
           return;
         }
-        // FR-23: after two refusals in a row, stop offering to try again.
+        // After two refusals in a row, stop offering to try again.
         if (event.type === "offer_callback") {
           setCallback({
             question: event.question,
@@ -267,16 +292,14 @@ export function Assistant({
           );
           return;
         }
-        // FR-19: spoken and written together. Audio is never the only copy.
-        // The source list is on screen to be read, not listened to.
+        // Audio is never the only copy, and the source list is read, not spoken.
         const toSpeak = (event.spokenAnswer ?? event.answer).trim();
         if (mode === "voice" && toSpeak.length > 0) {
           void speak(toSpeak)
             .then((audio) => {
               setSpoken(audio);
               setVoiceNotice(audio.notice);
-              // The border on the answer follows the audio, so it is always the
-              // paragraph being read that is marked, never a stale one.
+              // The border follows the audio, so it never marks a stale answer.
               audio.onStateChange((speaking) =>
                 setSpeakingTurn(speaking ? id : null),
               );
@@ -310,7 +333,7 @@ export function Assistant({
       };
 
       try {
-        await ask(trimmed, chosen, apply);
+        await ask(trimmed, chosen, apply, undefined, language);
       } catch {
         apply({
           type: "error",
@@ -322,21 +345,17 @@ export function Assistant({
         setStatus("");
       }
     },
-    [busy, mode],
+    [busy, language, mode],
   );
 
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
 
-  // Re-scopes what comes next. Answers already in the transcript keep the plan
-  // they were answered under, so switching never rewrites history.
+  // Answers keep the plan they were given under; switching rewrites nothing.
   const changePlan = (): void => {
     setPlanPrompt({ plans: planOptions, question: "" });
   };
 
-  /*
-   * Dismissing hands the pending question back to the composer rather than
-   * discarding it: the member typed it, and a close should not cost them that.
-   */
+  // Dismissing hands the question back: a close should not cost what they typed.
   const dismissPlanPrompt = (): void => {
     const pending = planPrompt?.question ?? "";
     setPlanPrompt(null);
@@ -350,9 +369,7 @@ export function Assistant({
     if (pending.length > 0) void submit(pending, option);
   };
 
-  // Plans and the corpus date, so the plan control and the freshness line exist
-  // before any plan-scoped question is asked. FR-P2-16.
-  // FR-P2-37. Asked once on load so the indicator is right before anything else.
+  // Loaded before any plan-scoped question, so both controls exist first.
   useEffect(() => {
     void fetchSession().then((state) => setSignedInAs(state.signedInAs));
   }, []);
@@ -365,17 +382,12 @@ export function Assistant({
     });
   }, []);
 
-  // Written on every settled turn rather than on unload, which mobile browsers
-  // do not reliably fire.
+  // On every settled turn: mobile browsers do not reliably fire unload.
   useEffect(() => {
     writeHistory(turns);
   }, [turns]);
 
-  /*
-   * FR-P2-46. The member never retypes: the question that triggered the login
-   * is asked again the moment they are back, and its placeholder turn is
-   * replaced rather than left above the answer.
-   */
+  // The member never retypes: the gated question is asked again on return.
   const resumeAfterLogin = (name: string): void => {
     setSignedInAs(name);
     const pending = turns.find((turn) => turn.id === signingInFor)?.question ?? null;
@@ -434,10 +446,7 @@ export function Assistant({
 
   const heading = "Clovbot - Member Assistant";
 
-  /*
-   * FR-16. The panel keeps these in its header; the full page puts them in the
-   * rail with the other tools, so the header carries only the title and close.
-   */
+  // Panel header, or the full page's rail. One markup, two homes.
   const modeControl = (
             <button
               type="button"
@@ -456,14 +465,35 @@ export function Assistant({
               ) : (
                 <IoMic aria-hidden="true" />
               )}
-              {mode === "voice" ? "Switch to text" : "Switch to voice"}
+              {mode === "voice"
+                ? say(isPhone ? "switchToTextShort" : "switchToText")
+                : say(isPhone ? "switchToVoiceShort" : "switchToVoice")}
             </button>
+  );
+
+  /** Named in the language it switches to, so either member can read it. */
+  const languageControl = (
+    <button
+      type="button"
+      className="assistant__mode"
+      lang={language === "es" ? "en" : "es"}
+      onClick={() => {
+        const next: Speech = language === "es" ? "en" : "es";
+        spoken?.stop();
+        setSpeakingTurn(null);
+        setLanguage(next);
+        writeLanguage(next);
+      }}
+    >
+      <IoLanguage aria-hidden="true" />
+      {language === "es" ? "English" : "Español"}
+    </button>
   );
 
   const helpControl = (
     <button
       type="button"
-      className={railId === undefined ? "assistant__icon-button" : "assistant__mode"}
+      className={railId === undefined || isPhone ? "assistant__icon-button" : "assistant__mode"}
       aria-expanded={helpOpen}
       aria-controls="assistant-help"
       onClick={() => setHelpOpen((open) => !open)}
@@ -471,11 +501,52 @@ export function Assistant({
       <IoHelpCircleOutline aria-hidden="true" />
       {/* Icon-only beside the close control; labelled in the rail, where it sits
           with the other named tools. */}
-      {railId === undefined ? (
+      {railId === undefined || isPhone ? (
         <span className="visually-hidden">{helpOpen ? "Hide help" : "Show help"}</span>
       ) : (
         <>{helpOpen ? "Hide help" : "Show help"}</>
       )}
+    </button>
+  );
+
+  const startOverChip = (
+    <button type="button" className="chip" onClick={startOver}>
+      <IoRefresh aria-hidden="true" /> {say("startOver")}
+    </button>
+  );
+  /** On the device: posting a member's answer would put their record on the wire. */
+  const saveTranscript = async (): Promise<void> => {
+    const savedOn = new Date();
+    const context = {
+      planName: plan?.name ?? null,
+      documentDate: corpusDate,
+      language,
+      savedOn,
+    };
+    try {
+      const { renderTranscript } = await import("../pdf.ts");
+      const bytes = await renderTranscript(transcriptBlocks(turns, context), language);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = transcriptFilename(context);
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // The print view is still a clean page, and silence is worse.
+      setStatus(say("transcriptFailed"));
+      window.print();
+    }
+  };
+
+  const savePdfChip = (
+    <button type="button" className="chip chip--compact" onClick={() => void saveTranscript()}>
+      <IoDownloadOutline aria-hidden="true" /> {say("savePdf")}
+    </button>
+  );
+  const clearChip = (
+    <button type="button" className="chip chip--compact" onClick={forgetHistory}>
+      <IoTrash aria-hidden="true" /> {say("clearSaved")}
     </button>
   );
 
@@ -484,33 +555,50 @@ export function Assistant({
       {/* FR-13. The human path is here in every state; the header carries only
             icon controls now. Help lives in the header and is not repeated. */}
       <a className="chip chip--human" href={`tel:${MEMBER_SERVICES_DISPLAY}`}>
-        <IoCall aria-hidden="true" /> Talk to a person
+        <IoCall aria-hidden="true" /> {say("talkToPerson")}
       </a>
-      <button type="button" className="chip" onClick={startOver}>
-        <IoRefresh aria-hidden="true" /> Start over
-      </button>
-      {railId !== undefined && modeControl}
-      {railId !== undefined && helpControl}
+      {startOverChip}
       {turns.length > 0 && (
         <>
-          <button type="button" className="chip" onClick={() => window.print()}>
-            <IoPrint aria-hidden="true" /> Print
-          </button>
-          <button type="button" className="chip" onClick={forgetHistory}>
-            <IoTrash aria-hidden="true" /> Clear saved
-          </button>
+          {savePdfChip}
+          {clearChip}
         </>
       )}
     </div>
   );
 
-  /*
-   * The full page gives these a column of their own; the panel keeps them
-   * pinned above the composer. One piece of markup, two homes.
-   */
+  // Explicit order: what changes the conversation, then the destructive pair, then help.
+  const railTools = (
+    <div className="rail__tools">
+      {modeControl}
+      {languageControl}
+      {startOverChip}
+      {turns.length > 0 && (
+        <>
+          {clearChip}
+          {savePdfChip}
+        </>
+      )}
+      {helpControl}
+    </div>
+  );
+
+  // A column on the full page, pinned above the composer in the panel.
+  const controls = (
+    <>
+      {modeControl}
+      {languageControl}
+      {helpControl}
+    </>
+  );
+
+  // A phone has no column, so the controls go beside Back and the actions stay put.
   const railTarget =
     railId === undefined ? null : document.getElementById(railId);
-  const tools = railTarget === null ? chips : createPortal(chips, railTarget);
+  const tools =
+    railTarget === null
+      ? chips
+      : createPortal(isPhone ? controls : railTools, railTarget);
 
   return (
     <section
@@ -531,6 +619,7 @@ export function Assistant({
               header control worth naming. */}
           <div className="assistant__corner">
             {railId === undefined && modeControl}
+            {railId === undefined && languageControl}
             {railId === undefined && helpControl}
             {variant === "panel" && onExpand !== undefined && (
               <button
@@ -539,7 +628,7 @@ export function Assistant({
                 onClick={onExpand}
               >
                 <IoExpand aria-hidden="true" />
-                <span className="visually-hidden">Open full page</span>
+                <span className="visually-hidden">{say("openFullPage")}</span>
               </button>
             )}
             {variant === "panel" && onClose !== undefined && (
@@ -549,7 +638,7 @@ export function Assistant({
                 onClick={onClose}
               >
                 <IoClose aria-hidden="true" />
-                <span className="visually-hidden">Close the assistant</span>
+                <span className="visually-hidden">{say("closeAssistant")}</span>
               </button>
             )}
           </div>
@@ -574,12 +663,12 @@ export function Assistant({
             )}
           </span>
           {signedInAs === null ? (
-            <span className="meta-chip meta-chip--quiet">Not signed in</span>
+            <span className="meta-chip meta-chip--quiet">{say("notSignedIn")}</span>
           ) : (
             <span className="meta-chip meta-chip--signed">
               Signed in as {signedInAs}{" "}
               <button type="button" className="assistant__plan-change" onClick={() => void leave()}>
-                Sign out
+                {say("signOut")}
               </button>
             </span>
           )}
@@ -591,43 +680,32 @@ export function Assistant({
           <section
             id="assistant-help"
             className="help"
-            aria-label="What you can ask"
+            aria-label={say("whatYouCanAsk")}
           >
-            <h3 className="help__title">What you can ask</h3>
+            <div className="help__head">
+              <h3 className="help__title">{say("whatYouCanAsk")}</h3>
+              <button
+                type="button"
+                className="assistant__icon-button"
+                onClick={() => setHelpOpen(false)}
+              >
+                <IoClose aria-hidden="true" />
+                <span className="visually-hidden">{say("closeHelp")}</span>
+              </button>
+            </div>
             <ul className="help__list">
-              <li>
-                What a service costs under your plan: copays, coinsurance, the
-                out-of-pocket maximum.
-              </li>
-              <li>
-                Whether a service or a drug is covered, and what tier a drug is
-                on.
-              </li>
-              <li>
-                How a process works: prior authorization, referrals, appeals and
-                grievances.
-              </li>
-              <li>
-                What your supplemental benefits include: dental, vision,
-                hearing, over-the-counter.
-              </li>
+              {help("canAsk", language).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
             </ul>
-            <h3 className="help__title">What it cannot do</h3>
+            <h3 className="help__title">{say("whatItCannotDo")}</h3>
             <ul className="help__list">
-              <li>
-                Anything about you personally. It holds no member data and never
-                signs you in.
-              </li>
-              <li>
-                Medical advice, or deciding whether something will be covered
-                for you.
-              </li>
-              <li>
-                Tell you whether a named doctor is in network. That directory is
-                demonstration data.
-              </li>
+              {help("cannotDo", language).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
             </ul>
-            <h3 className="help__title">The buttons</h3>
+            <p className="help__note">{say("syntheticNotice")}</p>
+            <h3 className="help__title">{say("theButtons")}</h3>
             <ul className="help__list">
               <li>
                 <strong>Talk to a person</strong> calls Member Services at{" "}
@@ -638,8 +716,8 @@ export function Assistant({
                 forgets the plan you chose.
               </li>
               <li>
-                <strong>Print</strong> produces a copy with every source, which
-                your browser can save as a PDF.
+                <strong>Save as PDF</strong> downloads this whole conversation,
+                with every source, as a file you can keep or print.
               </li>
               <li>
                 <strong>Copy</strong> puts one answer and its sources on the
@@ -701,8 +779,7 @@ export function Assistant({
               <p className="turn__question">{turn.question}</p>
 
               {turn.outcome === "pending" ? (
-                /* Where the answer will appear, not below the composer: this
-                   is the spot the member is already looking at. */
+                /* Where the answer will appear, which is where they are looking. */
                 <p className="turn__pending" role="status" aria-live="polite">
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.span
@@ -713,7 +790,7 @@ export function Assistant({
                       exit={reduceMotion === true ? { opacity: 1 } : { opacity: 0, y: -8 }}
                       transition={{ duration: reduceMotion === true ? 0 : 0.26, ease: "easeOut" }}
                     >
-                      {progress || "Working on it"}
+                      {progress || say("workingOnIt")}
                     </motion.span>
                   </AnimatePresence>
                 </p>
@@ -735,7 +812,7 @@ export function Assistant({
                         className="button button--primary"
                         onClick={() => setSigningInFor(turn.id)}
                       >
-                        <IoLockClosedOutline aria-hidden="true" /> Sign in and answer this
+                        <IoLockClosedOutline aria-hidden="true" /> {say("signInAndAnswer")}
                       </button>
                     ))}
                 </div>
@@ -758,6 +835,7 @@ export function Assistant({
                     headline={turn.headline}
                     staleness={turn.staleness}
                     fallback={turn.answer}
+                    sourcesTitle={say("sourcesTitle")}
                   />
 
                   {/* FR-27, on answered turns only. */}
@@ -765,7 +843,7 @@ export function Assistant({
                     <>
                       <div className="feedback">
                         <span id={`fb-${turn.id}`}>
-                          Did this answer your question?
+                          {say("didThisAnswer")}
                         </span>
                         <div role="group" aria-labelledby={`fb-${turn.id}`}>
                           {(["yes", "no"] as const).map((value) => (
@@ -782,7 +860,7 @@ export function Assistant({
                                       : item,
                                   ),
                                 );
-                                // Recorded, not just shown. FR-27.
+                                // Sent straight away: the reason is an offer, not a toll.
                                 if (turn.turnId !== null)
                                   void sendFeedback(
                                     turn.turnId,
@@ -816,6 +894,44 @@ export function Assistant({
                           </span>
                         </button>
                       </div>
+
+                      {/*
+                        * Fixed reasons, never a text box: free text is the one
+                        * surface that could put a diagnosis into the store.
+                        */}
+                      {turn.feedback === "no" && turn.feedbackReason === null && (
+                        <div className="feedback__why">
+                          <span id={`why-${turn.id}`}>{say("whatWentWrong")}</span>
+                          <div role="group" aria-labelledby={`why-${turn.id}`}>
+                            {REASONS.map(({ value, key }) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className="chip"
+                                onClick={() => {
+                                  setTurns((previous) =>
+                                    previous.map((item) =>
+                                      item.id === turn.id
+                                        ? { ...item, feedbackReason: value }
+                                        : item,
+                                    ),
+                                  );
+                                  if (turn.turnId !== null)
+                                    void sendFeedback(turn.turnId, false, value);
+                                }}
+                              >
+                                {say(key)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {turn.feedbackReason !== null && (
+                        <p className="feedback__thanks" role="status">
+                          {say("thanksForTelling")}
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -842,7 +958,7 @@ export function Assistant({
           {planPrompt !== null && (
             <div className="plan-prompt">
               <div className="plan-prompt__head">
-                <h3 className="plan-prompt__title">Which plan are you on?</h3>
+                <h3 className="plan-prompt__title">{say("whichPlan")}</h3>
                 <button
                   type="button"
                   className="assistant__icon-button"
@@ -881,6 +997,7 @@ export function Assistant({
       </div>
 
       <div className="assistant__foot">
+        {railId !== undefined && isPhone && chips}
         {/* FR-P2-22, D-070: the three commands ideas.md P2-06 names. Contextual
           follow-ups are not built; D-069 measured what touching the prompt costs. */}
         {tools}
@@ -897,17 +1014,40 @@ export function Assistant({
                 <button
                   type="button"
                   className="button button--quiet"
-                  onClick={() => spoken.play()}
+                  onClick={() => {
+                    setPaused(false);
+                    spoken.play();
+                  }}
                 >
-                  <IoPlay aria-hidden="true" /> Play the answer again
+                  <IoPlay aria-hidden="true" /> {say("playAgain")}
                 </button>
+                {/*
+                  * Pause holds the place; Stop only reset it, which the button
+                  * beside it already does. Two fixed controls, never one that relabels.
+                  */}
                 <button
                   type="button"
                   className="button button--quiet"
-                  disabled={speakingTurn === null}
-                  onClick={() => spoken.stop()}
+                  disabled={speakingTurn === null && !paused}
+                  onClick={() => {
+                    if (paused) {
+                      spoken.resume();
+                      setPaused(false);
+                      return;
+                    }
+                    spoken.pause();
+                    setPaused(true);
+                  }}
                 >
-                  <IoStop aria-hidden="true" /> Stop
+                  {paused ? (
+                    <>
+                      <IoPlay aria-hidden="true" /> {say("resumeAnswer")}
+                    </>
+                  ) : (
+                    <>
+                      <IoPause aria-hidden="true" /> {say("pauseAnswer")}
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -945,7 +1085,7 @@ export function Assistant({
                 setDraft("");
                 void submit(question, plan);
               }}
-              placeholder="Ask about costs, drugs, providers or appeals"
+              placeholder={isPhone ? say("askPlaceholderShort") : say("askPlaceholder")}
               autoComplete="off"
               maxLength={3_000}
             />

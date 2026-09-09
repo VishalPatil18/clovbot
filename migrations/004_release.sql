@@ -1,8 +1,6 @@
--- Stage 10: release. FR-27 feedback, and the index the instrumentation reads.
+-- Feedback, and the index the instrumentation reads.
 
--- FR-27. The control existed from Stage 7 but recorded nothing; this is where
--- the answer actually lands. Nullable on turns rather than a separate table,
--- because a response belongs to exactly one turn.
+-- Nullable on turns rather than a separate table: a response belongs to one turn.
 alter table turns add column if not exists member_feedback text
   check (member_feedback in ('resolved', 'not_resolved'));
 

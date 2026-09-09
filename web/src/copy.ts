@@ -10,9 +10,8 @@ interface Copyable {
 }
 
 /**
- * FR-P2-21. Plain text, because a caregiver pastes into email, Notes or a text
- * message, and every one of those loses formatting but keeps lines. Sources
- * travel with the answer: a pasted claim without them is an uncited claim.
+ * Plain text: a caregiver pastes into email or Notes, which lose formatting and
+ * keep lines. Sources travel along, or a pasted claim is an uncited claim.
  */
 export function answerAsText(turn: Copyable, planName: string, documentDate: string): string {
   const lines: string[] = [`Question: ${turn.question}`, ""];

@@ -17,14 +17,10 @@ const HEADER_TIER = "Drug Tier";
 /** Dosage form codes sit between the drug name and its strengths. */
 const FORM_CODE = /^[A-Z]{2,4}\d{0,2}$/;
 
-/**
- * Page footers repeat the legend and the page number. The page number is a bare
- * integer alone on the line: anchoring on a digit prefix instead would swallow a
- * strength continuation such as "10 mg".
- */
+/** A bare integer alone on the line; a digit prefix would swallow "10 mg". */
 const FURNITURE = /^(PA - Prior|mail-order)\b|^\d+$/;
 
-/** Column boundaries are read from each page's own header, never inherited. D-057. */
+/** Column boundaries are read from each page's own header, never inherited. */
 interface Columns {
   tierFrom: number;
   requirementsFrom: number;
@@ -64,8 +60,8 @@ export function normalizeDrugName(name: string): string {
 }
 
 /**
- * Typed rows from the formulary's bounding boxes. D-007 wants a table query for a
- * fact that lives in a table; layout text loses the wrapped half of both columns.
+ * Typed rows from the bounding boxes: a fact in a table wants a table query,
+ * and layout text loses the wrapped half of both columns.
  */
 export function parseFormulary(xhtml: string): DrugRow[] {
   const rows: DrugRow[] = [];
@@ -107,7 +103,7 @@ export function parseFormulary(xhtml: string): DrugRow[] {
       if (FURNITURE.test(label)) continue;
 
       // Class headings sit left of the drug-name column. Letter case is not the
-      // signal: "ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS" is a heading. D-059.
+      // signal: "ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS" is a heading.
       const startsLeftOfNames = (name[0]?.x ?? Number.POSITIVE_INFINITY) < columns.tierFrom - 260;
       if (startsLeftOfNames) {
         category = label;

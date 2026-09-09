@@ -1,4 +1,4 @@
-import type { Citation, Claim, Headline } from "./api.ts";
+import type { Citation, Claim, FeedbackReason, Headline } from "./api.ts";
 
 export interface StoredTurn {
   id: number;
@@ -12,6 +12,8 @@ export interface StoredTurn {
   staleness: string | null;
   outcome: "answered" | "refused" | "upstream_failure" | "needs_login" | "pending";
   feedback: "yes" | "no" | null;
+  /** Kept so a restored conversation does not ask for a reason twice. */
+  feedbackReason: FeedbackReason | null;
   turnId: string | null;
 }
 
@@ -48,18 +50,19 @@ const isTurn = (value: unknown): value is StoredTurn => {
   );
 };
 
-/**
- * FR-P2-18. History is a convenience, so every path here degrades to empty
- * rather than throwing: private browsing rejects access outright, and a device
- * that has been used for months can reject a write. FR-P2-19.
- */
+/** A convenience, so every path degrades to empty rather than throwing. */
 export function readHistory(): StoredTurn[] {
   try {
     const raw = storage().getItem(HISTORY_KEY);
     if (raw === null) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isTurn).slice(-MAX_TURNS);
+    // A conversation saved before the reason existed has none. Defaulting it
+    // here rather than at every read site keeps the type honest.
+    return parsed
+      .filter(isTurn)
+      .map((turn) => ({ ...turn, feedbackReason: turn.feedbackReason ?? null }))
+      .slice(-MAX_TURNS);
   } catch {
     return [];
   }
@@ -75,13 +78,23 @@ export function writeHistory(turns: StoredTurn[]): void {
 }
 
 /**
- * FR-P2-39. Signing out on a shared device removes anything sourced from the
+ * Both labels: the citation is written in the answer's language, and matching
+ * only English left a Spanish member's claim data in storage after sign-out.
+ */
+const MEMBER_RECORD_LABELS = ["Your member record", "Su registro de miembro"];
+
+/** True when any citation on the turn came from the member's own record. */
+export const isMemberTurn = (turn: { citations: { label: string }[] }): boolean =>
+  turn.citations.some((citation) =>
+    MEMBER_RECORD_LABELS.some((label) => citation.label.startsWith(label)),
+  );
+
+/**
+ * Signing out on a shared device removes anything sourced from the
  * member's own record; answers from public documents are theirs to keep.
  */
 export function clearMemberTurns(): StoredTurn[] {
-  const kept = readHistory().filter(
-    (turn) => !turn.citations.some((citation) => citation.label.startsWith("Your member record")),
-  );
+  const kept = readHistory().filter((turn) => !isMemberTurn(turn));
   writeHistory(kept);
   return kept;
 }

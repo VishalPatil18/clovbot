@@ -18,6 +18,7 @@ const outcome = (over: Partial<CaseOutcome>): CaseOutcome => ({
   faithfulness: 1,
   structural: { compliant: true, uncitedSentences: [] },
   note: "",
+  language: "en" as const,
   ...over,
 });
 
@@ -92,7 +93,7 @@ describe("refusalRate", () => {
 });
 
 describe("scoreByBucket", () => {
-  // Bucket B and C behaviour is specified but not enforced until Stage 6's floor.
+  // Bucket B and C behaviour is specified but not enforced until the floor lands.
   it("excludes not-yet-enforced cases from accuracy", () => {
     const scores = scoreByBucket([
       outcome({ bucket: "C", enforced: false, passed: false }),

@@ -1,14 +1,11 @@
 /**
- * Asserts FR-P2-03 against the live index: retrieval scoped to one plan never
- * returns another plan's rows. Exits non-zero on the first leak.
- *
- * This is the assertion that matters, because leakage does not surface as an
- * error. It surfaces as a confidently wrong copay.
+ * Asserts against the live index that retrieval scoped to one plan never returns
+ * another's rows. Leakage surfaces as a confidently wrong copay, never an error.
  */
 import { CORPUS_SCOPE, formatPlanRef } from "../src/corpus/scope.ts";
 import { isInPlanScope } from "../src/rag/provenance.ts";
 import { embed } from "../src/rag/providers.ts";
-import { connect, searchHybrid } from "../src/rag/store.ts";
+import { connectAdmin, searchHybrid } from "../src/rag/store.ts";
 
 const QUESTIONS = [
   "what is my specialist copay",
@@ -25,7 +22,7 @@ const QUESTIONS = [
 
 const TOP_K = 10;
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 let leaks = 0;

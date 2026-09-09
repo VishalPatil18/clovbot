@@ -68,6 +68,7 @@ async function fetchOne(
     kind: document.kind,
     contractId: document.contractId,
     planId: document.planId,
+    language: document.language,
     url: document.url,
     retrievedAt: options.now(),
     robotsAllowed: options.robotsAllowed,

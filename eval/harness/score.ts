@@ -2,7 +2,7 @@ import { parseCitations } from "../../src/rag/prompt.ts";
 
 export type Bucket = "A" | "B" | "C" | "adversarial";
 
-/** NFR-QUAL-03. Lowering the floor to improve this number is prohibited. */
+/** Lowering the floor to improve this number is prohibited. */
 export const REFUSAL_BANDS = { investigate: 0.2, fail: 0.35 } as const;
 export const FAITHFULNESS_FLOOR = 0.9;
 
@@ -26,7 +26,7 @@ export interface StructuralResult {
   uncitedSentences: string[];
 }
 
-/** Deterministic. NFR-QUAL-02 is a hard build gate, separate from the judge. */
+/** Deterministic, and a hard build gate separate from the judge. */
 export function checkStructuralCitations(answer: string): StructuralResult {
   const uncited = splitSentences(answer).filter(
     (sentence) =>
@@ -55,6 +55,8 @@ export interface CaseOutcome {
   faithfulness: number | null;
   structural: StructuralResult;
   note: string;
+  /** Reported separately, never pooled. */
+  language: "en" | "es";
 }
 
 export interface BucketScore {
@@ -81,7 +83,7 @@ export function scoreByBucket(outcomes: CaseOutcome[]): BucketScore[] {
   });
 }
 
-/** Upstream failures are excluded from the refusal rate. FR-25. */
+/** Upstream failures are excluded from the refusal rate. */
 export function refusalRate(outcomes: CaseOutcome[]): number {
   const answerable = outcomes.filter((outcome) => outcome.bucket === "A");
   if (answerable.length === 0) return 0;
@@ -98,6 +100,12 @@ export function meanFaithfulness(outcomes: CaseOutcome[]): number | null {
 
 export interface Report {
   faithfulness: number | null;
+  /**
+   * A pooled figure lets Spanish fail behind an English average: with
+   * six Spanish cases against fifty-four English ones, Spanish could score zero
+   * and move the mean by a tenth.
+   */
+  faithfulnessByLanguage: { language: "en" | "es"; cases: number; faithfulness: number | null }[];
   structuralCompliance: number;
   refusalRate: number;
   refusalVerdict: RefusalVerdict;
@@ -108,6 +116,10 @@ export interface Report {
 export function buildReport(outcomes: CaseOutcome[]): Report {
   const rate = refusalRate(outcomes);
   const faithfulness = meanFaithfulness(outcomes);
+  const faithfulnessByLanguage = (["en", "es"] as const).map((language) => {
+    const spoken = outcomes.filter((outcome) => outcome.language === language);
+    return { language, cases: spoken.length, faithfulness: meanFaithfulness(spoken) };
+  });
   const structural =
     outcomes.length === 0
       ? 1
@@ -127,6 +139,7 @@ export function buildReport(outcomes: CaseOutcome[]): Report {
 
   return {
     faithfulness,
+    faithfulnessByLanguage,
     structuralCompliance: structural,
     refusalRate: rate,
     refusalVerdict: refusalVerdict(rate),

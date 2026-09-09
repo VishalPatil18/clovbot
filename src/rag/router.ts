@@ -12,7 +12,7 @@ export type DrugIndex = Set<string>;
 
 /**
  * Words that make a question about a rule rather than about a number, so a drug
- * question carrying one still needs prose. FR-P2-10.
+ * question carrying one still needs prose.
  */
 const RULE_WORDS =
   /\b(appeal|appeals|grievance|exception|deny|denied|denial|prior authorization|prior auth|process|how do i|why|step therapy|coverage determination|refill|pharmacy|mail.order)\b/i;
@@ -20,19 +20,15 @@ const RULE_WORDS =
 const escape = (value: string): string => value.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
 
 /**
- * Which retrieval paths run. Deterministic: the structured path is selected when
- * the question names a drug the table actually holds, so a tier question about an
- * indexed drug cannot degrade to prose search. D-061.
- *
- * Paths are additive. A question that is both a lookup and a rules question keeps
- * both, so neither half can be dropped. D-062.
+ * Which retrieval paths run. The structured path is selected when the question
+ * names an indexed drug, so a tier question cannot degrade to prose search.
+ * Paths are additive: a question that is both keeps both halves.
  */
 export function chooseRoute(
   question: string,
   index: DrugIndex,
-  /** Set when the caller has already identified the member. Stage 7 owns the
-      classifier that decides this from the question; Stage 5's CLI is told. */
-  memberIdentified = false,
+  /** Identity AND need: being signed in is not a reason to read the record. */
+  needsRecord = false,
 ): RouteDecision {
   const haystack = question.toLowerCase();
 
@@ -57,13 +53,13 @@ export function chooseRoute(
     .map((hit) => hit.canonical);
 
   const withMember = (paths: RoutePath[]): RoutePath[] =>
-    memberIdentified ? [...paths, "member"] : paths;
+    needsRecord ? [...paths, "member"] : paths;
 
   if (drugs.length === 0) {
     return {
       paths: withMember(["rag"]),
       drugs,
-      reason: memberIdentified ? "member identified, no indexed drug named" : "no indexed drug named",
+      reason: needsRecord ? "question needs the member record, no indexed drug named" : "no indexed drug named",
     };
   }
 
@@ -76,6 +72,6 @@ export function chooseRoute(
     };
   }
   // A pure lookup stays pure unless a member is in play, in which case their
-  // record may hold the other half of the answer. D-062 keeps paths additive.
+  // record may hold the other half of the answer. Paths stay additive.
   return { paths: withMember(["structured"]), drugs, reason: `named ${named}` };
 }

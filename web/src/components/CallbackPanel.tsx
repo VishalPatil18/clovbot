@@ -3,9 +3,8 @@ import { requestCallback, type CallbackDraft } from "../api.ts";
 import { MEMBER_SERVICES_DISPLAY } from "./Assistant.tsx";
 
 /**
- * FR-22. A refusal shows what was searched, offers a pre-filled callback, and
- * keeps the phone number visible. The form collects no name, phone or email:
- * NFR-SEC-01 holds no member identity, so there is nothing here to leak.
+ * A refusal shows what was searched and offers a pre-filled callback. The form
+ * collects no name, phone or email, so there is nothing here to leak.
  */
 export function CallbackPanel({ draft }: { draft: CallbackDraft }): React.JSX.Element {
   const [note, setNote] = useState("");

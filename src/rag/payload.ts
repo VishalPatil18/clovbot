@@ -1,11 +1,11 @@
+import { t, type Speech } from "../i18n.ts";
 import type { AnswerPayload, CitableKind } from "../types.ts";
 import type { DocumentKind } from "../corpus/types.ts";
 import type { Prompt } from "./prompt.ts";
 
 /**
- * D-026: an obviously-fake number, because this is an unaffiliated public deploy
- * and a real one would route real members to a call centre that never agreed to
- * it. Hours are omitted: srs.md section 10 lists Clover's real hours as unsourced.
+ * Obviously fake: a real number would route members to a call centre that
+ * never agreed to it. Hours are omitted because the real ones are unsourced.
  */
 export const MEMBER_SERVICES = "1-555-0100 (TTY 711), a placeholder for this case study";
 
@@ -31,6 +31,24 @@ const KIND_LABEL: Record<CitableKind, string> = {
   member_record: "Your member record",
 };
 
+/**
+ * Their published Spanish names, so a member is pointed at a document they can
+ * pick up. The drug list keeps English: there is no Spanish edition.
+ */
+const KIND_LABEL_ES: Record<CitableKind, string> = {
+  evidence_of_coverage: "Evidencia de Cobertura",
+  summary_of_benefits: "Resumen de Beneficios",
+  annual_notice_of_change: "Aviso Anual de Cambios",
+  formulary: "Drug List (en inglés)",
+  provider_directory: "Directorio de Proveedores (datos de demostración)",
+  pharmacy_directory: "Directorio de Farmacias",
+  corporate: "Información pública de Clover Health",
+  member_record: "Su registro de miembro",
+};
+
+const kindLabel = (kind: CitableKind, speech: Speech): string =>
+  speech === "es" ? KIND_LABEL_ES[kind] : KIND_LABEL[kind];
+
 /** Heading paths can be wrapped body sentences, so a section is trimmed for display. */
 const MAX_SECTION = 40;
 
@@ -43,8 +61,8 @@ function shortSection(section: string): string {
   return `${cut.slice(0, boundary > 20 ? boundary : MAX_SECTION)}...`;
 }
 
-/** FR-06. A citation without a plan year is not a valid citation. */
-export function citationLabel(chunk: CitableChunk): string {
+/** A citation without a plan year is not a valid citation. */
+export function citationLabel(chunk: CitableChunk, speech: Speech = "en"): string {
   if (!Number.isInteger(chunk.planYear)) {
     throw new Error(`citation for ${chunk.id} has no plan year`);
   }
@@ -54,17 +72,17 @@ export function citationLabel(chunk: CitableChunk): string {
   const section = shortSection(chunk.section);
   const tail = section.length > 0 ? ` · ${section}` : "";
   // "Your member record · Claim CLM-0031 · What you owe". Same three-part shape
-  // as a document citation, so both kinds scan as one list. D-082.
+  // as a document citation, so both kinds scan as one list.
   if (chunk.kind === "member_record") {
-    return `${KIND_LABEL.member_record} · ${chunk.documentId}${tail}`;
+    return `${kindLabel("member_record", speech)} · ${chunk.documentId}${tail}`;
   }
   // A document covering every contract has no plan to name, and "Plan *" is not
   // a source a member can look up.
   if (chunk.contractId === "*") {
-    return `${KIND_LABEL[chunk.kind]} ${chunk.planYear}${tail}`;
+    return `${kindLabel(chunk.kind, speech)} ${chunk.planYear}${tail}`;
   }
   const plan = chunk.planId === "*" ? chunk.contractId : `${chunk.contractId}-${chunk.planId}`;
-  return `${KIND_LABEL[chunk.kind]} ${chunk.planYear} · Plan ${plan}${tail}`;
+  return `${kindLabel(chunk.kind, speech)} ${chunk.planYear} · Plan ${plan}${tail}`;
 }
 
 /**
@@ -143,7 +161,19 @@ const SYSTEM = [
 
 const defuse = (content: string): string => content.replace(/<\/?sources>/gi, "");
 
-export function buildStructuredPrompt(question: string, chunks: CitableChunk[]): Prompt {
+/**
+ * Adding one system-prompt rule was measured to move faithfulness, so the
+ * Spanish instruction goes in the user message and English stays byte-identical.
+ */
+const ANSWER_IN_SPANISH =
+  "Responde en español. Las fuentes pueden estar en español o en inglés; " +
+  "la respuesta debe estar en español en ambos casos.";
+
+export function buildStructuredPrompt(
+  question: string,
+  chunks: CitableChunk[],
+  speech: Speech = "en",
+): Prompt {
   if (chunks.length === 0) throw new Error("cannot build a prompt with no sources");
 
   const sources = chunks
@@ -158,14 +188,16 @@ export function buildStructuredPrompt(question: string, chunks: CitableChunk[]):
     )
     .join("\n\n---\n\n");
 
-  return { system: SYSTEM, user: `<sources>\n${sources}\n</sources>\n\nQuestion: ${question}` };
+  const user = `<sources>\n${sources}\n</sources>\n\nQuestion: ${question}`;
+  return {
+    system: SYSTEM,
+    user: speech === "es" ? `${user}\n\n${ANSWER_IN_SPANISH}` : user,
+  };
 }
 
 /**
- * What gets read aloud. The written answer carries citation markers and the
- * source list; both are there to be read, not listened to, and speaking them
- * buries the answer under provenance. FR-19 requires the spoken and written
- * answers to carry the same content, which the claims do.
+ * What gets read aloud. Markers and the source list are there to be read, and
+ * speaking them buries the answer under provenance.
  */
 export function spokenAnswer(payload: AnswerPayload): string {
   if (payload.refusal !== null) {
@@ -182,8 +214,12 @@ export function spokenAnswer(payload: AnswerPayload): string {
   return parts.join(" ");
 }
 
-/** Prose is rendered by the application, never by the model. FR-32. */
-export function renderAnswer(payload: AnswerPayload, chunks: CitableChunk[]): string {
+/** Prose is rendered by the application, never by the model. */
+export function renderAnswer(
+  payload: AnswerPayload,
+  chunks: CitableChunk[],
+  speech: Speech = "en",
+): string {
   const byId = new Map(chunks.map((chunk) => [chunk.id, chunk]));
   const lines: string[] = [];
 
@@ -210,9 +246,9 @@ export function renderAnswer(payload: AnswerPayload, chunks: CitableChunk[]): st
 
   if (numbered.length > 0) {
     lines.push("");
-    lines.push("Where this comes from:");
+    lines.push(`${t("sources", speech)}:`);
     for (const entry of numbered) {
-      lines.push(`  [${entry.number}] ${citationLabel(entry.chunk)}`);
+      lines.push(`  [${entry.number}] ${citationLabel(entry.chunk, speech)}`);
     }
   }
 

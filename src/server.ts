@@ -15,6 +15,7 @@ import {
 } from "./corpus/scope.ts";
 import type { PlanRef } from "./types.ts";
 import { stalenessWarning } from "./freshness.ts";
+import type { Speech } from "./i18n.ts";
 import { sendLoginCode } from "./auth/mail.ts";
 import {
   currentSession,
@@ -30,35 +31,40 @@ import {
   consecutiveRefusals,
   indexedPlans,
   readCorpusFreshness,
+  FEEDBACK_REASONS,
   recordFeedback,
+  type FeedbackReason,
   writeCallback,
   writeTurn,
 } from "./rag/store.ts";
 import { shouldPresentCallbackForm } from "./session.ts";
-import { audioKey, findCachedAudio, writeAudio } from "./voice/cache.ts";
+import { readAudio, writeAudio } from "./cache.ts";
 import { degradeNotice } from "./voice/chain.ts";
 import { speak, transcribe } from "./voice/providers.ts";
+import {
+  LIMITS,
+  askRequest,
+  callbackRequest,
+  feedbackRequest,
+  loginRequest,
+  loginVerify,
+  speakRequest,
+} from "./validate.ts";
 
 const PORT = Number(process.env["PORT"] ?? "5174");
 const PLAN_YEAR = CORPUS_SCOPE.planYear;
 
-/**
- * Offered plans, built from the corpus scope so the picker cannot name a plan the
- * corpus does not cover. Names come from the catalog, not from the mock's invented
- * placeholders, and a plan without one raises here rather than showing a member a
- * contract number. D-055.
- */
-/** Populated at boot from the index, so the picker cannot outrun the corpus. */
+/** Loaded at boot from the index, so the picker cannot outrun the corpus. */
 export let PLANS: PlanChoice[] = [];
 
-/** FR-P2-16. Read at boot from the index, never from a disk the container lacks. */
+/** Read from the index, never from a disk the container may lack. */
 export let CORPUS: { documentsFetchedAt: string; ingestedAt: string; planYear: number } | null = null;
 
-/** A spoken answer carries its own warning; audio cannot be scrolled back to. */
+/** Audio cannot be scrolled back to, so the warning is spoken too. */
 const withStaleness = (spoken: string, warning: string | null): string =>
   warning === null ? spoken : `${spoken} ${warning}`;
 
-/** The plan answered when a question needs no plan context. Retrieval always scopes. */
+/** Used when a question needs no plan. Retrieval scopes regardless. */
 function firstIndexedPlan(): PlanRef {
   const first = PLANS[0];
   if (first === undefined) throw new Error("no plans are indexed");
@@ -66,29 +72,36 @@ function firstIndexedPlan(): PlanRef {
 }
 
 
-const MAX_QUESTION = 500;
-const MAX_NOTE = 1_000;
-
-/** FR-30, NFR-SEC-02. Generous enough for a demo, low enough to bound cost. */
+/** Generous enough for a demo, low enough to bound cost. */
 const SESSION_LIMIT = 20;
 const SESSION_WINDOW = "1 hour";
 const IP_LIMIT = 60;
 const IP_WINDOW = "1 hour";
 
 const SESSION_COOKIE = "clovbot_sid";
-/* Separate from the anonymous session, and rotated on every sign-in. D-084. */
+/* Separate from the anonymous session, and rotated on every sign-in. */
 const MEMBER_COOKIE = "clovbot_member";
 
-/** Opaque and server-issued. Carries no member identity. NFR-SEC-01. */
+/** Opaque and server-issued. Carries no member identity. */
+/**
+ * Derived from the forwarded protocol rather than configured: Vercel and Cloud
+ * Run both set it, and a plaintext local port correctly gets no Secure flag.
+ */
+const overHttps = (req: IncomingMessage): boolean => {
+  const forwarded = req.headers["x-forwarded-proto"];
+  const header = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return (header ?? "").split(",")[0]?.trim() === "https";
+};
+
+const cookieFlags = (req: IncomingMessage): string =>
+  `Path=/; HttpOnly; SameSite=Lax${overHttps(req) ? "; Secure" : ""}`;
+
 function sessionId(req: IncomingMessage, res: ServerResponse): string {
   const existing = /clovbot_sid=([0-9a-f-]{36})/.exec(req.headers.cookie ?? "")?.[1];
   if (existing !== undefined) return existing;
 
   const created = randomUUID();
-  res.setHeader(
-    "set-cookie",
-    `${SESSION_COOKIE}=${created}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
-  );
+  res.setHeader("set-cookie", `${SESSION_COOKIE}=${created}; ${cookieFlags(req)}; Max-Age=86400`);
   return created;
 }
 
@@ -105,10 +118,15 @@ const send = (res: ServerResponse, event: unknown): void => {
 const memberCookie = (req: IncomingMessage): string | null =>
   new RegExp(`${MEMBER_COOKIE}=([0-9a-f-]{36})`).exec(req.headers.cookie ?? "")?.[1] ?? null;
 
-const setMemberCookie = (res: ServerResponse, value: string, maxAge: number): void => {
+const setMemberCookie = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  value: string,
+  maxAge: number,
+): void => {
   res.setHeader(
     "set-cookie",
-    `${MEMBER_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${String(maxAge)}`,
+    `${MEMBER_COOKIE}=${value}; ${cookieFlags(req)}; Max-Age=${String(maxAge)}`,
   );
 };
 
@@ -117,31 +135,23 @@ const json = (res: ServerResponse, status: number, body: unknown): void => {
   res.end(JSON.stringify(body));
 };
 
-/**
- * FR-P2-32. Ten codes an hour per address and thirty per address family, counted
- * in the same Postgres mechanism the question limits already use.
- */
+/** Ten codes an hour per address, thirty per address family. */
 const CODE_LIMIT_PER_EMAIL = 10;
 const CODE_LIMIT_PER_IP = 30;
 
-/** FR-P2-35. The cookie outlives neither cap. */
+/** The cookie outlives neither cap. */
 const MEMBER_COOKIE_MAX_AGE = 8 * 60 * 60;
 
-/**
- * The same reply whether or not the address is enrolled, so the endpoint cannot
- * be used to discover which of the five exist.
- */
+/** Same reply either way, so this cannot enumerate enrolled addresses. */
 const CODE_SENT = { sent: true } as const;
 
 async function handleLoginRequest(body: string, res: ServerResponse, ip: string): Promise<void> {
-  let email = "";
-  try {
-    const parsed = JSON.parse(body) as { email?: unknown };
-    email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 254) : "";
-  } catch {
+  const request = loginRequest(body);
+  if (request === null) {
     json(res, 400, { error: "malformed request" });
     return;
   }
+  const { email } = request;
   if (email.length === 0) {
     json(res, 400, { error: "email is required" });
     return;
@@ -172,17 +182,17 @@ async function handleLoginRequest(body: string, res: ServerResponse, ip: string)
   }
 }
 
-async function handleLoginVerify(body: string, res: ServerResponse): Promise<void> {
-  let email = "";
-  let code = "";
-  try {
-    const parsed = JSON.parse(body) as { email?: unknown; code?: unknown };
-    email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 254) : "";
-    code = typeof parsed.code === "string" ? parsed.code.slice(0, 32) : "";
-  } catch {
+async function handleLoginVerify(
+  body: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const request = loginVerify(body);
+  if (request === null) {
     json(res, 400, { error: "malformed request" });
     return;
   }
+  const { email, code } = request;
 
   const client = connect();
   await client.connect();
@@ -193,15 +203,21 @@ async function handleLoginVerify(body: string, res: ServerResponse): Promise<voi
       return;
     }
     const sessionId = await startSession(client, memberId);
-    setMemberCookie(res, sessionId, MEMBER_COOKIE_MAX_AGE);
-    const session = await currentSession(client, sessionId, new Date());
+    setMemberCookie(req, res, sessionId, MEMBER_COOKIE_MAX_AGE);
+    const { session } = await currentSession(client, sessionId, new Date());
     json(res, 200, { signedInAs: session?.displayName ?? null });
   } finally {
     await client.end();
   }
 }
 
-/** FR-P2-36. Plain language, and never a raw error. */
+/** Signed in a minute ago and not now reads as a fault; say why. */
+const SESSION_ENDED: Record<"idle" | "expired", string> = {
+  idle: "You were signed out after 30 minutes without activity. Sign in again to see your own details.",
+  expired: "Your sign-in lasted its full 8 hours and has ended. Sign in again to see your own details.",
+};
+
+/** Plain language, and never a raw error. */
 const SIGN_IN_MESSAGE: Record<string, string> = {
   wrong: "That code did not match. Check it and try again, or ask for a new one.",
   expired: "That code has expired. Ask for a new one and it will arrive in a moment.",
@@ -221,7 +237,7 @@ async function handleLogout(req: IncomingMessage, res: ServerResponse): Promise<
       await client.end();
     }
   }
-  setMemberCookie(res, "", 0);
+  setMemberCookie(req, res, "", 0);
   json(res, 200, { signedOut: true });
 }
 
@@ -247,8 +263,9 @@ const server = createServer((req, res) => {
       const client = connect();
       await client.connect();
       try {
-        const session = await currentSession(client, memberCookie(req), new Date());
-        json(res, 200, { signedInAs: session?.displayName ?? null });
+        const { session, ended } = await currentSession(client, memberCookie(req), new Date());
+        // Expiry is told apart from never having signed in, so the panel can explain.
+        json(res, 200, { signedInAs: session?.displayName ?? null, sessionEnded: ended });
       } finally {
         await client.end();
       }
@@ -262,7 +279,7 @@ const server = createServer((req, res) => {
   }
 
   if (req.method === "POST" && req.url === "/api/login/verify") {
-    collect(req, (body) => void handleLoginVerify(body, res));
+    collect(req, (body) => void handleLoginVerify(body, req, res));
     return;
   }
 
@@ -306,12 +323,10 @@ function collect(req: IncomingMessage, done: (body: string) => void): void {
   let body = "";
   req.on("data", (chunk: Buffer) => {
     body += chunk.toString("utf8");
-    if (body.length > 200_000) req.destroy();
+    if (body.length > LIMITS.body) req.destroy();
   });
   req.on("end", () => done(body));
 }
-
-const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 
 function collectBinary(
   req: IncomingMessage,
@@ -321,7 +336,7 @@ function collectBinary(
   let size = 0;
   req.on("data", (chunk: Buffer) => {
     size += chunk.byteLength;
-    if (size > MAX_AUDIO_BYTES) {
+    if (size > LIMITS.audioBytes) {
       req.destroy();
       return;
     }
@@ -332,19 +347,16 @@ function collectBinary(
   );
 }
 
-/** FR-27. Responses are logged against the turn they answer. */
+/** Logged against the turn it answers. */
 async function handleFeedback(body: string, res: ServerResponse): Promise<void> {
-  let turnId = "";
-  let resolved: boolean | null = null;
-  try {
-    const parsed = JSON.parse(body) as { turnId?: unknown; resolved?: unknown };
-    turnId = typeof parsed.turnId === "string" ? parsed.turnId : "";
-    resolved = typeof parsed.resolved === "boolean" ? parsed.resolved : null;
-  } catch {
+  // Anything outside the four is dropped, so this cannot become a free-text channel.
+  const request = feedbackRequest(body, FEEDBACK_REASONS);
+  if (request === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
     return;
   }
+  const { turnId, resolved, reason } = request;
   if (turnId.length === 0 || resolved === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "turnId and resolved are required" }));
@@ -354,7 +366,7 @@ async function handleFeedback(body: string, res: ServerResponse): Promise<void> 
   const client = connect();
   try {
     await client.connect();
-    const recorded = await recordFeedback(client, turnId, resolved);
+    const recorded = await recordFeedback(client, turnId, resolved, reason);
     res.writeHead(recorded ? 200 : 404, { "content-type": "application/json" });
     res.end(JSON.stringify(recorded ? { recorded: true } : { error: "no such turn" }));
   } catch (error) {
@@ -365,50 +377,52 @@ async function handleFeedback(body: string, res: ServerResponse): Promise<void> 
   }
 }
 
-/** FR-19, FR-20. Synthesis runs here so the provider keys stay off the page. */
+/** Runs here so the provider keys stay off the page. */
 async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
-  let text = "";
-  try {
-    const parsed = JSON.parse(body) as { text?: unknown };
-    text = typeof parsed.text === "string" ? parsed.text.slice(0, 5_000).trim() : "";
-  } catch {
+  const request = speakRequest(body);
+  if (request === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
     return;
   }
+  const { text, language: speech } = request;
   if (text.length === 0) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "nothing to read aloud" }));
     return;
   }
 
-  // Cache before the chain: a repeated answer is never synthesised twice. FR-20.
-  // Every provider is checked, because a recording made while the chain was
-  // degraded is still a valid recording of the same words.
-  const voice = process.env["ELEVENLABS_VOICE_ID"] ?? "default";
-  const cached = findCachedAudio(text, voice, ["elevenlabs", "fishaudio"]);
-  if (cached !== null) {
-    res.writeHead(200, {
-      "content-type": "audio/mpeg",
-      "x-voice-provider": cached.provider,
-      "x-voice-cached": "1",
-    });
-    res.end(cached.audio);
-    return;
-  }
+  // Every provider is checked: one recorded while degraded is still valid.
+  const client = connect();
+  await client.connect();
+  try {
+    const voice =
+      (speech === "es" ? process.env["ELEVENLABS_VOICE_ID_SPANISH"] : undefined) ??
+      process.env["ELEVENLABS_VOICE_ID"] ??
+      "default";
+    const cached = await readAudio(client, text, voice, ["elevenlabs", "fishaudio"]);
+    if (cached !== null) {
+      res.writeHead(200, {
+        "content-type": "audio/mpeg",
+        "x-voice-provider": cached.provider,
+        "x-voice-cached": "1",
+      });
+      res.end(cached.audio);
+      return;
+    }
 
   try {
-    const result = await speak(text);
+    const result = await speak(text, speech);
     const notice = degradeNotice(result);
 
     if (result.value === null) {
-      // The browser tier: nothing to send, the page speaks it. FR-20.
+      // The browser tier: nothing to send, the page speaks it.
       res.writeHead(200, { "content-type": "application/json", "x-voice-provider": result.provider });
       res.end(JSON.stringify({ provider: result.provider, useBrowserVoice: true, notice }));
       return;
     }
 
-    writeAudio(audioKey(text, voice, result.provider), result.value);
+    await writeAudio(client, text, voice, result.provider, result.value);
     res.writeHead(200, {
       "content-type": "audio/mpeg",
       "x-voice-provider": result.provider,
@@ -416,18 +430,21 @@ async function handleSpeak(body: string, res: ServerResponse): Promise<void> {
       ...(notice === null ? {} : { "x-voice-notice": encodeURIComponent(notice) }),
     });
     res.end(Buffer.from(result.value));
-  } catch (error) {
-    res.writeHead(503, { "content-type": "application/json" });
-    res.end(
-      JSON.stringify({
-        error: "The answer could not be read aloud. It is on screen above.",
-        detail: error instanceof Error ? error.message : String(error),
-      }),
-    );
+    } catch (error) {
+      res.writeHead(503, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "The answer could not be read aloud. It is on screen above.",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  } finally {
+    await client.end().catch(() => {});
   }
 }
 
-/** FR-18. Returns a transcript the member edits before it is sent. */
+/** Returns a transcript the member edits before it is sent. */
 async function handleTranscribe(
   audio: Uint8Array,
   mime: string,
@@ -459,22 +476,19 @@ async function handleTranscribe(
   }
 }
 
-/** FR-22. Stores the pre-filled request and confirms. Nothing is sent anywhere. */
+/** Stores the request and confirms. Nothing is sent anywhere. */
 async function handleCallback(
   body: string,
   res: ServerResponse,
   session: string,
 ): Promise<void> {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(body) as Record<string, unknown>;
-  } catch {
+  const request = callbackRequest(body);
+  if (request === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
     return;
   }
-
-  const question = typeof parsed["question"] === "string" ? parsed["question"].slice(0, MAX_QUESTION) : "";
+  const { question } = request;
   if (question.trim().length === 0) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "A question is required so a person knows what to call about." }));
@@ -485,14 +499,12 @@ async function handleCallback(
   try {
     await client.connect();
     const id = await writeCallback(client, {
-      // FR-31 applies here too: this text is persisted.
+      // Persisted, so it is redacted like everything else.
       question: redactIdentifiers(question),
-      planContext: typeof parsed["planContext"] === "string" ? parsed["planContext"] : null,
-      documentsSearched: Array.isArray(parsed["documentsSearched"])
-        ? parsed["documentsSearched"].filter((entry): entry is string => typeof entry === "string")
-        : [],
-      refusalTrigger: typeof parsed["refusalTrigger"] === "string" ? parsed["refusalTrigger"] : null,
-      note: typeof parsed["note"] === "string" ? redactIdentifiers(parsed["note"].slice(0, MAX_NOTE)) : null,
+      planContext: request.planContext,
+      documentsSearched: request.documentsSearched,
+      refusalTrigger: request.refusalTrigger,
+      note: request.note === null ? null : redactIdentifiers(request.note),
       sessionId: session,
     });
     res.writeHead(200, { "content-type": "application/json" });
@@ -515,22 +527,16 @@ async function handleAsk(
   res: ServerResponse,
   session: string,
   ip: string,
-  /** The member cookie as sent. Resolved to a session row, never trusted as an id. */
+  /** Resolved to a session row, never trusted as an id. */
   memberToken: string | null,
 ): Promise<void> {
-  let question = "";
-  let planId: string | null = null;
-  let contractId: string | null = null;
-  try {
-    const parsed = JSON.parse(body) as { question?: unknown; planId?: unknown; contractId?: unknown };
-    question = typeof parsed.question === "string" ? parsed.question.slice(0, MAX_QUESTION).trim() : "";
-    planId = typeof parsed.planId === "string" ? parsed.planId : null;
-    contractId = typeof parsed.contractId === "string" ? parsed.contractId : null;
-  } catch {
+  const request = askRequest(body);
+  if (request === null) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
     return;
   }
+  const { question, planId, contractId, language } = request;
 
   if (question.length === 0) {
     res.writeHead(400, { "content-type": "application/json" });
@@ -538,8 +544,7 @@ async function handleAsk(
     return;
   }
 
-  // An unindexed plan retrieves nothing and reads as a refusal. Say it is a bad
-  // request instead. Contract defaults only while the corpus covers one.
+  // An unindexed plan retrieves nothing and would read as a refusal.
   const planRef = planId === null ? null : resolveIndexedPlan(PLANS, contractId, planId);
   if (planId !== null && planRef === null) {
     res.writeHead(400, { "content-type": "application/json" });
@@ -553,8 +558,7 @@ async function handleAsk(
     connection: "keep-alive",
   });
 
-  // FR-10, D-022: ask for plan only when the answer depends on it, and only
-  // once per session. The member may ask anything before choosing.
+  // Asked only when the answer depends on it, and only once.
   if (planRef === null && needsPlanContext(question)) {
     send(res, { type: "needs_plan", plans: PLANS, question });
     res.end();
@@ -562,13 +566,12 @@ async function handleAsk(
   }
 
   const client = connect();
-  // Instrumentation runs after the answer is on screen. A failure there must not
-  // replace a delivered answer with an error the member cannot act on.
+  // A failure logging must not replace an answer already on screen.
   let delivered = false;
   try {
     await client.connect();
 
-    // FR-30, NFR-SEC-02. A clear message, never a hang or a stack trace.
+    // A clear message, never a hang or a stack trace.
     for (const [key, limit, window, scope] of [
       [`s:${session}`, SESSION_LIMIT, SESSION_WINDOW, "this session"],
       [`i:${ip}`, IP_LIMIT, IP_WINDOW, "this network"],
@@ -585,12 +588,9 @@ async function handleAsk(
       }
     }
 
-    /*
-     * FR-P2-45's structural half. The member id comes from a live session row
-     * and from nowhere else, so no classifier - Stage 7's or any later one -
-     * can cause member data to be retrieved for someone without a session.
-     */
-    const member = await currentSession(client, memberToken, new Date());
+    // From a live session row and nowhere else, so no classifier can widen it.
+    const { session: member, ended } = await currentSession(client, memberToken, new Date());
+    if (ended !== null) send(res, { type: "session_ended", message: SESSION_ENDED[ended] });
 
     const turn = await answerTurn(
       client,
@@ -598,11 +598,14 @@ async function handleAsk(
       planRef ?? firstIndexedPlan(),
       {
         onToken: () => send(res, { type: "progress" }),
-        ...(member === null ? {} : { memberId: member.memberId }),
+        language,
+        ...(member === null
+          ? {}
+          : { memberId: member.memberId, sessionId: member.sessionId }),
       },
     );
 
-    // FR-P2-17. Computed once so the written, spoken and printed copies agree.
+    // Computed once so the written, spoken and saved copies agree.
     const stale = stalenessWarning(CORPUS?.planYear ?? PLAN_YEAR, new Date());
 
     send(res, {
@@ -614,21 +617,21 @@ async function handleAsk(
         stale,
       ),
       outcome: turn.outcome,
+      language: turn.language,
       claims: turn.payload?.claims ?? [],
       unanswered: turn.payload?.unanswered ?? [],
       refusal: turn.payload?.refusal ?? null,
-      // Numbered in order of first appearance, so a claim marker maps to the list.
+      // Ordered by first appearance, so a claim marker maps to the list.
       citations:
         turn.payload === null
           ? []
           : numberCitations(turn.payload, turn.retrieved).map((entry) => ({
               id: entry.chunk.id,
               number: entry.number,
-              label: citationLabel(entry.chunk),
+              label: citationLabel(entry.chunk, turn.language),
               documentId: entry.chunk.documentId,
             })),
-      // Every cited id, including ones merged onto a shared number, so a claim
-      // marker resolves even when two chunks render the same citation.
+      // Includes ids merged onto a shared number, so every marker resolves.
       claimCitationNumbers:
         turn.payload === null ? {} : Object.fromEntries(citationNumbers(turn.payload, turn.retrieved)),
       headline: turn.payload?.headline ?? null,
@@ -645,6 +648,8 @@ async function handleAsk(
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,
+      // A member's answer holds their record, and this table has no policy.
+      answer: member === null ? turn.answer : null,
       provider: turn.provider,
       latencyMs: {
         ...turn.latencyMs,
@@ -655,7 +660,7 @@ async function handleAsk(
       refusalTrigger: turn.refusalTrigger,
     });
 
-    // FR-23. After two consecutive refusals, stop offering to try again.
+    // After two consecutive refusals, stop offering to try again.
     send(res, { type: "turn", turnId });
 
     const refusals = await consecutiveRefusals(client, session);
@@ -672,8 +677,7 @@ async function handleAsk(
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    // FR-25: an upstream failure is an explicit error state with the human path,
-    // never a silent degrade into an uncited answer.
+    // An explicit error with the human path, never a silent uncited answer.
     if (delivered) console.error(`turn instrumentation failed: ${detail}`);
     else send(res, { type: "error", message: "Something went wrong reaching the plan documents.", detail });
   } finally {
@@ -683,10 +687,8 @@ async function handleAsk(
 }
 
 /**
- * A revision with a broken environment must fail to start, not answer /api/plans
- * and 503 every question. Constructing a client only checks the URL and the CA,
- * so the plan query is what actually proves the database is reachable and holds
- * an index. An empty result is a deploy with nothing to answer from. D-055.
+ * Constructing a client checks only the URL, so this query is the real probe.
+ * An empty result is a deploy with nothing to answer from.
  */
 async function boot(): Promise<void> {
   const client = connect();

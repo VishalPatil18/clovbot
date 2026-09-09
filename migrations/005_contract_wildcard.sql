@@ -1,10 +1,6 @@
--- Contract-wide documents - the formulary and corporate pages - answer under every
--- contract. They carry '*' in contract_id as well as plan_id, mirroring the plan
--- wildcard this function already honoured. Without the contract half, a session
--- scoped to a second contract loses the formulary and every corporate page. D-056.
---
--- Signature and return columns are unchanged, so replacing the body is enough and
--- no client changes with it.
+-- The formulary and corporate pages answer under every contract, so they carry
+-- '*' in contract_id as well as plan_id. Without it a second contract loses both.
+-- Signature and return columns are unchanged, so no client changes.
 
 create or replace function search_hybrid(
   query_embedding vector(1536),

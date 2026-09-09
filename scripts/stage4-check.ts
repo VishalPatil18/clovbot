@@ -1,9 +1,8 @@
 /**
- * Stage 4 acceptance checks. Not a unit test: it needs the live index, and its
- * value is the measured numbers, which are printed rather than asserted.
+ * Retrieval checks against the live index. Numbers are printed, not asserted.
  */
 import { embed } from "../src/rag/providers.ts";
-import { connect, searchHybrid, type RetrievalMode } from "../src/rag/store.ts";
+import { connectAdmin, searchHybrid, type RetrievalMode } from "../src/rag/store.ts";
 import type { DocumentKind } from "../src/types.ts";
 
 const SCOPE = { contractId: "H5141", planId: "004", planYear: 2026 };
@@ -24,7 +23,7 @@ const SMOKE: { question: string; expect: DocumentKind }[] = [
 ];
 
 async function rank(
-  client: Awaited<ReturnType<typeof connect>>,
+  client: Awaited<ReturnType<typeof connectAdmin>>,
   question: string,
   mode: RetrievalMode,
   limit = TOP_K,
@@ -40,7 +39,7 @@ async function rank(
   }));
 }
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 try {
@@ -60,7 +59,7 @@ try {
     // A common drug the embedding model already knows: dense alone is enough.
     { label: "exact token, common drug", question: "atorvastatin", want: "formulary", needle: "ATORVASTATIN" },
     // A rare brand name carries little semantic signal, so dense drops it out of
-    // the top 5 and only the lexical half finds it. This is why D-004 exists.
+    // the top 5 and only the lexical half finds it. This is why the lexical half exists.
     { label: "exact token, rare brand", question: "ORSERDU", want: "formulary", needle: "ORSERDU" },
     { label: "paraphrase (no shared words)", question: "what does it cost to see a skin doctor", want: "summary_of_benefits", needle: "copay" },
   ];

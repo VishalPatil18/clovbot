@@ -1,8 +1,10 @@
+import type { Speech } from "./api.ts";
+export type { Speech };
 export type VoiceMode = "text" | "voice";
 
 const MODE_KEY = "clovbot_mode";
 
-/** FR-16. The choice persists across sessions. */
+/** The choice persists across sessions. */
 export function readMode(): VoiceMode {
   try {
     return window.localStorage.getItem(MODE_KEY) === "voice" ? "voice" : "text";
@@ -21,9 +23,8 @@ export function writeMode(mode: VoiceMode): void {
 }
 
 /**
- * A press shorter than this is a tap, which starts recording and leaves it
- * running. A longer press is a hold, which stops when released. FR-17 requires
- * both paths to work at all times, so the gesture is inferred rather than set.
+ * Shorter is a tap, which leaves recording running; longer is a hold, which stops
+ * on release. Both work always, so the gesture is inferred rather than set.
  */
 export const TAP_THRESHOLD_MS = 400;
 
@@ -31,7 +32,7 @@ export const isTap = (heldMs: number): boolean => heldMs < TAP_THRESHOLD_MS;
 
 export interface Recording {
   stop: () => Promise<Blob>;
-  /** 0 to 1, for the level meter that stands in for a live transcript. D-045. */
+  /** 0 to 1, for the level meter that stands in for a live transcript. */
   level: () => number;
 }
 
@@ -88,14 +89,17 @@ export async function transcribe(audio: Blob): Promise<Transcription> {
 export interface Spoken {
   play: () => void;
   stop: () => void;
+  /** Holds the place, unlike stop. Both tiers support it natively. */
+  pause: () => void;
+  resume: () => void;
   /** Fires when playback finishes or is stopped, so the interface can settle. */
   onStateChange: (handler: (speaking: boolean) => void) => void;
   notice: string | null;
 }
 
 /**
- * FR-19. Audio never replaces the written answer; it accompanies it. The browser
- * tier speaks the text locally when the remote chain is exhausted. FR-20.
+ * Audio never replaces the written answer; it accompanies it. The browser
+ * tier speaks locally when the remote chain is exhausted.
  */
 export async function speak(text: string): Promise<Spoken> {
   const response = await fetch("/api/speak", {
@@ -129,6 +133,14 @@ export async function speak(text: string): Promise<Spoken> {
         window.speechSynthesis.cancel();
         notify(false);
       },
+      pause: () => {
+        window.speechSynthesis.pause();
+        notify(false);
+      },
+      resume: () => {
+        window.speechSynthesis.resume();
+        notify(true);
+      },
     };
   }
 
@@ -136,7 +148,6 @@ export async function speak(text: string): Promise<Spoken> {
   const audio = new Audio(URL.createObjectURL(await response.blob()));
   let notify: (speaking: boolean) => void = () => {};
   audio.addEventListener("ended", () => notify(false));
-  audio.addEventListener("pause", () => notify(false));
 
   return {
     notice: encoded === null ? null : decodeURIComponent(encoded),
@@ -153,5 +164,33 @@ export async function speak(text: string): Promise<Spoken> {
       audio.currentTime = 0;
       notify(false);
     },
+    pause: () => {
+      audio.pause();
+      notify(false);
+    },
+    resume: () => {
+      void audio.play();
+      notify(true);
+    },
   };
+}
+
+
+const LANGUAGE_KEY = "clovbot_language";
+
+/** Detection seeds this on the first Spanish question; this remembers it. */
+export function readLanguage(): Speech {
+  try {
+    return window.localStorage.getItem(LANGUAGE_KEY) === "es" ? "es" : "en";
+  } catch {
+    return "en";
+  }
+}
+
+export function writeLanguage(speech: Speech): void {
+  try {
+    window.localStorage.setItem(LANGUAGE_KEY, speech);
+  } catch {
+    // Losing the preference is survivable; failing to switch language is not.
+  }
 }

@@ -1469,3 +1469,481 @@ Bucket B at 8/8 is the live proof of Stage 7: five member questions gated, three
 **The faithfulness dips are not noise.** A-21 has scored 0 in three of six runs and PAIR-03b scored 0.667 once. Both add a clause the cited chunk does not state. The judge is doing its job; this is recorded as an answer-quality issue, and the gate was set to tolerate one such case rather than to hide them.
 
 **Not verified: FR-P2-53.** The deployed signed-out to signed-in to answered flow needs migrations 005 through 009 applied to production and a deploy, both of which are the user's to run. The runbook is in `README.md`. The same flow is verified locally over HTTP.
+
+---
+
+## Feature: Row-level security (P3 Stage 1)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-01 to FR-P3-12, NFR-P3-01, NFR-P3-11. **Decision:** D-090.
+
+### The problem this closes
+
+Member scoping was a `where member_id = $1` inside one function. It was correct, and it was the only thing there. A new code path that forgot it, or a bug inside it, discloses a record and nothing objects. `NFR-P2-10` stated this as residual risk and named P3 as where it closes.
+
+### What was found before building
+
+The application connected as `postgres`: owner of every table, and `rolbypassrls = true`. Policies written against that connection would have been inert, and `FORCE ROW LEVEL SECURITY` does not override `BYPASSRLS`. The whole stage could have been built and proved nothing.
+
+### UX flow
+
+None. Nothing a member sees changes, and that is the intent. The one visible consequence would be a bug: a member who could not read their own record.
+
+### Backend entities
+
+- `clovbot_app` - a login role with `NOBYPASSRLS`, owning nothing, holding only the privileges the running product executes. Created by hand so its password never enters the repository.
+- `current_member_id()` - reads `clovbot.member_id` from the connection, `NULL` when unset.
+- `withMemberIdentity(client, memberId, read)` in `src/members/store.ts` - wraps a read in a transaction that sets the identity transaction-locally.
+- `connect()` / `connectAdmin()` in `src/rag/store.ts` - the product's connection and the schema owner's, from `DATABASE_APP_URL` and `DATABASE_URL`.
+
+### DB schema
+
+No table changes. `migrations/011_row_level_security.sql` adds grants, enables and **forces** row-level security on `members`, `member_accumulators`, `member_claims`, `member_prior_authorizations` and `member_appointments`, and gives each a `select` policy comparing its member column to `current_member_id()`.
+
+`login_codes` and `member_sessions` carry a `member_id` and deliberately get no policy: the sign-in path reads them to discover who the member is, before an identity exists to filter by. They are protected by privilege, and the exemption is recorded as a table comment and asserted by the check.
+
+`migrations/011_row_level_security_down.sql` reverses all of it.
+
+### Tech specs
+
+- **Enforcement:** Postgres row-level security. Rejected: an application-layer repository wrapper, because that is what already existed and is the thing being backstopped.
+- **Identity transport:** `set_config('clovbot.member_id', $1, true)`, transaction-local. Rejected: a session `SET`, because the pooler runs in session mode and hands the server connection to the next request, which would inherit the identity.
+- **Role model:** one restricted role for the product, the existing owner for migrations, ingest, seeding and operator tools. Rejected: a second connection per request for member reads only, which leaves a connection in every request that can read every member.
+- **Failure mode:** `connect()` has no fallback to the admin URL. A missing `DATABASE_APP_URL` stops the process rather than quietly reconnecting as the role that can read everything.
+
+### Verification
+
+`npm run check:rls`, wired into the CI job that already holds database credentials. It connects as the application role and issues raw selects, with no application code in the path.
+
+Two design corrections came out of running it:
+
+1. The first version disabled the policy on a live table to watch a leak appear, from the admin connection while reading from the app connection. That takes an `ACCESS EXCLUSIVE` lock the reading connection then waits on, and it timed out. `SET ROLE` to collapse it onto one connection is refused: PostgreSQL 16+ requires the `SET` option on a role membership, which the owner does not hold here.
+2. The replacement proves the same thing without DDL. The identical query, on the same table, run as the member who owns those rows returns them; run as the other member it returns nothing. The difference is the policy. A check that turns off security on a live table is a hazard the first time its rollback does not run.
+
+---
+
+## Feature: Access log and minimum-necessary reads (P3 Stage 2)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-13 to FR-P3-24. **Decisions:** D-091, D-092, D-094.
+
+### The problem this closes
+
+Being signed in was by itself enough to read the whole record. `chooseRoute` added the member path on identity, and `loadMemberRecord` ran `select *` across five tables, so a signed-in member asking a specialist copay had their claims, prior authorisations and appointments read to answer it. Nothing chose that; it accumulated.
+
+### UX flow
+
+Two visible changes. A member whose session ran out is told which limit was reached and offered the way back, instead of being shown a sign-in form with no explanation. `ask:member` prints the member id rather than the name, because printing the name would mean reading it.
+
+### Backend entities
+
+- `MemberFact.sources` - the columns a fact was built from. The access log is the union of these, so what is logged and what is answered come from one structure.
+- `fieldsRead(record)` - deduplicated `table.column@row-id` strings.
+- `writeAccessLog(client, entry)` - one row per authenticated turn, inside the member's identity.
+- `loadMemberPlan(client, memberId)` - plan identity only, for scoping retrieval.
+- `SessionLookup { session, ended }` - tells an expired session apart from never having had one.
+- `member_for_login(text)` - a `security definer` function for the one lookup that cannot have an identity yet.
+
+### DB schema
+
+`member_access_log` (id, member_id, session_id, read_at, topic, question, fields_read text[], outcome), behind its own policy for select and insert, granted `insert` and `select` only. Migration 013 adds `member_for_login`.
+
+### Tech specs
+
+- **Audit point:** `answerTurn`, the one place every outcome converges. Rejected: inside the read transaction, which does not know the outcome; and the request handler, which would miss the CLI entirely.
+- **Field naming:** column plus row id. Rejected: column alone, which cannot say which of three claims was read; and the citation label, which is presentation text that a wording change would silently reformat.
+- **Immutability:** by grant. Rejected: convention plus a code review.
+- **Failure mode:** a failed audit write fails the turn. No answer has reached the member at that point, so nothing is disclosed without a record of it.
+
+### Verification
+
+`npm run check:audit`, 14 checks against the live database, wired into CI beside `check:rls`.
+
+---
+
+## Feature: Real-PHI writeup (P3 Stage 3)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-25 to FR-P3-30. Written, not built.
+
+**Output:** `docs/real-phi.md`. Eleven controls, each stating what exists today and what a real deployment would still owe; what P3 Stages 1 and 2 carry over and what needs strengthening; and three scenarios answered, each saying what cannot be done as well as what can.
+
+**Tech specs:** a Markdown document in `docs/`, reviewer-facing. No UI, no schema, no dependency. `tests/unit/real-phi-writeup.test.ts` asserts source integrity: every regulation named in the body appears in the sources list, every control section carries both halves, and the section on Azure retention states no period the project did not verify.
+
+**What measuring found that reading the code would not.** The pooler accepts plaintext, so TLS is a client-side convention rather than a server-side rule, and `pg_stat_ssl` shows the pooler-to-database hop unencrypted. Three outbound paths carry answer content to vendors with no agreement, none of which appears on the briefing's five-item HIPAA list.
+
+---
+
+## Feature: Spanish, end to end (P3 Stage 4)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-31 to FR-P3-44, NFR-P3-06, NFR-P3-09, NFR-P3-12. **Decisions:** D-093, D-095, D-096.
+
+### What a member sees
+
+A language control beside the voice control, in the panel header and in the full-page rail, labelled in the language it switches to: **Español** when reading English, **English** when reading Spanish. Named that way so a member who cannot read the current language can still find it, with `lang` set so a screen reader pronounces the label correctly.
+
+A Spanish question is answered in Spanish without touching the control at all. Detection seeds the setting on the first Spanish turn, and the member can override it afterwards.
+
+### UX flow
+
+1. Member types or speaks a question in Spanish.
+2. The detector reads it as Spanish and the setting follows the answer.
+3. Retrieval is scoped to Spanish chunks before ranking, alongside the plan.
+4. The model is asked, on the user message only, to answer in Spanish.
+5. The answer renders with Spanish citations: `Evidencia de Cobertura 2026 · Plan H5141-004`, under `De dónde viene esto`.
+6. Read aloud, it uses the Spanish voice.
+
+### Backend entities
+
+- `QuestionLanguage` - `"en" | "es" | "other"`. The third is still handed over, because no source document supports it.
+- `Speech` and `corpusLanguage()` in `src/i18n.ts` - the interface code and the corpus tag.
+- `COPY` in `src/i18n.ts` - refusals, handovers, staleness and the drug-list disclosure, authored in both languages.
+- `explanationEs` on every guardrail rule, and Spanish alternatives inside every pattern.
+- `web/src/strings.ts` - panel chrome and help prose.
+
+### DB schema
+
+`chunks` gains `language` with a check constraint, an index, and a `search_vector` that picks its text-search configuration per row. `search_hybrid` gains a `p_language` parameter and scopes on it inside the ranking CTE.
+
+### Tech specs
+
+- **Instruction placement:** the user message. Rejected: the system prompt, because D-069 measured that changing its bytes moves faithfulness on English answers.
+- **Scoping:** a column, filtered in SQL before ranking. Rejected: post-filtering, which is D-033's mistake in a new dimension; and separate tables, which duplicates every index and policy for one column.
+- **Copy:** authored. Rejected: runtime machine translation, which would produce a claim no source supports.
+- **Drug list:** cited across languages with the mismatch stated. Rejected: refusing, which fails a question the system can answer; and silent bilingual tagging, which hides it.
+
+### Verification
+
+Against the live index, 2737 chunks (1913 English over 19 documents, 824 Spanish over 9):
+
+- A Spanish question retrieved 5 chunks, all Spanish, from the `-es` documents. The paired English question retrieved 5, all English.
+- The paired amounts agree: `$10` in-network and `$20` out-of-network for plan 004, in both languages, from different source documents.
+- Guardrails fire in Spanish (`dolor en el pecho` breaks out to 911, `puede aprobar mi cobertura` refuses) with no false positives on answerable questions in either language.
+
+### What building it surfaced
+
+**The Spanish Summary of Benefits writes `(plan 004)` in lower case** where English writes `(Plan 004)`. One character, and the only reason it did not silently merge two columns of amounts is that D-031 fails loudly when a money row cannot be attributed.
+
+**A conversion failure was sticky.** `convertAll` skipped any entry not marked `ok`, so a fixed parser kept reporting the reason from the run that broke it.
+
+**Translating the guardrail explanations was not enough.** The match patterns were English-only, so a Spanish emergency fired no rule and the translated copy was never reached. The golden set caught it; nothing else would have.
+
+**The help panel claimed the assistant "holds no member data and never signs you in".** True in P1, false since P2 shipped sign-in. Found while translating it, and replaced with what is actually true: every record here is demonstration data.
+
+---
+
+## Feature: Mobile layout (P3 Stage 5)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-45 to FR-P3-52, NFR-P3-13, NFR-P3-14. **Decisions:** D-097, D-098.
+
+### What was actually wrong
+
+The product had two responsive rules in total and had never been rendered at a phone size. Measured at 393x852:
+
+- The assistant laid out **726px of content inside a 393px frame**. It did not scroll sideways, because `html, body { overflow-x: hidden }` clipped it. The Ask button was unreachable, not merely off to the side.
+- The cause was one declaration: `.assistant__bar` was `flex-wrap: nowrap`, so its min-content width became a floor that propagated up through a flex and grid tree where every item defaults to `min-width: auto`.
+- The same floor clipped the **desktop** panel: 726px of content in a 576px frame at 1440.
+- The conversation had **287px of 852**, a third of the screen, behind 565px of chrome.
+- The landing navigation was a wrapping flex row with `space-between`, producing ragged half-rows.
+
+### UX flow on a phone
+
+1. Member lands on the page. Navigation is one tap target per row, no menu control.
+2. Tapping the launcher opens the assistant as the **full page**, not a panel.
+3. The header carries the title, then voice, language and help; the way back sits above it.
+4. The conversation is the largest region. "Talk to a person" is above the composer, always.
+5. In voice mode the microphone is centred and full size, with its instruction beneath.
+
+### Frontend entities
+
+- `web/src/viewport.ts` - `PHONE_MAX` and `useIsPhone()`. The hook builds its query from the constant, so the CSS breakpoint and the layout switch cannot disagree.
+- `askPlaceholderShort` in `strings.ts` - the full placeholder wraps to two lines in a 48px field and clips.
+
+### Tech specs
+
+- **Layout switch:** JavaScript `matchMedia` against a shared constant. Rejected: a CSS-only panel resize, which leaves an expand control with nothing to expand to and no home for the rail; and a phone-specific component, which would drift.
+- **Rail:** controls move to the header by passing no rail id, reusing the branch the panel already had. Rejected: a bottom sheet, because hiding primary navigation is a documented failure for a 65+ audience, and "Talk to a person" must never be behind a tap.
+- **Verification:** Playwright, pinned at 1.63.0, devDependency. Rejected: reasoning from the stylesheet, which is what produced a product nobody had looked at on a phone.
+
+### Verification
+
+`npm run shoot` renders the landing page, the assistant and voice mode at four viewports, asserts no horizontal overflow, and writes a PNG per surface. The loop was: render, look, measure, fix, render again.
+
+Measured before and after at 393x852:
+
+| Band | Before | After |
+| --- | --- | --- |
+| Disclaimer | 66px | 44px |
+| Back bar | 61px | 49px |
+| Header | 196px | 158px |
+| **Conversation** | **287px** | **401px** |
+| Foot | 242px | 201px |
+
+Content width against its frame, after the fix: 1440 fits in 576, 1280 in 512, 1024 in 410, 393 in 393.
+
+---
+
+## Feature: Caching (P3 Stage 6)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-53 to FR-P3-61, NFR-P3-15, NFR-P3-16. **Decision:** D-100.
+
+### What was already there
+
+The audio cache existed and shipped, keyed on provider, voice and text, written to `data/audio`. Query embeddings were not cached: `embed([question])` ran on every turn. Answer caching did not exist and was listed as deferred in three documents.
+
+### UX flow
+
+None. A member sees the same answer sooner. That is the whole feature, and the property that makes it safe: emptying every cache changes no answer.
+
+### Backend entities
+
+- `src/cache.ts` - `answerKey`, `normaliseQuestion`, `readAnswer`, `writeAnswer`, `embeddingKey`, `readEmbedding`, `writeEmbedding`, `audioKey`, `readAudio`, `writeAudio`.
+- The lookup sits in `answerTurn` after the guardrail and login gates and before any provider call.
+
+### DB schema
+
+`answer_cache` (key, snapshot_id, contract_id, plan_id, plan_year, language, question, turn jsonb, hits, last_hit_at), `embedding_cache` (key, model, embedding vector(1536), hits, last_hit_at), `audio_cache` (key, provider, voice, audio bytea, bytes, hits, last_hit_at). No table carries a `member_id`, so none needs a policy.
+
+### Tech specs
+
+- **Matching:** exact normalised question inside its scope. Rejected: similarity above a threshold, which `docs/ideas.md` itself says returns a wrong copay, and which costs an embedding call per turn to check.
+- **Store:** Postgres. Rejected: in-process, which dies with a Cloud Run instance; and the container filesystem, which the audio cache used and which had both problems.
+- **Scope:** authenticated turns excluded entirely. Rejected: keying per member, which puts record-derived text in a store `docs/real-phi.md` would then have to account for.
+- **Failure:** every read and write is best-effort. A cache that cannot be reached is a slower product, not a broken one.
+
+### Verification
+
+Pure-function tests over the keys, including the collision the design exists to avoid: the in-network and out-of-network forms of the same question key differently, as do the same question under another plan, language or snapshot. Static assertions that the member gate wraps both the read and the write and sits after the guardrails.
+
+---
+
+## Feature: Feedback that goes somewhere (P3 Stage 7)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-63 to FR-P3-69, NFR-P3-17. **Decision:** D-102.
+
+### What was already there
+
+The yes/no control recorded a rating against the turn, and `npm run insights` printed the split. That had been true since v1.0.0. What it could not tell anyone was **which answer** failed or **why**: the turn holds the question, not the answer, and a bare count of no's does not say what to change.
+
+### UI
+
+```text
+Did this answer your question?   [ 👍 Yes ]  [ 👎 No ]              [copy]
+
+  ... after No:
+
+  What was wrong with it?
+  [ It is not about my plan ] [ Not what I asked ]
+  [ Hard to understand ]      [ I think this is covered ]
+
+  ... after a reason:
+  Thank you. That helps us fix it.
+```
+
+### UX flow
+
+1. Member taps No. The no is recorded immediately, before anything else is asked.
+2. Four reasons appear under the answer. No text box.
+3. Tapping one records it and replaces the row with a thank-you.
+4. Nothing appears if they say Yes, and nothing is asked twice.
+
+### Frontend entities
+
+- `REASONS` in `Assistant.tsx`, pairing each wire value with its copy key so the two cannot drift.
+- `Turn.feedbackReason` and `StoredTurn.feedbackReason`, so a restored conversation does not ask again.
+
+### Backend entities
+
+- `FEEDBACK_REASONS` and `FeedbackReason` in `src/rag/store.ts`.
+- `recordFeedback(client, turnId, resolved, reason)`.
+- `TurnRecord.answer`, written only when the turn carried no member id.
+
+### DB schema
+
+`turns` gains `answer text`, `feedback_reason text` under a four-value check constraint, and `feedback_at timestamptz`, plus a partial index on rated rows. `feedback_report` is a view over rated turns that **excludes `session_id`**.
+
+### Tech specs
+
+- **Reason capture:** four fixed values, constrained in the database. Rejected: free text, the one surface that could put a condition into the store; and nothing, which leaves a number with no cause.
+- **Answer storage:** public turns only. Rejected: all turns, which rebuilds a store of record data without a policy; and none, because `reproduce` re-runs the model and returns a different answer from the one that was disliked.
+- **Anonymity:** a view without the session id, and the word "pseudonymous" in the documentation. Rejected: nulling the id, which breaks the loop breaker; and hashing it, which reads more anonymous than it is.
+- **Use:** golden-set candidates in `npm run insights`. Rejected: building toward fine-tuning, which has no pipeline here and would be scaffolding for an imagined need.
+
+### Verification
+
+Static assertions over the constraint, the endpoint filter, the absence of any text input in the markup, and the report reading the view rather than the table. Live verification that the view has no `session_id` column, that a free-text reason is rejected by the database, and that a turn with no answer text still records its rating.
+
+---
+
+## Feature: A transcript the member can keep (P3 Stage 8)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-70 to FR-P3-77, NFR-P3-18. **Decision:** D-103.
+
+### What was already there
+
+A **Print** chip calling `window.print()`, over a print stylesheet that drops the chrome, releases the scrolling regions and keeps every citation. That is FR-P2-20 and it has shipped since v1.1.0. The browser dialog's "Save as PDF" destination was the export path, and this audience had to find it.
+
+### Interrogation summary
+
+Four forks went to the user; all four took the recommendation.
+
+1. **How the bytes are made.** jsPDF lazily imported, over a hand-rolled writer or keeping the dialog. Chosen: jsPDF.
+2. **Print or download.** Chosen: replace the chip. Two near-identical controls in a row that is already tight at 393px is the worse outcome, and Ctrl+P still gives a clean page.
+3. **A signed-in member's answers.** Chosen: include them, with a notice on page one. The file is built on their device and never leaves it, but it sits in a downloads folder on a possibly shared computer.
+4. **What else the file carries.** Chosen: plan, document date, save date, synthetic-data notice, Member Services number, page numbers.
+
+Answered without asking, and stated: the file covers the whole saved conversation on screen; its chrome follows the conversation's language; the filename is `clovbot-conversation-YYYY-MM-DD.pdf`; the wordmark is type, not an embedded image.
+
+### UI
+
+```text
+[ Talk to a person ]  [ Start over ]  [ Save as PDF ]  [ Clear saved ]
+
+  clovbot-conversation-2026-09-09.pdf
+  ------------------------------------------------------------
+  Your conversation with the Clover assistant
+  Saved: 2026-09-09
+  Plan: Clover Health Choice PPO (H5141-004)
+  Plan documents collected: 2026-09-08
+  This is not an official plan document. ... 1-555-0100 (TTY 711).
+  Every member record here is demonstration data.
+
+  This file contains information from your own member record.   <- only when true
+
+  You asked: what is my specialist copay
+  You pay $10 for each visit to an in-network specialist.
+  Where this comes from
+      [1] Summary of Benefits 2026 - Plan H5141-004 - Doctor's Office
+                                                        Page 1 of 1
+```
+
+### UX flow
+
+1. Member presses **Save as PDF**. Nothing else is asked.
+2. The renderer is fetched on this first press only.
+3. The file is built from the conversation in memory and handed to the browser.
+4. If the fetch fails, a sentence says so and the print view opens instead.
+
+### Frontend entities
+
+- `transcriptBlocks(turns, context)` in `web/src/transcript.ts`: the conversation as a flat list of typed blocks. Pure data.
+- `transcriptFilename(context)`, language-aware.
+- `renderTranscript(blocks, language)` in `web/src/pdf.ts`: the block list set in type. No DOM, so the Node test program can import it.
+- `saveTranscript()` in `Assistant.tsx`, holding the dynamic import, the blob and the anchor click.
+- `isMemberTurn` in `web/src/history.ts`, now shared with `clearMemberTurns`.
+
+### Backend entities
+
+None. Nothing is sent anywhere.
+
+### DB schema
+
+Unchanged. No migration.
+
+### Tech specs
+
+- **Framework:** jsPDF 4.2.1, MIT, dynamically imported. Rejected: a hand-rolled writer, which stops being the smaller option at the Helvetica width table; `html2canvas` rasterisation, which produces a large file of unselectable pixels; server-side rendering, which puts a member's own record back on the wire.
+- **Language:** TypeScript, strict, as everywhere else.
+- **Deployment target:** the existing static build. jsPDF is its own chunk and the initial bundle is unchanged.
+- **Data store:** none. The conversation is already in memory and in `localStorage`.
+
+### Verification
+
+The document model is asserted directly: content, order, source numbering, the prose fallback, the gaps, the plan and dates, the member notice in both languages, and the filename. Two render tests prove the bytes are a real multi-page PDF and that Spanish accents survive. Static tests assert the control no longer calls `window.print()`, that the renderer is dynamically imported, and that the print stylesheet is still there. Then the artifact itself: the built bundle served, the control pressed, the download captured, and the PDF read back in both languages.
+
+---
+
+## Feature: Comments that earn their place, and a documented corpus (P3 Stage 9)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-78 to FR-P3-83, NFR-P3-19. **Decision:** D-104.
+
+### What was already there
+
+`CLAUDE.md` §5 has said "Comments explain WHY, max 15 words, no spec or phase references" since the first commit. Roughly 2,500 comment lines had accumulated against it, 411 of them naming a requirement, a decision or a stage.
+
+### Interrogation summary
+
+Five forks went to the user.
+
+1. **Scope.** Asked whether `claude/` and `docs/` were in scope. First answer was everything; that contradicted the same request's instruction to add a stage entry to `plan-p3.md`, so it went back once with the contradiction named. Final answer: **code, SQL, CSS and config only.**
+2. **Length.** 15 words, with a two-line exemption where the code looks wrong but is right and the mistake has already been made once.
+3. **References.** **Drop both** requirement ids and decision ids. The reasoning goes into the comment or is dropped; nothing points at a document the reader may not have.
+4. **Also swept:** test files, SQL migration headers and CSS comments, all three.
+5. **Corpus documentation:** where the data came from, how it was fetched, which libraries, and how much reached the index.
+
+### UI
+
+None. No behaviour changed.
+
+### UX flow
+
+Not applicable.
+
+### Frontend and backend entities
+
+- `tests/unit/comments.test.ts`: extracts every comment from `src`, `web/src`, `tests`, `scripts`, `eval` and `migrations`, and fails on a requirement id, a decision id, a stage or phase, a build pass or a release. `--` opens a comment only in `.sql`, because in CSS it opens a custom property.
+- `docs/corpus.md`: ten sections covering scope, discovery, fetching, what was retrieved, conversion, chunking, embedding, reproduction, libraries, and what the corpus cannot answer.
+
+### DB schema
+
+Unchanged.
+
+### Tech specs
+
+- **Sweep method:** read and rewrite per file. A bulk regex was tried for the id-stripping half and produced 30 mangled sentences plus one corrupted numeric range; it was kept only as a first pass, with every changed line then reviewed in the diff.
+- **Enforcement:** a Vitest test in the existing suite. Rejected: a lint rule, which would add a dependency and a second runner for one assertion.
+- **Deployment target:** unchanged; comments do not ship.
+- **Data store:** none.
+
+### Verification
+
+The full suite is the behaviour proof: 857 tests pass, the same set as before the sweep plus the five the gate adds, and both typechecks and the web build are clean. Corpus figures were read from the snapshot manifest and the live database, which is what caught the two-snapshot chunk count.
+
+---
+
+## Feature: Security review and posture (P3 Stage 10)
+
+**Requirements:** `claude/srs-p3.md` FR-P3-84 to FR-P3-91, NFR-P3-20, NFR-P3-21. **Decision:** D-105.
+
+### What was already there
+
+More than the request assumed. Body ceilings at every entry point, rate limits per session, per IP and per address, `HttpOnly`/`SameSite=Lax` cookies, parameterised queries throughout, row-level security with `FORCE` on a `NOBYPASSRLS` role, identifier redaction before the model call as well as the log write, scrypt-hashed one-time codes, an append-only audit log enforced by grant, a secret scan in CI, four security headers, and no `dangerouslySetInnerHTML` anywhere.
+
+### Interrogation summary
+
+Four forks went to the user; three took the recommendation.
+
+1. **Scope:** document, plus the small safe fixes. Anything larger comes back first.
+2. **Zod:** centralise the existing narrowing into one module, no dependency.
+3. **Advisories:** CI blocks on critical, reports high. A gate that can never pass gets ignored.
+4. **`SECURITY.md`:** **left alone** at the user's direction, against the recommendation. Its placeholder contact and inaccurate CSRF claim remain; `docs/security.md` states the real position.
+
+### UI
+
+None. No user-visible surface changed.
+
+### UX flow
+
+Unchanged, with one invisible difference: a malformed request body now returns 400 rather than reaching a handler that would default every field.
+
+### Frontend entities
+
+None.
+
+### Backend entities
+
+- `src/validate.ts`: `LIMITS` plus one parser per endpoint (`askRequest`, `callbackRequest`, `loginRequest`, `loginVerify`, `feedbackRequest`, `speakRequest`). Returns `null` for a body that is not a JSON object; coerces every field otherwise.
+- `cookieFlags(req)` and `overHttps(req)` in `src/server.ts`: `Secure` derived from `x-forwarded-proto`.
+- `feedbackRequest` takes the allowed reasons as an argument, so the wire values keep one home and the module stays free of the database layer.
+
+### DB schema
+
+Unchanged.
+
+### Tech specs
+
+- **Validation:** one hand-written module. Rejected: Zod, which `CLAUDE.md` names but which would replace a validator that accumulates failure reasons and rejects a payload that both refuses and makes claims; and per-handler narrowing, which is what was there.
+- **CSP:** a header in `vercel.json`. Rejected: a meta tag, which cannot express `frame-ancestors`.
+- **Advisory gate:** `npm audit` in the existing CI job. Rejected: a scheduled scan, which reports after a merge rather than before; and Dependabot, which opens pull requests for advisories that have no fix.
+- **Deployment target:** unchanged.
+
+### Verification
+
+27 unit tests over the validation module: malformed bodies, wrong types, prototype-shaped objects, enumerated fields and every ceiling. Static assertions over the cookie helper, the CSP directives and the CI audit step. The CSP verified by serving the built bundle under it in Chromium and checking for violations and page errors: zero, with the panel opened. Advisory reachability checked by grepping the source for image and archive decoding: none.

@@ -1,7 +1,7 @@
 import { AutoModelForSequenceClassification, AutoTokenizer } from "@huggingface/transformers";
 import type { RetrievedChunk } from "./store.ts";
 
-/** D-037. Local, so the confidence signal has no rate limit and cannot be withdrawn. */
+/** Local, so the confidence signal has no rate limit and cannot be withdrawn. */
 export const DEFAULT_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2";
 
 export interface RerankedChunk extends RetrievedChunk {
@@ -26,7 +26,7 @@ async function load(modelId: string): Promise<Ranker> {
     });
     const { logits } = await model(inputs);
     // A cross-encoder emits one relevance logit per pair; sigmoid puts it in 0..1
-    // so a single floor can be compared across question types. D-016.
+    // so a single floor can be compared across question types.
     return [...logits.data].map((logit) => 1 / (1 + Math.exp(-Number(logit))));
   };
 }

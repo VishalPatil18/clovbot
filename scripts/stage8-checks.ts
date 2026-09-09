@@ -1,13 +1,12 @@
 /**
- * plan-p1 Stage 8 acceptance, against the live database and model. A script
- * rather than tests because it needs both; the numbers are printed, not asserted.
+ * Guardrail and escalation checks. Needs the live database and model, so not a test.
  */
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { answerTurn } from "../src/rag/answer-turn.ts";
 import {
   checkRate,
-  connect,
+  connectAdmin,
   consecutiveRefusals,
   writeCallback,
   writeTurn,
@@ -29,7 +28,7 @@ const golden = JSON.parse(readFileSync("eval/golden/golden-set.json", "utf8")) a
   cases: { id: string; bucket: string; driver: string; question: string; plan: string }[];
 };
 
-const client = connect();
+const client = connectAdmin();
 await client.connect();
 
 try {
