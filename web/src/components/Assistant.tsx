@@ -102,7 +102,7 @@ interface Turn {
   unanswered: string[];
   headline: Headline | null;
   staleness: string | null;
-  outcome: "answered" | "refused" | "upstream_failure" | "pending";
+  outcome: "answered" | "refused" | "upstream_failure" | "needs_login" | "pending";
   feedback: "yes" | "no" | null;
   /** Server id, so a feedback response can name the turn it answers. FR-27. */
   turnId: string | null;
@@ -154,6 +154,8 @@ export function Assistant({
   const [voiceReset, setVoiceReset] = useState(0);
   const [signedInAs, setSignedInAs] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
+  /** FR-P2-46. Held across the login detour and asked again on return. */
+  const [heldQuestion, setHeldQuestion] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage | null>(null);
   const [stageElapsed, setStageElapsed] = useState(0);
   const reduceMotion = useReducedMotion();
@@ -209,6 +211,10 @@ export function Assistant({
       ]);
 
       const apply = (event: AskEvent): void => {
+        if (event.type === "answer" && event.outcome === "needs_login") {
+          setHeldQuestion(trimmed);
+          setSigningIn(true);
+        }
         if (event.type === "needs_plan") {
           setPlanOptions(event.plans);
           setTurns((previous) => previous.filter((turn) => turn.id !== id));
@@ -362,6 +368,21 @@ export function Assistant({
   useEffect(() => {
     writeHistory(turns);
   }, [turns]);
+
+  /*
+   * FR-P2-46. The member never retypes: the question that triggered the login
+   * is asked again the moment they are back, and its placeholder turn is
+   * replaced rather than left above the answer.
+   */
+  const resumeAfterLogin = (name: string): void => {
+    setSignedInAs(name);
+    setSigningIn(false);
+    const pending = heldQuestion;
+    setHeldQuestion(null);
+    if (pending === null) return;
+    setTurns((previous) => previous.filter((turn) => turn.outcome !== "needs_login"));
+    void submit(pending, plan);
+  };
 
   const leave = async (): Promise<void> => {
     await signOut();
@@ -569,11 +590,11 @@ export function Assistant({
           so nothing is trapped and Escape is unnecessary. D-071. */}
         {signingIn && signedInAs === null && (
         <SignIn
-          onSignedIn={(name) => {
-            setSignedInAs(name);
+          onSignedIn={resumeAfterLogin}
+          onCancel={() => {
             setSigningIn(false);
+            setHeldQuestion(null);
           }}
-          onCancel={() => setSigningIn(false)}
         />
       )}
       {helpOpen && (
@@ -706,6 +727,22 @@ export function Assistant({
                     </motion.span>
                   </AnimatePresence>
                 </p>
+              ) : turn.outcome === "needs_login" ? (
+                <div className="turn__answer turn__answer--needs-login">
+                  <p>{turn.answer}</p>
+                  {signedInAs === null && (
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      onClick={() => {
+                        setHeldQuestion(turn.question);
+                        setSigningIn(true);
+                      }}
+                    >
+                      <IoLockClosedOutline aria-hidden="true" /> Sign in and answer this
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div
                   className={`turn__answer turn__answer--${turn.outcome}${speakingTurn === turn.id ? " turn__answer--speaking" : ""}`}

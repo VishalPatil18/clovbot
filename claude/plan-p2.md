@@ -166,18 +166,18 @@
 - **Scope in:** Classifier deciding whether a question needs member data. Plain-language explanation of why login is required. Inline login offer. Automatic answering of the original question after successful login. Member-scoped answering with per-source citation. Cite-or-refuse applied to record-sourced claims.
 - **Scope out:** Nothing deferred. This completes the authenticated tier's behaviour.
 - **Acceptance criteria:**
-  - [ ] A member-specific question from a signed-out member offers login rather than refusing or guessing.
-  - [ ] A public question is never gated behind login, asserted across the bucket A golden set.
-  - [ ] A member-specific question is never answered without a session, asserted directly.
-  - [ ] The original question is answered automatically after login, without re-typing.
-  - [ ] Record-sourced claims carry record and field citations.
-  - [ ] Combined answers cite each source separately.
-  - [ ] Classifier accuracy is measured in both directions and reported, with false negatives - answering a member question without auth - treated as the severe failure.
-  - [ ] Cross-member access is impossible at the application layer, pending P3's database enforcement.
+  - [x] A member-specific question from a signed-out member offers login rather than refusing or guessing. A fourth outcome, `needs_login`, decided before retrieval.
+  - [x] A public question is never gated behind login. 17 public cases in the login set, zero gated, and bucket A unchanged at 37/40.
+  - [x] A member-specific question is never answered without a session, asserted directly. Structural since Stage 6: the member id comes from a session row and nowhere else.
+  - [x] The original question is answered automatically after login, without re-typing.
+  - [x] Record-sourced claims carry record and field citations. `Your member record · Claim CLM-0031 · What you owe`.
+  - [x] Combined answers cite each source separately. Verified in Stage 5 and unchanged.
+  - [x] Classifier accuracy is measured in both directions and reported, never aggregated. **0 false negatives** against a zero-tolerance gate, **0 false positives** against a 95% floor.
+  - [x] Cross-member access is impossible at the application layer, pending P3's database enforcement. `scripts/member-scope-check.ts`, 0 leaks.
 - **Test plan:** Both-direction classification tests over an extended golden set, with false negatives reported separately rather than folded into an aggregate accuracy number. Session-boundary integration tests. Auto-answer-on-return test.
 - **Effort:** M
 - **Exit signal:** Asking "what is my deductible balance" while signed out offers login, and answers itself once you are in.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-09. Verified over HTTP in both directions.
 
 ---
 
@@ -208,7 +208,7 @@
 - [x] Stage 4 - Session UX cluster (follow-up chips not delivered, D-070)
 - [x] Stage 5 - Synthetic member records
 - [x] Stage 6 - Email OTP authentication (accessibility pass outstanding)
-- [ ] Stage 7 - Login detection and member answering
+- [x] Stage 7 - Login detection and member answering
 - [ ] Stage 8 - Auth-tier eval and deploy
 
 ---

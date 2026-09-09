@@ -10,7 +10,7 @@ export interface StoredTurn {
   unanswered: string[];
   headline: Headline | null;
   staleness: string | null;
-  outcome: "answered" | "refused" | "upstream_failure" | "pending";
+  outcome: "answered" | "refused" | "upstream_failure" | "needs_login" | "pending";
   feedback: "yes" | "no" | null;
   turnId: string | null;
 }

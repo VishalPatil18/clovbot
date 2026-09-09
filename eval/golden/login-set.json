@@ -1,0 +1,209 @@
+{
+  "note": "Hand-labelled login-detection cases, both directions. A false negative - a question needing member data answered without a session - is gated at zero, because it is the severe direction. False positives, public questions put behind a login wall, are reported separately and gated at 95%. NFR-P2-02.",
+  "cases": [
+    {
+      "id": "L-01",
+      "question": "what did my last claim cost",
+      "needsMemberData": true,
+      "note": "needs a claim stored against this member"
+    },
+    {
+      "id": "L-02",
+      "question": "has my claim been paid yet",
+      "needsMemberData": true,
+      "note": "needs a claim stored against this member"
+    },
+    {
+      "id": "L-03",
+      "question": "how much did I owe on my last bill",
+      "needsMemberData": true,
+      "note": "needs a claim stored against this member"
+    },
+    {
+      "id": "L-04",
+      "question": "what does my explanation of benefits say",
+      "needsMemberData": true,
+      "note": "needs a claim stored against this member"
+    },
+    {
+      "id": "L-05",
+      "question": "what is the status of my prior authorization",
+      "needsMemberData": true,
+      "note": "needs a prior auth the member filed stored against this member"
+    },
+    {
+      "id": "L-06",
+      "question": "was my prior auth approved",
+      "needsMemberData": true,
+      "note": "needs a prior auth the member filed stored against this member"
+    },
+    {
+      "id": "L-07",
+      "question": "did my authorization go through",
+      "needsMemberData": true,
+      "note": "needs a prior auth the member filed stored against this member"
+    },
+    {
+      "id": "L-08",
+      "question": "how much of my dental allowance is left",
+      "needsMemberData": true,
+      "note": "needs a accumulator stored against this member"
+    },
+    {
+      "id": "L-09",
+      "question": "how much have I spent this year",
+      "needsMemberData": true,
+      "note": "needs a accumulator stored against this member"
+    },
+    {
+      "id": "L-10",
+      "question": "what is my remaining hearing benefit",
+      "needsMemberData": true,
+      "note": "needs a accumulator stored against this member"
+    },
+    {
+      "id": "L-11",
+      "question": "what is my deductible balance",
+      "needsMemberData": true,
+      "note": "needs a accumulator stored against this member"
+    },
+    {
+      "id": "L-12",
+      "question": "what drug payment stage am I in",
+      "needsMemberData": true,
+      "note": "needs a accumulator stored against this member"
+    },
+    {
+      "id": "L-13",
+      "question": "how much of my out of pocket maximum have I used",
+      "needsMemberData": true,
+      "note": "needs a accumulator stored against this member"
+    },
+    {
+      "id": "L-14",
+      "question": "when was my last appointment",
+      "needsMemberData": true,
+      "note": "needs a appointment stored against this member"
+    },
+    {
+      "id": "L-15",
+      "question": "when did I last see a doctor",
+      "needsMemberData": true,
+      "note": "needs a appointment stored against this member"
+    },
+    {
+      "id": "L-16",
+      "question": "who is my primary care provider",
+      "needsMemberData": true,
+      "note": "needs a assigned provider stored against this member"
+    },
+    {
+      "id": "L-17",
+      "question": "who is my assigned doctor",
+      "needsMemberData": true,
+      "note": "needs a assigned provider stored against this member"
+    },
+    {
+      "id": "L-18",
+      "question": "what is my specialist copay",
+      "needsMemberData": false,
+      "note": "plan document, however possessive"
+    },
+    {
+      "id": "L-19",
+      "question": "what is my copay for a specialist visit",
+      "needsMemberData": false,
+      "note": "plan document; 'visit' is a price, not an appointment"
+    },
+    {
+      "id": "L-20",
+      "question": "what is my out of pocket maximum",
+      "needsMemberData": false,
+      "note": "the limit is public; what is left of it is not"
+    },
+    {
+      "id": "L-21",
+      "question": "what is my deductible",
+      "needsMemberData": false,
+      "note": "the amount is public; the balance is not"
+    },
+    {
+      "id": "L-22",
+      "question": "what is my monthly premium",
+      "needsMemberData": false,
+      "note": "plan document"
+    },
+    {
+      "id": "L-23",
+      "question": "is a hearing aid covered",
+      "needsMemberData": false,
+      "note": "plan document"
+    },
+    {
+      "id": "L-24",
+      "question": "what tier is my drug on",
+      "needsMemberData": false,
+      "note": "formulary"
+    },
+    {
+      "id": "L-25",
+      "question": "is my medication covered",
+      "needsMemberData": false,
+      "note": "formulary"
+    },
+    {
+      "id": "L-26",
+      "question": "does my plan cover dental",
+      "needsMemberData": false,
+      "note": "plan document"
+    },
+    {
+      "id": "L-27",
+      "question": "how do I file an appeal",
+      "needsMemberData": false,
+      "note": "process"
+    },
+    {
+      "id": "L-28",
+      "question": "how do I file a claim",
+      "needsMemberData": false,
+      "note": "process, not a claim of theirs"
+    },
+    {
+      "id": "L-29",
+      "question": "what is prior authorization",
+      "needsMemberData": false,
+      "note": "the rule, not their request"
+    },
+    {
+      "id": "L-30",
+      "question": "does an MRI need prior authorization",
+      "needsMemberData": false,
+      "note": "the rule, not their request"
+    },
+    {
+      "id": "L-31",
+      "question": "which services need prior authorization",
+      "needsMemberData": false,
+      "note": "the rule, not their request"
+    },
+    {
+      "id": "L-32",
+      "question": "how do I find a doctor in my network",
+      "needsMemberData": false,
+      "note": "process"
+    },
+    {
+      "id": "L-33",
+      "question": "how do I change my primary care provider",
+      "needsMemberData": false,
+      "note": "process, not who theirs is"
+    },
+    {
+      "id": "L-34",
+      "question": "which pharmacies near me are in network",
+      "needsMemberData": false,
+      "note": "bucket A the corpus does not cover; refuses, never gates"
+    }
+  ]
+}

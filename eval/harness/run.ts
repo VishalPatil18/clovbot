@@ -3,6 +3,7 @@ import { latestSnapshotId } from "../../src/corpus/snapshot.ts";
 import { answerTurn } from "../../src/rag/answer-turn.ts";
 import { connect, loadDrugIndex } from "../../src/rag/store.ts";
 import { chooseRoute, type RoutePath } from "../../src/rag/router.ts";
+import { needsMemberData } from "../../src/auth/login-required.ts";
 import { judgeFaithfulness } from "../judges/faithfulness.ts";
 import { buildReport, type Bucket, type CaseOutcome } from "./score.ts";
 import type { PlanRef } from "../../src/types.ts";
@@ -11,6 +12,8 @@ import type { PlanRef } from "../../src/types.ts";
 const TOP_K = 5;
 /** NFR-P2-03. Aggregate floor; the structured direction is zero-tolerance. */
 const ROUTING_FLOOR = 0.9;
+/** NFR-P2-02. False positives are gated; false negatives are not tolerated. */
+const LOGIN_FALSE_POSITIVE_FLOOR = 0.95;
 
 interface GoldenCase {
   id: string;
@@ -56,12 +59,13 @@ try {
 }
 
 const routing = await scoreRouting();
+const login = scoreLogin();
 
 const report = buildReport(outcomes);
 print(report, outcomes);
 persist(report, outcomes);
 
-if (report.failures.length > 0 || routing.failed) process.exit(1);
+if (report.failures.length > 0 || routing.failed || login.failed) process.exit(1);
 
 async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
   const turn = await answerTurn(client, testCase.question, {
@@ -125,6 +129,48 @@ function evaluate(
   if (accepted.length === 0) return true;
   const haystack = actual.answer.toLowerCase();
   return accepted.some((value) => haystack.includes(value.toLowerCase()));
+}
+
+interface LoginCase {
+  id: string;
+  question: string;
+  needsMemberData: boolean;
+  note: string;
+}
+
+function scoreLogin(): { failed: boolean } {
+  const cases = (
+    JSON.parse(readFileSync("eval/golden/login-set.json", "utf8")) as { cases: LoginCase[] }
+  ).cases;
+
+  const falseNegatives: string[] = [];
+  const falsePositives: string[] = [];
+  for (const testCase of cases) {
+    const gated = needsMemberData(testCase.question) !== null;
+    if (testCase.needsMemberData && !gated) falseNegatives.push(testCase.id);
+    if (!testCase.needsMemberData && gated) falsePositives.push(testCase.id);
+  }
+
+  const publicCases = cases.filter((c) => !c.needsMemberData).length;
+  const positiveAccuracy =
+    publicCases === 0 ? 1 : (publicCases - falsePositives.length) / publicCases;
+  // Never one aggregate: the two directions cost different things.
+  const failed = falseNegatives.length > 0 || positiveAccuracy < LOGIN_FALSE_POSITIVE_FLOOR;
+
+  console.log("\n=== Login detection report ===");
+  console.log(`  cases               ${String(cases.length)}`);
+  console.log(`  member questions answered without identity  ${String(falseNegatives.length)} [zero tolerance]`);
+  console.log(`  public questions gated  ${String(falsePositives.length)} of ${String(publicCases)}` +
+    ` (accuracy ${positiveAccuracy.toFixed(3)}, floor ${String(LOGIN_FALSE_POSITIVE_FLOOR)})`);
+  if (falseNegatives.length > 0) console.log(`  false negatives: ${falseNegatives.join(", ")}`);
+  if (falsePositives.length > 0) console.log(`  false positives: ${falsePositives.join(", ")}`);
+
+  writeFileSync(
+    "eval/results/login-latest.json",
+    `${JSON.stringify({ snapshotId, cases: cases.length, falseNegatives, falsePositives, positiveAccuracy, failed }, null, 2)}\n`,
+    "utf8",
+  );
+  return { failed };
 }
 
 interface RoutingCase {

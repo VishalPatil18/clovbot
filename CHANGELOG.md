@@ -28,6 +28,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - While an answer is being prepared, the assistant says what it is doing at each step rather than showing one unchanging line.
 - The question box now grows to four lines as you type and holds a much longer question.
 - You can play an answer aloud and scroll back through the written version at the same time.
+- Ask something only your own record can answer while signed out, and the assistant now says so plainly and offers to sign you in, rather than refusing or guessing. Sign in and it answers the question you already asked, without you retyping it. Questions the plan documents can answer are never put behind a sign-in.
 - You can sign in without a password. Enter your email, get a six-digit code, and type or paste it in - all inside the assistant, so the conversation you were having is still there afterwards. The code works once and lasts ten minutes.
 - While signed in, the assistant says who you are signed in as, and one tap signs you out. Signing out removes anything about your own record from the conversation saved on that device, and leaves the general answers.
 - The assistant can answer questions about a member's own record at a terminal: what a claim cost, where a prior authorisation stands, how much of an allowance is left, and who the assigned provider is. Answers cite the record and the exact field, and a question that spans both gets the record and the plan documents in one reply, each with its own source. Every record is invented demonstration data.

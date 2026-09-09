@@ -231,3 +231,15 @@ _<How this concept will apply to future work in this project.>_
 **Personal data belongs in the environment even when the person offering it is the one asking.** Five real addresses would have been committed to a public case-study repository. They live in `.env`, the seed keeps unreachable fallbacks, and a fresh checkout works with nobody able to sign in - which is the right default.
 
 **Twice is a pattern, not noise.** A-21's faithfulness has now dropped to zero in two of four runs, on the same added clause. Once was variance worth recording; twice is a known answer-quality issue, and re-running until it passes would be selecting the result.
+
+## P2 Stage 7 - what login detection taught
+
+**Build the enforcement before the detection, and the detection stops being dangerous.** Stage 6 made member data reachable only through a session row. By the time the classifier arrived, being wrong could cost a worse answer but never a disclosure. A guess is safe exactly when something else is guaranteeing the property.
+
+**A possessive is not a signal; adjacency is.** "My copay for a specialist visit" and "my last visit" both contain "my" and "visit". Matching anywhere in the sentence gated a price question as an appointment. The rule has to say which noun the possessive is attached to.
+
+**The distinguishing clause is often the second half.** "What is my out-of-pocket maximum" is public. "How much of my out-of-pocket maximum have I used" is not. The subject is identical and the decision lives entirely in "have I used".
+
+**Never average two errors that cost different things.** Answering a member's question without knowing who they are, and putting a public question behind a login wall, are both classifier errors and nothing else about them is alike. One is gated at zero and the other at 95%, reported separately, because a single accuracy figure would let the severe one hide behind the harmless one.
+
+**Read your own learnings file before repeating what is in it.** A const declared below its top-level call site threw after all sixty eval cases had run. The identical fault, in the identical file, is written up two stages earlier. The notes only pay off if they are consulted before the code, not after the failure.

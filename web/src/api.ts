@@ -31,7 +31,7 @@ export type AskEvent =
       answer: string;
       /** The answer without citation markers or the source list. Read aloud. */
       spokenAnswer?: string;
-      outcome: "answered" | "refused" | "upstream_failure";
+      outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
       claims: Claim[];
       unanswered: string[];
       refusal: { trigger: string; explanation: string } | null;

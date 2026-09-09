@@ -978,3 +978,11 @@
 .signin__error { color: var(--color-forest-ink); font-weight: var(--font-weight-semibold); }
 
 .meta-chip--signed { background: var(--color-mint-veil); border-color: var(--color-sage-mist); }
+
+/* FR-P2-43. An invitation, not a dead end: it says why and offers the way in. */
+.turn__answer--needs-login {
+  background: var(--color-keylime-wash); border: 1px solid var(--color-mint-veil);
+  border-radius: var(--radius-md); padding: var(--spacing-16);
+  display: grid; gap: var(--spacing-12); justify-items: start;
+}
+.turn__answer--needs-login p { margin: 0; font-size: var(--text-message); line-height: var(--leading-message); }

@@ -103,7 +103,7 @@ export interface TurnLog {
   rerankTopScore: number;
   confidenceFloor: number;
   corpusSnapshotId: string;
-  outcome: "answered" | "refused" | "upstream_failure";
+  outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
   refusalTrigger: RefusalTrigger | "below_floor" | null;
 }
 

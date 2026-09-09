@@ -510,3 +510,23 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** the keyboard and screen-reader pass over the login flow, which needs P3's browser tooling and is the highest-friction surface in the product. Row-level security is P3-01; until then the query is the only boundary. Arrival in the inbox is unconfirmed - Resend accepted the send, which is not the same as delivery.
 
 **Next:** Stage 7, login detection and member answering.
+
+## 2026-09-09 - P2 Stage 7: login detection and member answering
+
+**Did:** A signed-out member asking something that needs their record is offered a login instead of a refusal or a guess, and the question answers itself once they are in. Deterministic rules decide; the query layer still enforces.
+
+**Files:** created `src/auth/login-required.ts`, `eval/golden/login-set.json`, two test files. Changed `src/rag/answer-turn.ts`, `eval/harness/run.ts`, the outcome union at six sites, `web/src/components/Assistant.tsx`, `web/src/app.css`.
+
+**Verified over HTTP:** signed out, a claim question returns `needs_login` with a plain explanation; a copay question answers normally; signed in, the same claim question answers from the record with the field cited. Gates: 0 false negatives against zero tolerance, 0 false positives against a 95% floor, 34 cases. Router 1.000, bucket A 37/40, faithfulness 1.000. 663 tests pass.
+
+**What building it surfaced:**
+
+- **Half the stage was already done.** Stage 6 made the member id reachable only from a session row, so the classifier decides what to offer, never what is permitted. A miss falls through to the documents; it cannot disclose.
+- **Possessives need adjacency, not proximity.** "my copay for a specialist visit" was gated as an appointment question, and "the status of my prior authorization" was let through because a general-phrasing exception swallowed it. Requiring the possessive to sit on the noun fixes both.
+- **A limit is public; what is left of it is not.** "What is my out-of-pocket maximum" and "how much of it have I used" differ only in the second clause, and that clause is the whole decision.
+- **The two directions are never one number.** Answering a member question without identity and gating a public one behind a login cost different things, so they are gated separately and reported separately.
+- **I repeated a recorded mistake.** A const declared below its top-level call site threw after all 60 eval cases ran - the same TDZ fault as `ROUTING_FLOOR` in Stage 2, already written into `learnings.md`.
+
+**Open:** the keyboard and screen-reader pass over the login flow, still needing P3's browser tooling. Row-level security is P3-01.
+
+**Next:** Stage 8, auth-tier eval and deploy - the last stage of P2.

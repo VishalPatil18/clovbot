@@ -1,5 +1,6 @@
 import { findContainmentViolations, validateAnswerPayload } from "../answer.ts";
 import { checkGuardrails } from "../guardrails.ts";
+import { needsMemberData } from "../auth/login-required.ts";
 import { detectLanguage } from "../language.ts";
 import { applyConfidenceGate } from "../retrieval.ts";
 import { redactIdentifiers } from "../logging.ts";
@@ -27,7 +28,7 @@ export interface TurnResult {
   citedIds: string[];
   rerankTopScore: number;
   confidenceFloor: number;
-  outcome: "answered" | "refused" | "upstream_failure";
+  outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
   refusalTrigger: string | null;
   provider: string;
   latencyMs: Record<string, number>;
@@ -129,6 +130,24 @@ export async function answerTurn(
       rerankTopScore: Number.NEGATIVE_INFINITY,
       outcome: "refused",
       refusalTrigger: guard.trigger,
+      latencyMs: { total: Date.now() - started },
+    };
+  }
+
+  /*
+   * FR-P2-43. Decided before retrieval, like a guardrail, so a question that
+   * needs identity never reaches the model and cannot leak a partial answer on
+   * its way to asking for a login. Never a refusal, and never a guess.
+   */
+  const identityNeeded = needsMemberData(question);
+  if (identityNeeded !== null && options.memberId === undefined) {
+    return {
+      ...base,
+      answer: identityNeeded.explanation,
+      rerankTopScore: Number.NEGATIVE_INFINITY,
+      outcome: "needs_login",
+      refusalTrigger: null,
+      route: { paths: [], drugs: [], reason: `needs ${identityNeeded.topic} from the record` },
       latencyMs: { total: Date.now() - started },
     };
   }

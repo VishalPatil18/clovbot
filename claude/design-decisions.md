@@ -3188,6 +3188,52 @@ FR-P2-40 planned for one member seeded with an operator-controlled address. The 
 
 ---
 
+## Decision D-087 - Login detection is deterministic rules, and needs_login is its own outcome
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 7 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-42` defines member-specific as "answering requires a value stored against that member". `NFR-P2-02` gates a false negative at zero and false positives at 95%. A turn was answered, refused, or an upstream failure.
+
+### Options considered
+
+For the decision: deterministic rules; a separate model call before retrieval; rules with a model fallback.
+For the outcome: a fourth kind; a refusal carrying a login flag; an answered turn with a prompt to sign in.
+
+### Decision
+
+Deterministic rules, in the shape D-043 used for bucket C and D-061 used for the router. A fourth outcome, `needs_login`, decided before retrieval.
+
+### Rationale
+
+A zero-tolerance gate cannot rest on something probabilistic, and every decision has to be explainable by pointing at the rule that fired.
+
+The outcome is its own kind because a refusal it is not: `FR-P2-43` requires the assistant to offer a way forward rather than decline. Folding it into refusals would also inflate the refusal rate, which is a gated metric, with turns that are not refusals.
+
+Deciding it before retrieval means such a question never reaches the model, so it cannot leak a partial answer on its way to asking for a login - the same reasoning D-043 gives for bucket C.
+
+### The rules needed adjacency, not proximity
+
+Two bugs surfaced in the first draft, both from matching a possessive anywhere in the sentence:
+
+- "what is my copay for a specialist **visit**" was gated as an appointment question. A price is not a visit.
+- "what is the status of **my prior authorization**" was let through, because the general-phrasing exception matched "what is ... prior authorization".
+
+Both are fixed by requiring the possessive to sit directly on the noun. "my prior auth" is theirs; "does my plan need prior authorization" is the rule in general.
+
+### Consequences
+
+- A phrasing nobody anticipated falls through to the documents rather than to a login prompt, which is the safe direction: the query layer already refuses member data without a session, so a miss cannot disclose anything.
+- The rules are a maintenance surface. `eval/golden/login-set.json` carries 34 hand-labelled cases in both directions, scored inside `npm run eval` and gated separately per direction.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

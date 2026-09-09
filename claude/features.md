@@ -1378,3 +1378,51 @@ OTP core, session rules, schema, delivery, store, routes, the structural guard, 
 **Eval: bucket A 37/40, router 1.000 with zero structured misses, four known failures, no new ones.** Faithfulness read 0.9722 because A-21 scored 0 again - the model adds "before the drug will be covered", which is not literally in the cited chunk. A-21 still passes its own assertion, this stage's diff does not touch `src/rag/`, and the same case behaved the same way in Stage 5. Recorded as a known answer-quality issue rather than chased.
 
 **Not done: the keyboard and screen-reader pass over the login flow.** It needs the browser tooling D-040 deferred to P3. `plan-p2.md` calls this the highest-friction surface in the product for a 65+ audience, so it is the most costly place for that gap to sit.
+
+---
+
+## Feature: Login detection and member answering (P2 Stage 7)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-09                       |
+| Cycle            | 18                               |
+| Stage of plan.md | `plan-p2.md` Stage 7             |
+| Requirements     | `srs-p2.md` FR-P2-42 to FR-P2-48 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How the decision is made | Deterministic rules, like the guardrails and the router (D-087) |
+| 2 | What a gated turn is | A fourth outcome, `needs_login` (D-087) |
+| 3 | Signed in but the record has no such field | Refuse and offer a person, as cite-or-refuse requires |
+| 4 | Where the cases live and how the gate is expressed | Its own file, scored in `npm run eval` beside the router |
+
+### Phase 2 - Architecting
+
+D-087. Half of this stage was already built: Stage 6 made the member id reachable only from a session row, so the classifier decides what to **offer**, never what is **permitted**. A miss cannot disclose anything.
+
+### Phase 3 and 4 - Specs
+
+`src/auth/login-required.ts` holds one rule per record topic with an `unless` for the phrasing that looks the same but is answerable from documents. `eval/golden/login-set.json` holds 34 hand-labelled cases. The outcome union gains a fourth value at six sites. No new dependency, no prompt change, no migration - `turns.outcome` has no check constraint.
+
+### Phase 5 - Planning
+
+Classifier, outcome, turn wiring, web offer and resume, eval set and gate, verification.
+
+### Phase 6 - Writing Code
+
+**Verified over HTTP:**
+
+| | Outcome |
+| --- | --- |
+| Signed out, "what did my last claim cost" | `needs_login` - "That answer is in your own record, so I need to know who you are first." |
+| Signed out, "what is my specialist copay" | `answered` - $10, from the plan documents |
+| Signed in, "what did my last claim cost" | `answered`, cited `Your member record · Claim CLM-0031 · What you owe` |
+
+**Gates: 0 false negatives against zero tolerance, 0 false positives against a 95% floor**, over 34 cases split 17 and 17. Reported separately, never aggregated, because the two directions cost different things. Router 1.000, bucket A 37/40, faithfulness 1.000, four known failures.
+
+**The rules needed adjacency, not proximity.** Two bugs in the first draft, both from matching a possessive anywhere in the sentence: "what is my copay for a specialist **visit**" was gated as an appointment, and "what is the status of **my prior authorization**" was let through because the general-phrasing exception swallowed it. Requiring the possessive to sit directly on the noun fixes both, and both are now cases in the set.
+
+**A mistake I had already made once and repeated.** `LOGIN_FALSE_POSITIVE_FLOOR` was declared below the top-level call that reads it, so the eval ran all 60 cases and then threw - exactly the `ROUTING_FLOOR` fault from Stage 2, which is recorded in `learnings.md`. Reading my own learnings file would have been faster than rediscovering it.

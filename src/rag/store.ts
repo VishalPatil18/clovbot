@@ -259,7 +259,7 @@ export interface TurnRecord {
   planContext: string;
   chunkIds: string[];
   corpusSnapshotId: string;
-  outcome: "answered" | "refused" | "upstream_failure";
+  outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
   provider: string;
   latencyMs: Record<string, number>;
   sessionId?: string;
