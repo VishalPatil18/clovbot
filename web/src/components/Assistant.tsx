@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import {
   ask,
   fetchPlans,
+  fetchSession,
+  signOut,
   sendFeedback,
   type AskEvent,
   type CallbackDraft,
@@ -23,6 +25,7 @@ import {
   IoCopy,
   IoExpand,
   IoHelpCircleOutline,
+  IoLockClosedOutline,
   IoMic,
   IoMicOff,
   IoPrint,
@@ -47,7 +50,8 @@ import {
   type Spoken,
   type VoiceMode,
 } from "../voice.ts";
-import { clearHistory, readHistory, writeHistory } from "../history.ts";
+import { clearHistory, clearMemberTurns, readHistory, writeHistory } from "../history.ts";
+import { SignIn } from "./SignIn.tsx";
 import { answerAsText } from "../copy.ts";
 import { STEP_MS, progressMessage, type Stage } from "../progress.ts";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -148,6 +152,8 @@ export function Assistant({
   const [copied, setCopied] = useState<number | null>(null);
   const [corpusDate, setCorpusDate] = useState<string | null>(null);
   const [voiceReset, setVoiceReset] = useState(0);
+  const [signedInAs, setSignedInAs] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
   const [stage, setStage] = useState<Stage | null>(null);
   const [stageElapsed, setStageElapsed] = useState(0);
   const reduceMotion = useReducedMotion();
@@ -338,6 +344,11 @@ export function Assistant({
 
   // Plans and the corpus date, so the plan control and the freshness line exist
   // before any plan-scoped question is asked. FR-P2-16.
+  // FR-P2-37. Asked once on load so the indicator is right before anything else.
+  useEffect(() => {
+    void fetchSession().then((state) => setSignedInAs(state.signedInAs));
+  }, []);
+
   useEffect(() => {
     void fetchPlans().then((response) => {
       if (response === null) return;
@@ -351,6 +362,12 @@ export function Assistant({
   useEffect(() => {
     writeHistory(turns);
   }, [turns]);
+
+  const leave = async (): Promise<void> => {
+    await signOut();
+    setSignedInAs(null);
+    setTurns(clearMemberTurns());
+  };
 
   const resetVoice = (): void => {
     spoken?.stop();
@@ -534,14 +551,32 @@ export function Assistant({
               </>
             )}
           </span>
-          <span className="meta-chip meta-chip--quiet">Not signed in</span>
+          {signedInAs === null ? (
+            <span className="meta-chip meta-chip--quiet">Not signed in</span>
+          ) : (
+            <span className="meta-chip meta-chip--signed">
+              Signed in as {signedInAs}{" "}
+              <button type="button" className="assistant__plan-change" onClick={() => void leave()}>
+                Sign out
+              </button>
+            </span>
+          )}
         </div>
       </header>
 
       <div className="assistant__scroll">
         {/* FR-P2-23. An expandable region, not a dialog: tab passes through and out,
           so nothing is trapped and Escape is unnecessary. D-071. */}
-        {helpOpen && (
+        {signingIn && signedInAs === null && (
+        <SignIn
+          onSignedIn={(name) => {
+            setSignedInAs(name);
+            setSigningIn(false);
+          }}
+          onCancel={() => setSigningIn(false)}
+        />
+      )}
+      {helpOpen && (
           <section
             id="assistant-help"
             className="help"

@@ -150,3 +150,51 @@ export async function ask(
     }
   }
 }
+
+export interface SessionState {
+  signedInAs: string | null;
+}
+
+/** FR-P2-37. Asked on load so the indicator is right in every state. */
+export async function fetchSession(): Promise<SessionState> {
+  try {
+    const response = await fetch("/api/session");
+    if (!response.ok) return { signedInAs: null };
+    return (await response.json()) as SessionState;
+  } catch {
+    return { signedInAs: null };
+  }
+}
+
+/** The reply is the same whether or not the address is enrolled. */
+export async function requestLoginCode(email: string): Promise<{ ok: boolean; error?: string }> {
+  const response = await fetch("/api/login/request", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (response.ok) return { ok: true };
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  return { ok: false, error: body.error ?? "Could not send a code. Try again in a moment." };
+}
+
+export async function verifyLoginCode(
+  email: string,
+  code: string,
+): Promise<{ ok: boolean; signedInAs?: string; error?: string }> {
+  const response = await fetch("/api/login/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    signedInAs?: string;
+    error?: string;
+  };
+  if (response.ok) return { ok: true, ...(body.signedInAs === undefined ? {} : { signedInAs: body.signedInAs }) };
+  return { ok: false, error: body.error ?? "That did not work. Ask for a new code." };
+}
+
+export async function signOut(): Promise<void> {
+  await fetch("/api/logout", { method: "POST" }).catch(() => undefined);
+}

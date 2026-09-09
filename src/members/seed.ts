@@ -45,6 +45,11 @@ export interface SeedMember {
 /**
  * Five invented members. D-047: no real member data at any version.
  *
+ * Addresses are the one thing not written here. OPERATOR_MEMBER_EMAILS carries
+ * five real ones in member-id order so a code can be received and the login
+ * demonstrated; CLAUDE.md forbids personal data in the repo, so the fallbacks
+ * below are unreachable and the variable lives only in .env.
+ *
  * Every provider name reuses the DEMO DATA roster from src/corpus/synthetic.ts,
  * so no real practice is named anywhere in this file.
  *
@@ -288,6 +293,18 @@ export const SEED_MEMBERS: SeedMember[] = [
     ],
   },
 ];
+
+/**
+ * The address a code is sent to, from the environment when set. Unset means the
+ * @example.invalid fallback stands and nothing can be delivered.
+ */
+export function memberEmail(member: SeedMember): string {
+  const configured = (process.env["OPERATOR_MEMBER_EMAILS"] ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return configured[member.id - 1] ?? member.email;
+}
 
 /** Every stage the derivation can produce, so the demo covers all three. */
 export const seededStages = (stageOf: (member: SeedMember) => PartDStage): Set<PartDStage> =>

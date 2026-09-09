@@ -4,7 +4,7 @@ import { answerTurn } from "../rag/answer-turn.ts";
 import { citationLabel } from "../rag/payload.ts";
 import { connect, writeTurn } from "../rag/store.ts";
 import { latestSnapshotId } from "../corpus/snapshot.ts";
-import { SEED_MEMBERS } from "./seed.ts";
+import { SEED_MEMBERS, memberEmail } from "./seed.ts";
 import { loadMemberRecord } from "./store.ts";
 
 const flags = new Map<string, string>();
@@ -44,7 +44,7 @@ async function seed(): Promise<void> {
            drug_deductible = excluded.drug_deductible,
            out_of_pocket_limit = excluded.out_of_pocket_limit`,
         [
-          member.id, member.displayName, member.email, member.contractId, member.planId,
+          member.id, member.displayName, memberEmail(member), member.contractId, member.planId,
           member.planYear, member.effectiveDate, member.assignedProvider,
           member.assignedSpecialty, member.drugDeductible, member.outOfPocketLimit,
         ],

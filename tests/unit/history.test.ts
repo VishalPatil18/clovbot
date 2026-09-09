@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { HISTORY_KEY, MAX_TURNS, clearHistory, readHistory, writeHistory } from "../../web/src/history.ts";
+import { HISTORY_KEY, MAX_TURNS, clearHistory, clearMemberTurns, readHistory, writeHistory } from "../../web/src/history.ts";
 
 interface FakeStore {
   store: Map<string, string>;
@@ -107,5 +107,56 @@ describe("conversation history [FR-P2-18, FR-P2-19]", () => {
       JSON.stringify([{ ...turn(1), citations: undefined }, turn(2)]),
     );
     expect(readHistory().map((t) => t.question)).toEqual(["question 2"]);
+  });
+});
+
+describe("signing out on a shared device [FR-P2-39]", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  const cited = (id: number, label: string) => ({
+    ...turn(id),
+    citations: [{ id: "c1", number: 1, label, documentId: "d" }],
+  });
+
+  it("removes turns sourced from the member's record", () => {
+    const storage = fakeStorage();
+    install(storage);
+    writeHistory([
+      cited(1, "Summary of Benefits 2026 · Plan H5141-004 · Doctor's Office"),
+      cited(2, "Your member record · Claim CLM-0031 · What you owe"),
+    ]);
+    const kept = clearMemberTurns();
+    expect(kept.map((t) => t.id)).toEqual([1]);
+    expect(JSON.stringify(readHistory())).not.toContain("Your member record");
+  });
+
+  // A member keeps their own public questions; only their record data goes.
+  it("leaves answers from public documents in place", () => {
+    install(fakeStorage());
+    writeHistory([cited(1, "Evidence of Coverage 2026 · Plan H5141-004 · Appeals")]);
+    expect(clearMemberTurns()).toHaveLength(1);
+  });
+
+  it("removes a turn that cites both kinds, because it carries record data", () => {
+    install(fakeStorage());
+    writeHistory([
+      {
+        ...turn(1),
+        citations: [
+          { id: "c1", number: 1, label: "Summary of Benefits 2026 · Dental", documentId: "d" },
+          { id: "c2", number: 2, label: "Your member record · Accumulators · Dental allowance left", documentId: "d" },
+        ],
+      },
+    ]);
+    expect(clearMemberTurns()).toEqual([]);
+  });
+
+  it("does nothing harmful when storage is unavailable", () => {
+    install({
+      getItem: () => { throw new Error("SecurityError"); },
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    });
+    expect(() => clearMemberTurns()).not.toThrow();
   });
 });

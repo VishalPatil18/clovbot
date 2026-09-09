@@ -3090,6 +3090,104 @@ A malformed record fails the build rather than the insert, and the synthetic lab
 
 ---
 
+## Decision D-084 - A separate member cookie, minted fresh on every sign-in
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+An anonymous `clovbot_sid` cookie already exists, carrying rate limiting and the loop breaker. Signing in has to bind a member to a session somehow.
+
+### Options considered
+
+1. Keep the anonymous cookie as it is; mint a separate id, bound to the member row, on sign-in.
+2. Reuse the same cookie and attach a member to it.
+3. A second cookie that mirrors the first's lifetime.
+
+### Decision
+
+Option 1. `clovbot_member` is a distinct `HttpOnly; SameSite=Lax` cookie, generated fresh at sign-in and again discarded at sign-out.
+
+### Rationale
+
+Option 2 is session fixation: the id that existed before sign-in keeps working after it, so anyone who already knew that value inherits the authenticated session. Rotating on login is the standard defence and costs one `randomUUID`.
+
+Keeping them separate also keeps the anonymous session's 24-hour rate-limit window from setting the authenticated session's lifetime, which FR-P2-35 caps at eight hours.
+
+### Consequences
+
+- Two cookies, and sign-out must clear the member one and end its row.
+- A session row is the authority; the cookie is only a pointer, and a value that is not a UUID shape is refused before any query runs.
+
+---
+
+## Decision D-085 - Codes are stored as scrypt hashes, and an unknown address is answered identically
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+A six-digit code is a live credential with a million possibilities and a ten-minute life. Two questions follow: what the database holds, and what the endpoint reveals.
+
+### Decision
+
+Only a scrypt hash and a per-row salt are stored; the code exists in memory and in one email. The request endpoint returns the same body whether or not the address belongs to a member.
+
+### Rationale
+
+A plaintext column, or a fast hash, falls to an offline sweep of a million candidates the moment the table leaks. scrypt is deliberately slow, and at most five verifications per code makes that cost invisible.
+
+Replying "no such address" would turn the endpoint into a membership oracle: anyone could enumerate which addresses are enrolled. The same reply either way costs nothing and removes that.
+
+Expiry, single use and lockout are all decided **before** the code is compared, so a dead code cannot be probed for correctness after its window closes.
+
+### Consequences
+
+- A member who mistypes their address gets "a code is on its way" and no code. The copy says "if that address is on file" so the message is not a lie.
+- Claiming a code marks it spent in the same statement that reads it, so two requests racing the same code cannot both succeed.
+
+---
+
+## Decision D-086 - Real addresses live in the environment, never in the repository
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 6 |
+| Status | accepted |
+| Supersedes | extends FR-P2-40 |
+
+### Context
+
+FR-P2-40 planned for one member seeded with an operator-controlled address. The user supplied five, one per member, so any member can be demoed live.
+
+`members.email` is unique and a code has to identify exactly one member, so five members cannot share one address.
+
+### Decision
+
+`OPERATOR_MEMBER_EMAILS` holds five addresses in member-id order, in `.env` only. The seed module keeps unreachable `@example.invalid` fallbacks, so the repository contains no personal data and the build works without the variable.
+
+### Rationale
+
+`CLAUDE.md` forbids personal data in specs, prompts and memory files, and requires an environment variable instead. Five real addresses in `src/members/seed.ts` would have been committed, and a case-study repository is the wrong place for anyone's inbox.
+
+### Consequences
+
+- A checkout without the variable seeds five members nobody can sign in as, which is the correct default for a public repository.
+- The sending domain is `v-ai.org`, verified with Resend. Delivery was confirmed: the provider accepted a real send and returned success.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

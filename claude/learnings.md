@@ -215,3 +215,19 @@ _<How this concept will apply to future work in this project.>_
 **A test can be wrong in a way only variance reveals.** One golden case matched a single phrasing of a question that has three correct answers. It passed for two stages, then failed twice on answers that were faithful and cited. The fix was not more accepted strings but asserting the property the case actually existed to prove - that the HMO quotes no out-of-network price.
 
 **Measure your harness's noise before you trust a single run.** Two cases moved between runs at temperature 0 with no code change. Without that number, the first failing run reads as a regression and sends you hunting a bug you did not write.
+
+## P2 Stage 6 - what building a login taught
+
+**A helpful error message can be an oracle.** Telling someone "that address is not registered" is the friendlier reply and it lets anyone enumerate who is enrolled. The same answer either way costs nothing, and the copy - "if that address is on file" - keeps it from being a lie.
+
+**Check the fatal conditions before the interesting one.** Expiry, single use and lockout are all decided before the submitted code is compared. Reversed, a dead code could still be probed for correctness after its window closed, one attempt at a time.
+
+**Reusing a session id across a privilege change is the bug, not the shortcut.** The anonymous cookie already existed and attaching a member to it was one line. It would also have meant anyone who knew the pre-login id inherited the signed-in session. Rotating costs a `randomUUID`.
+
+**Build the structural half of a guarantee before the clever half.** Stage 7 adds a classifier that decides which questions need a login. Stage 6 made the member id reachable only from a session row, so the classifier can be wrong without disclosing anything. The safety property no longer depends on the accuracy of anything.
+
+**A schema constraint can catch a requirements answer.** "Point all five members at my address" collided with a unique index, and behind the index sat the real problem: a code arriving at one inbox cannot say which of five members is signing in. The database refused something the requirements had not thought through.
+
+**Personal data belongs in the environment even when the person offering it is the one asking.** Five real addresses would have been committed to a public case-study repository. They live in `.env`, the seed keeps unreachable fallbacks, and a fresh checkout works with nobody able to sign in - which is the right default.
+
+**Twice is a pattern, not noise.** A-21's faithfulness has now dropped to zero in two of four runs, on the same added clause. Once was variance worth recording; twice is a known answer-quality issue, and re-running until it passes would be selecting the result.

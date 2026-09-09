@@ -938,3 +938,43 @@
   padding-left: var(--spacing-12);
   border-left: 3px solid var(--color-sage-mist);
 }
+
+/* Stage 6: signing in, inside the panel. */
+
+.signin {
+  background: var(--color-keylime-wash); border: 1px solid var(--color-mint-veil);
+  border-radius: var(--radius-md); padding: var(--spacing-16);
+  display: grid; gap: var(--spacing-8);
+}
+
+.signin__title {
+  margin: 0; display: flex; align-items: center; gap: var(--spacing-8);
+  font-size: var(--text-subheading); font-family: var(--font-display);
+  color: var(--color-forest-ink);
+}
+
+.signin__body { margin: 0; font-size: var(--text-body); }
+.signin__form { display: grid; gap: var(--spacing-8); }
+.signin__label { font-size: var(--text-body); font-weight: var(--font-weight-semibold); }
+
+.signin__input {
+  /* 16px floor: below it iOS zooms the page when the field takes focus. */
+  font: inherit; font-size: var(--text-input); line-height: 24px;
+  min-height: var(--target-min); padding: 11px var(--spacing-12);
+  background: var(--color-cream-paper); color: var(--color-charcoal);
+  border: 1px solid var(--color-forest-ink); border-radius: var(--radius-md);
+}
+
+.signin__input:focus-visible {
+  outline-offset: -2px;
+  box-shadow: 0 0 0 4px rgb(15 62 23 / 12%);
+}
+
+/* Spaced digits are easier to read back from an email. */
+.signin__input--code { letter-spacing: 0.35em; font-variant-numeric: tabular-nums; }
+
+.signin__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
+.signin__notice, .signin__error { margin: 0; font-size: var(--text-body); line-height: 1.45; }
+.signin__error { color: var(--color-forest-ink); font-weight: var(--font-weight-semibold); }
+
+.meta-chip--signed { background: var(--color-mint-veil); border-color: var(--color-sage-mist); }

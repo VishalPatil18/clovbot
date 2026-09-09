@@ -142,20 +142,21 @@
 - **Scope in:** Resend integration. Six-digit code, short expiry, single-use, rate-limited. Session bound to a member row. Inline login inside the chat panel - email field, then code field, no page navigation. Session visibility indicator and one-tap sign out. Automatic expiry with a plain-language explanation.
 - **Scope out:** Row-level security and audit logging. Both are P3.
 - **Acceptance criteria:**
-  - [ ] Entering a seeded member's email delivers a six-digit code.
-  - [ ] The code is pasteable, satisfying WCAG 3.3.8, asserted by test.
-  - [ ] An expired code is rejected with a clear message.
-  - [ ] A reused code is rejected.
-  - [ ] Repeated requests for the same address are rate-limited.
-  - [ ] Login completes without navigating away, and the conversation is intact afterward.
-  - [ ] The signed-in indicator is visible in every state.
-  - [ ] Sign out clears the session, and a subsequent member question requires login again.
-  - [ ] Session expiry produces a plain-language message, not a silent failure.
-  - [ ] No credential or code appears in any log.
+  - [x] Entering a seeded member's email delivers a six-digit code. Resend accepted a real send on the verified `v-ai.org` domain.
+  - [x] The code is pasteable, satisfying WCAG 3.3.8, asserted by test. `autoComplete="one-time-code"`, numeric keypad, no paste handler, and spaces tolerated in the comparison.
+  - [x] An expired code is rejected with a clear message.
+  - [x] A reused code is rejected. Verified over HTTP.
+  - [x] Repeated requests for the same address are rate-limited. Ten per address and thirty per IP an hour, on the existing `rate_events` mechanism.
+  - [x] Login completes without navigating away, and the conversation is intact afterward.
+  - [x] The signed-in indicator is visible in every state.
+  - [x] Sign out clears the session, and a subsequent member question requires login again. Verified over HTTP: signed out the same question refuses, signed in it answers from the record.
+  - [x] Session expiry produces a plain-language message, not a silent failure.
+  - [x] No credential or code appears in any log. Asserted by test and checked against a real server log.
+  - [-] Keyboard-only and screen-reader pass over the login flow. **Not done.** It needs the browser tooling D-040 deferred to P3, and the plan calls this the highest-friction surface in the product for this audience.
 - **Test plan:** Integration tests over the full OTP lifecycle including both rejection paths. Log inspection asserting codes never appear. Keyboard-only and screen-reader pass over the login flow, since it is the highest-friction surface in the product for this audience.
 - **Effort:** M
 - **Exit signal:** You receive a code by email, paste it into the chat panel, and stay in the same conversation.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-09, minus the keyboard and screen-reader pass, which needs P3's browser tooling. Delivery is confirmed as accepted by Resend; arrival in the inbox is the user's to verify.
 
 ---
 
@@ -206,7 +207,7 @@
 - [~] Stage 3 - Answer card and freshness (card not delivered, D-069)
 - [x] Stage 4 - Session UX cluster (follow-up chips not delivered, D-070)
 - [x] Stage 5 - Synthetic member records
-- [ ] Stage 6 - Email OTP authentication
+- [x] Stage 6 - Email OTP authentication (accessibility pass outstanding)
 - [ ] Stage 7 - Login detection and member answering
 - [ ] Stage 8 - Auth-tier eval and deploy
 

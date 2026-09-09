@@ -489,3 +489,24 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 **Open:** H8010-002's Part D deductible. Member scoping is enforced in the query only; row-level security is P3-01 and until it exists a code-path bug is not caught by the database.
 
 **Next:** Stage 6, email OTP authentication.
+
+## 2026-09-09 - P2 Stage 6: email OTP authentication
+
+**Did:** A member can sign in with a six-digit code inside the panel, stay in the same conversation, see who they are signed in as, and sign out in one tap. Member data is reachable only through a live session.
+
+**Files:** created `migrations/009_member_login.sql`, `src/auth/{otp,session,mail,store}.ts`, `web/src/components/SignIn.tsx`, six test files. Changed `src/server.ts`, `src/members/{seed,cli}.ts`, `web/src/{api,history,app.css}`, `web/src/components/Assistant.tsx`, `.env.example`.
+
+**Verified over HTTP:** identical replies for known and unknown addresses; wrong, reused and expired codes each rejected with plain language; sign-in, session, sign-out; and the guard both ways - signed out the claim question refuses, signed in it answers from the record with the field cited. Resend accepted a real send on the verified `v-ai.org` domain. No six-digit sequence appears anywhere in a real server log. 649 tests pass, router 1.000, bucket A 37/40.
+
+**What building it surfaced:**
+
+- **Five members cannot share one address.** `members.email` is unique, and more to the point a code sent to one inbox cannot say which member is signing in. Five distinct addresses, in the environment only.
+- **Reusing the anonymous cookie would have been session fixation.** The id that existed before sign-in would keep working after it. A fresh id per sign-in costs one `randomUUID`.
+- **An honest error message can be a membership oracle.** "No such address" would let anyone enumerate who is enrolled. The same reply either way, and copy that says "if that address is on file", so nothing said is untrue.
+- **Order matters in verification.** Expiry, single use and lockout are decided before the code is compared, so a dead code cannot be probed for correctness after its window.
+- **Stage 7's safety half was cheaper to build now.** The member id comes from a session row and nowhere else, so the classifier Stage 7 adds cannot disclose anything by being wrong.
+- **A-21 flipped again.** Second time in four runs: the model adds "before the drug will be covered", which the cited chunk does not say. It still passes its own assertion. Now recorded as a known answer-quality issue rather than re-run.
+
+**Open:** the keyboard and screen-reader pass over the login flow, which needs P3's browser tooling and is the highest-friction surface in the product. Row-level security is P3-01; until then the query is the only boundary. Arrival in the inbox is unconfirmed - Resend accepted the send, which is not the same as delivery.
+
+**Next:** Stage 7, login detection and member answering.

@@ -74,6 +74,18 @@ export function writeHistory(turns: StoredTurn[]): void {
   }
 }
 
+/**
+ * FR-P2-39. Signing out on a shared device removes anything sourced from the
+ * member's own record; answers from public documents are theirs to keep.
+ */
+export function clearMemberTurns(): StoredTurn[] {
+  const kept = readHistory().filter(
+    (turn) => !turn.citations.some((citation) => citation.label.startsWith("Your member record")),
+  );
+  writeHistory(kept);
+  return kept;
+}
+
 /** Removes the key itself, so clearing is verifiable by inspecting storage. */
 export function clearHistory(): void {
   try {

@@ -15,6 +15,15 @@ import {
 } from "./corpus/scope.ts";
 import type { PlanRef } from "./types.ts";
 import { stalenessWarning } from "./freshness.ts";
+import { sendLoginCode } from "./auth/mail.ts";
+import {
+  currentSession,
+  endSession,
+  issueCode,
+  memberByEmail,
+  redeemCode,
+  startSession,
+} from "./auth/store.ts";
 import {
   checkRate,
   connect,
@@ -67,6 +76,8 @@ const IP_LIMIT = 60;
 const IP_WINDOW = "1 hour";
 
 const SESSION_COOKIE = "clovbot_sid";
+/* Separate from the anonymous session, and rotated on every sign-in. D-084. */
+const MEMBER_COOKIE = "clovbot_member";
 
 /** Opaque and server-issued. Carries no member identity. NFR-SEC-01. */
 function sessionId(req: IncomingMessage, res: ServerResponse): string {
@@ -91,6 +102,129 @@ const send = (res: ServerResponse, event: unknown): void => {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 };
 
+const memberCookie = (req: IncomingMessage): string | null =>
+  new RegExp(`${MEMBER_COOKIE}=([0-9a-f-]{36})`).exec(req.headers.cookie ?? "")?.[1] ?? null;
+
+const setMemberCookie = (res: ServerResponse, value: string, maxAge: number): void => {
+  res.setHeader(
+    "set-cookie",
+    `${MEMBER_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${String(maxAge)}`,
+  );
+};
+
+const json = (res: ServerResponse, status: number, body: unknown): void => {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify(body));
+};
+
+/**
+ * FR-P2-32. Ten codes an hour per address and thirty per address family, counted
+ * in the same Postgres mechanism the question limits already use.
+ */
+const CODE_LIMIT_PER_EMAIL = 10;
+const CODE_LIMIT_PER_IP = 30;
+
+/** FR-P2-35. The cookie outlives neither cap. */
+const MEMBER_COOKIE_MAX_AGE = 8 * 60 * 60;
+
+/**
+ * The same reply whether or not the address is enrolled, so the endpoint cannot
+ * be used to discover which of the five exist.
+ */
+const CODE_SENT = { sent: true } as const;
+
+async function handleLoginRequest(body: string, res: ServerResponse, ip: string): Promise<void> {
+  let email = "";
+  try {
+    const parsed = JSON.parse(body) as { email?: unknown };
+    email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 254) : "";
+  } catch {
+    json(res, 400, { error: "malformed request" });
+    return;
+  }
+  if (email.length === 0) {
+    json(res, 400, { error: "email is required" });
+    return;
+  }
+
+  const client = connect();
+  await client.connect();
+  try {
+    const byEmail = await checkRate(client, `otp:${email.toLowerCase()}`, CODE_LIMIT_PER_EMAIL, "1 hour");
+    const byIp = await checkRate(client, `otp-ip:${ip}`, CODE_LIMIT_PER_IP, "1 hour");
+    if (!byEmail.allowed || !byIp.allowed) {
+      json(res, 429, {
+        error: "Too many codes requested. Wait an hour, or call Member Services.",
+      });
+      return;
+    }
+
+    const member = await memberByEmail(client, email);
+    if (member !== null) {
+      const code = await issueCode(client, member);
+      const delivery = await sendLoginCode(member.email, code);
+      // Never the code, and never whether the address matched anyone.
+      console.log(`login code requested: delivery ${delivery.detail}`);
+    }
+    json(res, 200, CODE_SENT);
+  } finally {
+    await client.end();
+  }
+}
+
+async function handleLoginVerify(body: string, res: ServerResponse): Promise<void> {
+  let email = "";
+  let code = "";
+  try {
+    const parsed = JSON.parse(body) as { email?: unknown; code?: unknown };
+    email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 254) : "";
+    code = typeof parsed.code === "string" ? parsed.code.slice(0, 32) : "";
+  } catch {
+    json(res, 400, { error: "malformed request" });
+    return;
+  }
+
+  const client = connect();
+  await client.connect();
+  try {
+    const { result, memberId } = await redeemCode(client, email, code, new Date());
+    if (result.kind !== "ok" || memberId === null) {
+      json(res, 401, { error: SIGN_IN_MESSAGE[result.kind] });
+      return;
+    }
+    const sessionId = await startSession(client, memberId);
+    setMemberCookie(res, sessionId, MEMBER_COOKIE_MAX_AGE);
+    const session = await currentSession(client, sessionId, new Date());
+    json(res, 200, { signedInAs: session?.displayName ?? null });
+  } finally {
+    await client.end();
+  }
+}
+
+/** FR-P2-36. Plain language, and never a raw error. */
+const SIGN_IN_MESSAGE: Record<string, string> = {
+  wrong: "That code did not match. Check it and try again, or ask for a new one.",
+  expired: "That code has expired. Ask for a new one and it will arrive in a moment.",
+  used: "That code has already been used. Ask for a new one to sign in again.",
+  locked: "Too many tries with that code. Ask for a new one to start again.",
+  ok: "",
+};
+
+async function handleLogout(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const existing = memberCookie(req);
+  if (existing !== null) {
+    const client = connect();
+    await client.connect();
+    try {
+      await endSession(client, existing);
+    } finally {
+      await client.end();
+    }
+  }
+  setMemberCookie(res, "", 0);
+  json(res, 200, { signedOut: true });
+}
+
 const server = createServer((req, res) => {
   if (req.method === "GET" && req.url === "/api/plans") {
     res.writeHead(200, { "content-type": "application/json" });
@@ -108,6 +242,35 @@ const server = createServer((req, res) => {
     return;
   }
 
+  if (req.method === "GET" && req.url === "/api/session") {
+    void (async (): Promise<void> => {
+      const client = connect();
+      await client.connect();
+      try {
+        const session = await currentSession(client, memberCookie(req), new Date());
+        json(res, 200, { signedInAs: session?.displayName ?? null });
+      } finally {
+        await client.end();
+      }
+    })();
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/login/request") {
+    collect(req, (body) => void handleLoginRequest(body, res, clientIp(req)));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/login/verify") {
+    collect(req, (body) => void handleLoginVerify(body, res));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/logout") {
+    void handleLogout(req, res);
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/api/transcribe") {
     collectBinary(req, (audio, mime) => void handleTranscribe(audio, mime, res));
     return;
@@ -122,6 +285,7 @@ const server = createServer((req, res) => {
   const route = req.url;
   const session = sessionId(req, res);
   const ip = clientIp(req);
+  const memberToken = memberCookie(req);
 
   let body = "";
   req.on("data", (chunk: Buffer) => {
@@ -134,7 +298,7 @@ const server = createServer((req, res) => {
       void handleCallback(body, res, session);
       return;
     }
-    void handleAsk(body, res, session, ip);
+    void handleAsk(body, res, session, ip, memberToken);
   });
 });
 
@@ -351,6 +515,8 @@ async function handleAsk(
   res: ServerResponse,
   session: string,
   ip: string,
+  /** The member cookie as sent. Resolved to a session row, never trusted as an id. */
+  memberToken: string | null,
 ): Promise<void> {
   let question = "";
   let planId: string | null = null;
@@ -416,11 +582,21 @@ async function handleAsk(
       }
     }
 
+    /*
+     * FR-P2-45's structural half. The member id comes from a live session row
+     * and from nowhere else, so no classifier - Stage 7's or any later one -
+     * can cause member data to be retrieved for someone without a session.
+     */
+    const member = await currentSession(client, memberToken, new Date());
+
     const turn = await answerTurn(
       client,
       question,
       planRef ?? firstIndexedPlan(),
-      { onToken: () => send(res, { type: "progress" }) },
+      {
+        onToken: () => send(res, { type: "progress" }),
+        ...(member === null ? {} : { memberId: member.memberId }),
+      },
     );
 
     // FR-P2-17. Computed once so the written, spoken and printed copies agree.

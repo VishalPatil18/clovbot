@@ -1326,3 +1326,55 @@ Derived stage, schema, seed, queries and projection, router path, commands, veri
 **One golden case was mis-specified and is now fixed.** PAIR-05a asked what an out-of-network specialist costs on the HMO and matched a phrasing. Across three runs the model gave three *different, all correct, all cited* answers: the network rule, the authorised exception, and the unavailable-specialist exception. The case now asserts the **absence of an out-of-network price**, which is the structural difference the pair exists to show, rather than one wording of it.
 
 **Eval noise, now quantified rather than assumed.** At temperature 0, two borderline cases moved between runs with no code change: PAIR-05a above, and A-21, where the judge scored 0 for a clause the model added - "before the drug will be covered" - that is not literally in the cited chunk. A-21 still passed its own assertion. This is the first time run-to-run variance has been measured, and it means a single failing run is not by itself proof of a regression.
+
+---
+
+## Feature: Email OTP authentication (P2 Stage 6)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-09                       |
+| Cycle            | 17                               |
+| Stage of plan.md | `plan-p2.md` Stage 6             |
+| Requirements     | `srs-p2.md` FR-P2-30 to FR-P2-41 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Is there a Resend key and a verified domain | Key added mid-cycle; `v-ai.org` verified; delivery confirmed |
+| 2 | Where Stage 6 ends and Stage 7 begins | Stage 6 builds the structural guard, Stage 7 adds the classifier |
+| 3 | Which member gets a real address | All five, one address each |
+| 4 | How a session is bound | A separate cookie, minted fresh on sign-in (D-084) |
+| 5 | How five members share one person's inbox | Five distinct addresses in the environment (D-086) |
+| 6 | What the code arrives from | `Clovbot <clovbot@v-ai.org>` - not the Clover name, per FR-30 |
+
+**One answer contradicted the schema and was resolved rather than forced.** "All five point at your address" collided with `members.email` being unique, and more importantly a code sent to one address cannot say which of five members is signing in. Five distinct addresses solve both.
+
+### Phase 2 - Architecting
+
+D-084 through D-086. The security-shaped decisions were taken as defaults rather than put to the user, and are recorded with their reasoning: scrypt over a fast hash, rotation over reuse, an identical reply for an unknown address, and expiry checked before correctness.
+
+### Phase 3 and 4 - Specs
+
+`migrations/009_member_login.sql` adds `login_codes` and `member_sessions`. `src/auth/` holds the OTP rules, the session lifetime rules, Resend delivery and the store - the first two pure and tested without a database or a network. Rate limiting reuses `rate_events` and `checkRate` unchanged. **No new dependency:** Resend is called over `fetch`.
+
+### Phase 5 - Planning
+
+OTP core, session rules, schema, delivery, store, routes, the structural guard, the web surface, verification.
+
+### Phase 6 - Writing Code
+
+**Verified over HTTP, not just in tests:**
+
+- A known and an unknown address return **byte-identical replies**, so the endpoint cannot be used to discover who is enrolled.
+- A wrong code, a reused code and a successful sign-in each return the right plain-language outcome.
+- `/api/session` reports the signed-in member; sign-out ends the row and the next call reports nobody.
+- **The guard holds both ways.** Signed out, "what did my last claim cost" refuses. Signed in, the same question answers **"$210, the plan paid $200, and you owed $10"**, cited `Your member record · Claim CLM-0031 · What you owe`. The turn log records `rag` and `rag+member` respectively.
+- A real server log contains **no six-digit sequence** anywhere.
+
+**The member id reaches the answer path from a session row and from nowhere else.** That is FR-P2-45's structural half, built now rather than in Stage 7, so the classifier Stage 7 adds cannot cause a disclosure by being wrong.
+
+**Eval: bucket A 37/40, router 1.000 with zero structured misses, four known failures, no new ones.** Faithfulness read 0.9722 because A-21 scored 0 again - the model adds "before the drug will be covered", which is not literally in the cited chunk. A-21 still passes its own assertion, this stage's diff does not touch `src/rag/`, and the same case behaved the same way in Stage 5. Recorded as a known answer-quality issue rather than chased.
+
+**Not done: the keyboard and screen-reader pass over the login flow.** It needs the browser tooling D-040 deferred to P3. `plan-p2.md` calls this the highest-friction surface in the product for a 65+ audience, so it is the most costly place for that gap to sit.
