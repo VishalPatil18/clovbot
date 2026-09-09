@@ -467,3 +467,25 @@ The research briefing's recommended shape (RAG over public plan documents, escal
 - **A-24 opens with two near-duplicate claims.** Grouping makes that more visible. Left alone: suppressing one would make the application the editor of which cited claims a member sees.
 
 **Next:** P2 Stage 5, synthetic member records.
+
+## 2026-09-09 - P2 Stage 5: synthetic member records
+
+**Did:** Five synthetic members, member-scoped queries, a third router path, and a terminal command that answers from a member's own record with the field cited.
+
+**Files:** created `migrations/008_member_records.sql`, `src/members/{stage,seed,store,cli}.ts`, `scripts/member-scope-check.ts`, four test files. Changed `src/types.ts`, `src/rag/{payload,store,router,answer-turn}.ts`, `package.json`, `eval/golden/golden-set.json`.
+
+**Verified:** a claim answer, a prior-authorisation answer, and a combined answer citing the record plus four plan documents. 5 records checked for cross-member leakage, 0 leaks, check shown capable of failing. Eval faithfulness 1.000, bucket A 37/40, router 1.000. 596 tests pass.
+
+**What building it surfaced:**
+
+- **No prompt change was needed.** The Stage 2 projection already existed: a typed row becomes a citable source and travels the whole path unchanged. A member fact is the same move, so cite-or-refuse binds record claims for free and D-069's cost is not paid again.
+- **Part D thresholds differ by plan.** H5141-004 deducts $150, H5141-007 deducts $220. One system-wide constant would have put a 007 member in the wrong stage between those figures, so thresholds are stored per member.
+- **The corpus does not state H8010-002's Part D deductible.** No seeded member is on that plan. Inventing a plausible number would have been undetectable and wrong.
+- **The type system refused the wrong abstraction.** Extending the corpus `DocumentKind` broke `BYTE_FLOORS` - correctly, because a member record has no byte floor. Only the citation layer widened.
+- **`Promise.all` over one `pg` client is deprecated.** Four overlapping reads per member; sequential now.
+- **A golden case can be wrong in a way that only variance reveals.** PAIR-05a matched one phrasing of an out-of-network answer. Three runs produced three different correct answers. It now asserts the absence of an out-of-network price, which is the structural difference it was written to prove.
+- **The eval has measurable run-to-run noise at temperature 0.** Two borderline cases moved with no code change. A single failing run is not proof of a regression, and this is the first time that has been quantified rather than assumed.
+
+**Open:** H8010-002's Part D deductible. Member scoping is enforced in the query only; row-level security is P3-01 and until it exists a code-path bug is not caught by the database.
+
+**Next:** Stage 6, email OTP authentication.

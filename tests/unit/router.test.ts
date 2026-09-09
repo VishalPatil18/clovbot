@@ -69,3 +69,34 @@ describe("chooseRoute [FR-P2-09, D-061]", () => {
     expect(route("what is eliquisation").paths).toEqual(["rag"]);
   });
 });
+
+describe("member path [FR-P2-29, D-080]", () => {
+  const withMember = (question: string) => chooseRoute(question, index, true);
+
+  it("adds the member path when the caller knows who is asking", () => {
+    expect(withMember("what did my last claim cost").paths).toContain("member");
+  });
+
+  // FR-P2-29: a combined question keeps both halves rather than choosing.
+  it("keeps the record and the documents together on a combined question", () => {
+    const decision = withMember("what is my dental allowance and how much have I used");
+    expect(decision.paths).toContain("member");
+    expect(decision.paths).toContain("rag");
+  });
+
+  it("keeps all three when a drug, a rule and a member are all in play", () => {
+    const decision = withMember("is eliquis covered and how do I appeal a denial");
+    expect(decision.paths).toEqual(expect.arrayContaining(["structured", "rag", "member"]));
+  });
+
+  // Without a member the behaviour is exactly what Stage 2 measured.
+  it("never adds the member path when nobody is identified", () => {
+    for (const question of ["what did my last claim cost", "how do I file an appeal", "what tier is atorvastatin on"]) {
+      expect(chooseRoute(question, index).paths, question).not.toContain("member");
+    }
+  });
+
+  it("says a member was identified in its reason", () => {
+    expect(withMember("how do I file an appeal").reason).toMatch(/member identified/);
+  });
+});

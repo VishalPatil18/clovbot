@@ -1,4 +1,4 @@
-import type { AnswerPayload } from "../types.ts";
+import type { AnswerPayload, CitableKind } from "../types.ts";
 import type { DocumentKind } from "../corpus/types.ts";
 import type { Prompt } from "./prompt.ts";
 
@@ -12,7 +12,7 @@ export const MEMBER_SERVICES = "1-555-0100 (TTY 711), a placeholder for this cas
 export interface CitableChunk {
   id: string;
   documentId: string;
-  kind: DocumentKind;
+  kind: CitableKind;
   contractId: string;
   planId: string;
   planYear: number;
@@ -20,7 +20,7 @@ export interface CitableChunk {
   content: string;
 }
 
-const KIND_LABEL: Record<DocumentKind, string> = {
+const KIND_LABEL: Record<CitableKind, string> = {
   evidence_of_coverage: "Evidence of Coverage",
   summary_of_benefits: "Summary of Benefits",
   annual_notice_of_change: "Annual Notice of Change",
@@ -28,6 +28,7 @@ const KIND_LABEL: Record<DocumentKind, string> = {
   provider_directory: "Provider Directory (demo data)",
   pharmacy_directory: "Pharmacy Directory",
   corporate: "Clover Health public information",
+  member_record: "Your member record",
 };
 
 /** Heading paths can be wrapped body sentences, so a section is trimmed for display. */
@@ -52,6 +53,11 @@ export function citationLabel(chunk: CitableChunk): string {
   }
   const section = shortSection(chunk.section);
   const tail = section.length > 0 ? ` · ${section}` : "";
+  // "Your member record · Claim CLM-0031 · What you owe". Same three-part shape
+  // as a document citation, so both kinds scan as one list. D-082.
+  if (chunk.kind === "member_record") {
+    return `${KIND_LABEL.member_record} · ${chunk.documentId}${tail}`;
+  }
   // A document covering every contract has no plan to name, and "Plan *" is not
   // a source a member can look up.
   if (chunk.contractId === "*") {

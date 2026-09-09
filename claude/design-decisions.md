@@ -2956,6 +2956,140 @@ Option 4 was a real candidate at 8% of answers affected, and was rejected becaus
 
 ---
 
+## Decision D-080 - Member records are citable sources on a third router path
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 5 |
+| Status | accepted |
+| Supersedes | extends D-062 |
+
+### Context
+
+`FR-P2-29` requires one answer to cite a plan document and a member record separately, each attributed to its own source. Stage 2 solved the same shape for drug rows: a typed row is projected into the retrieved-chunk shape and travels the existing prompt, citation, validation and cite-or-refuse path unchanged.
+
+### Options considered
+
+1. The same projection, with the router gaining a third path alongside structured and RAG.
+2. A separate answering path for member questions.
+3. A new claim kind in the payload, distinguished by the model.
+
+### Decision
+
+Option 1. A record field becomes a citable source exactly as a drug row does, and `RoutePath` gains `member`.
+
+### Rationale
+
+Paths stay additive per D-062, so a combined question keeps both halves by construction rather than by a stitch that has to be got right. Option 2 would need the two paths joined by hand, which is the half-dropping D-062 exists to prevent.
+
+Option 3 needs a system-prompt change, and D-069 measured that cost exactly: faithfulness 1.000 to 0.989 and a required refusal flipping into an answer. Nothing here touches the prompt; the model simply sees more sources.
+
+### Consequences
+
+- Cite-or-refuse binds record claims with no new code, satisfying `FR-P2-28` by construction.
+- The router's confusion matrix grows a third class, and Stage 8 reports it.
+- Member scoping is enforced in the query, not in the prompt. A prompt cannot be relied on to keep one member's data from another.
+
+---
+
+## Decision D-081 - The Part D stage is derived from spend, against per-plan thresholds read from the corpus
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 5 |
+| Status | accepted |
+| Supersedes | closes an `srs-p2.md` open question |
+
+### Context
+
+`srs-p2.md` left open whether the Part D coverage stage is seeded flat or worked out from spend.
+
+### Options considered
+
+1. Derive it from year-to-date drug spend.
+2. Seed it as a flat field.
+3. Seed it flat with a test asserting it agrees with the spend.
+
+### Decision
+
+Option 1. The stage is a function of spend against that member's own plan thresholds.
+
+### Rationale
+
+A record that says "catastrophic" beside a spend that says otherwise is exactly the kind of internal contradiction this product cannot afford, and option 2 permits it silently. Option 3 catches it but still maintains the same fact in two places.
+
+### Thresholds, read from the corpus rather than recalled
+
+| Plan | Yearly drug deductible | Out-of-pocket limit |
+| --- | --- | --- |
+| H5141-004 | $150 on tiers 3, 4 and 5 | $2,100 |
+| H5141-007 | $220 on tiers 3, 4 and 5 | $2,100 |
+
+### Consequences
+
+- Thresholds differ by plan, so they are stored per member rather than as one constant.
+- **No seeded member is on H8010-002.** Its Part D deductible is not stated in the converted Evidence of Coverage, and `CLAUDE.md` rule 6 forbids inventing it. Recorded as an open question rather than filled with a plausible number.
+
+---
+
+## Decision D-082 - A record citation names the record, the item and the field
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 5 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-28` requires a record-sourced claim to cite the record and the field, not a document. A document citation reads `Summary of Benefits 2026 · Plan H5141-004 · Doctor's Office`.
+
+### Decision
+
+`Your member record · Claim CLM-0031 · What you owe`.
+
+### Rationale
+
+The same three-part shape as a document citation - what it is, which one, which field - so both kinds scan as one list when a combined answer carries both. Naming the field is what `FR-P2-28` asks for; a date-led alternative reads more naturally but only half satisfies it.
+
+### Consequences
+
+- `citationLabel` grows a record branch beside the contract-wildcard branch D-056 added.
+- Field names are member-facing, so they are written as a member would say them: "What you owe", not `member_owes`.
+
+---
+
+## Decision D-083 - Members are seeded from a typed module, not from a migration
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 5 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Five synthetic members with enrolment, accumulators, claims, prior authorisations, appointments and an assigned provider each.
+
+### Decision
+
+A migration creates the tables; a typed TypeScript module holds the records and a command applies them.
+
+### Rationale
+
+A malformed record fails the build rather than the insert, and the synthetic labelling is checkable by test rather than by reading SQL. Data inside a migration is awkward to change: re-seeding would mean editing applied history or writing a second migration.
+
+### Consequences
+
+- One more command, `npm run seed:members`.
+- Re-seeding is idempotent and safe to repeat, which is what makes the demo reproducible.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

@@ -1141,16 +1141,15 @@
       "enforced": true,
       "expect": {
         "outcome": "answered",
-        "sourceDocument": "summary_of_benefits",
-        "sourceSection": "Doctor’s Office",
-        "keyFact": [
-          "network provider",
-          "must use network",
-          "not covered"
+        "sourceDocument": "evidence_of_coverage",
+        "sourceSection": "",
+        "mustNotContain": [
+          "$20",
+          "out-of-network: $"
         ],
         "mustCite": true
       },
-      "note": "Structural pair, not numeric. The HMO has no out-of-network column at all and answers with the network rule; the PPO answers with an amount."
+      "note": "Structural half of the pair. The PPO quotes an out-of-network amount; the HMO has no out-of-network column and answers with the network rule, the authorised exception, or the unavailable-specialist exception - all correct and all from the Evidence of Coverage. Matching one phrasing failed on the other two, so the expectation is the absence of an out-of-network price, which is the difference the pair exists to show."
     },
     {
       "id": "PAIR-05b",

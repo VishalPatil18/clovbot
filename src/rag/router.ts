@@ -1,4 +1,4 @@
-export type RoutePath = "structured" | "rag";
+export type RoutePath = "structured" | "rag" | "member";
 
 export interface RouteDecision {
   paths: RoutePath[];
@@ -27,7 +27,13 @@ const escape = (value: string): string => value.replace(/[.*+?^${}()|[\]\\-]/g, 
  * Paths are additive. A question that is both a lookup and a rules question keeps
  * both, so neither half can be dropped. D-062.
  */
-export function chooseRoute(question: string, index: DrugIndex): RouteDecision {
+export function chooseRoute(
+  question: string,
+  index: DrugIndex,
+  /** Set when the caller has already identified the member. Stage 7 owns the
+      classifier that decides this from the question; Stage 5's CLI is told. */
+  memberIdentified = false,
+): RouteDecision {
   const haystack = question.toLowerCase();
 
   const matched: { canonical: string; text: string }[] = [];
@@ -50,17 +56,26 @@ export function chooseRoute(question: string, index: DrugIndex): RouteDecision {
     .filter((hit, at) => !matched.slice(0, at).some((longer) => longer.text.includes(hit.text)))
     .map((hit) => hit.canonical);
 
+  const withMember = (paths: RoutePath[]): RoutePath[] =>
+    memberIdentified ? [...paths, "member"] : paths;
+
   if (drugs.length === 0) {
-    return { paths: ["rag"], drugs, reason: "no indexed drug named" };
+    return {
+      paths: withMember(["rag"]),
+      drugs,
+      reason: memberIdentified ? "member identified, no indexed drug named" : "no indexed drug named",
+    };
   }
 
   const named = drugs.join(", ");
   if (RULE_WORDS.test(question)) {
     return {
-      paths: ["structured", "rag"],
+      paths: withMember(["structured", "rag"]),
       drugs,
       reason: `named ${named} and asked about a rule`,
     };
   }
-  return { paths: ["structured"], drugs, reason: `named ${named}` };
+  // A pure lookup stays pure unless a member is in play, in which case their
+  // record may hold the other half of the answer. D-062 keeps paths additive.
+  return { paths: withMember(["structured"]), drugs, reason: `named ${named}` };
 }

@@ -1274,3 +1274,55 @@ Grouping applies only at three or more claims, and only when neighbouring claims
 **Verified:** 555 tests pass, both typecheck projects clean, build succeeds.
 
 **Left alone deliberately:** A-24 opens with two claims saying nearly the same thing. Grouping makes that more obvious rather than less. Suppressing one would put the application in charge of which cited claims a member sees, which is a line this product has not crossed.
+
+---
+
+## Feature: Synthetic member records (P2 Stage 5)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-09                       |
+| Cycle            | 16                               |
+| Stage of plan.md | `plan-p2.md` Stage 5             |
+| Requirements     | `srs-p2.md` FR-P2-24 to FR-P2-29 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How a record field becomes citable | The Stage 2 projection, plus a third router path (D-080) |
+| 2 | Part D stage: derived or stored | Derived from spend against per-plan thresholds (D-081) |
+| 3 | What a record citation reads as | `Your member record · Claim CLM-0031 · What you owe` (D-082) |
+| 4 | Where the five members live | A typed seed module applied by a command (D-083) |
+
+### Phase 2 - Architecting
+
+D-080 through D-083. The shape was already proven: Stage 2 projected a drug row into the retrieved-chunk shape so it travelled the existing prompt, citation and cite-or-refuse path. A record field does the same, so cite-or-refuse binds record claims with no new code and **no prompt change** - D-069's cost is not paid again.
+
+### Phase 3 and 4 - Specs
+
+`migrations/008_member_records.sql` creates five tables. `src/members/` holds the typed seed, the derived stage, and the member-scoped queries. `RoutePath` gains `member`. `CitableKind` widens the citation layer only - a record has no byte floor, no snapshot and no plan year of its own, so `DocumentKind` stays a corpus concept. No new dependency.
+
+### Phase 5 - Planning
+
+Derived stage, schema, seed, queries and projection, router path, commands, verification.
+
+### Phase 6 - Writing Code
+
+**Verified live:**
+
+- `npm run ask:member -- --id=1 "what did my last claim cost"` returns **$210 billed, $200 plan paid, $10 owed**, cited `Your member record · Claim CLM-0031 · What you owe`.
+- The prior authorisation question returns **in review, no decision yet**, cited to `Prior authorisation PA-0114 · Status`.
+- **FR-P2-29 verified**: "what is my dental allowance left and what does the plan cover for dental" returns one answer citing the member record **and four plan documents**, each attributed to its own source.
+- `scripts/member-scope-check.ts`: 5 records, **0 leaks**, and inverting its predicate reports 100, so the check can fail.
+- The derivation covers all three drug stages across the five members, asserted rather than assumed.
+
+**Thresholds read from the corpus, not recalled:** H5141-004 deducts $150 on tiers 3-5, H5141-007 deducts $220, both reach catastrophic coverage at $2,100. **No seeded member is on H8010-002** - its Part D deductible is not stated in the converted Evidence of Coverage, and rule 6 forbids inventing it.
+
+**Two defects found in my own code:** `Promise.all` over one `pg` client issues overlapping queries, which pg deprecates and will remove in 9.0 - the reads are sequential now. And extending the corpus `DocumentKind` broke `BYTE_FLOORS`, which was the type system correctly refusing: a member record has no byte floor. Only the citation layer widened.
+
+**Eval: faithfulness 1.000, structural 100%, refusal 10.0%, bucket A 37/40, router 1.000 with zero structured misses.** Four known failures, nothing new. 596 tests pass.
+
+**One golden case was mis-specified and is now fixed.** PAIR-05a asked what an out-of-network specialist costs on the HMO and matched a phrasing. Across three runs the model gave three *different, all correct, all cited* answers: the network rule, the authorised exception, and the unavailable-specialist exception. The case now asserts the **absence of an out-of-network price**, which is the structural difference the pair exists to show, rather than one wording of it.
+
+**Eval noise, now quantified rather than assumed.** At temperature 0, two borderline cases moved between runs with no code change: PAIR-05a above, and A-21, where the judge scored 0 for a clause the model added - "before the drug will be covered" - that is not literally in the cited chunk. A-21 still passed its own assertion. This is the first time run-to-run variance has been measured, and it means a single failing run is not by itself proof of a regression.

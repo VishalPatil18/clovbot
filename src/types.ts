@@ -18,6 +18,13 @@ export interface PlanRef {
   planYear: number;
 }
 
+/**
+ * What a citation can point at. A member's own record is citable but is not a
+ * corpus document: it has no byte floor, no snapshot and no plan year of its
+ * own, so it widens the citation layer rather than DocumentKind. D-080.
+ */
+export type CitableKind = DocumentKind | "member_record";
+
 /** A citation without a plan year is not a valid citation. FR-06. */
 export interface Provenance {
   document: DocumentKind;

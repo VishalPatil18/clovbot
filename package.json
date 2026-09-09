@@ -21,7 +21,9 @@
     "build:web": "vite build",
     "reproduce": "node --env-file=.env --experimental-strip-types src/ops.ts reproduce",
     "insights": "node --env-file=.env --experimental-strip-types src/ops.ts insights",
-    "deploy:api": "./scripts/deploy-api.sh"
+    "deploy:api": "./scripts/deploy-api.sh",
+    "seed:members": "node --env-file=.env --experimental-strip-types src/members/cli.ts seed",
+    "ask:member": "node --env-file=.env --experimental-strip-types src/members/cli.ts ask"
   },
   "devDependencies": {
     "@types/node": "26.5.0",

@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 import pg from "pg";
 import type { CorpusChunk } from "./chunk.ts";
 import type { DocumentKind } from "../corpus/types.ts";
-import type { PlanRef } from "../types.ts";
+import type { CitableKind, PlanRef } from "../types.ts";
 import type { PromptChunk } from "./prompt.ts";
 
 export interface RetrievedChunk extends PromptChunk {
   /** Needed for citation rendering and EOC precedence. FR-06, FR-07. */
-  kind: DocumentKind;
+  kind: CitableKind;
   distance: number;
 }
 

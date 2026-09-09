@@ -1,0 +1,42 @@
+/**
+ * Asserts FR-P2-26 against the live seed: one member's record never contains
+ * another member's data. Exits non-zero on the first leak.
+ *
+ * This is the precursor to P3's row-level security. Until that exists, the
+ * query is the only boundary, so it is worth checking rather than assuming.
+ */
+import { SEED_MEMBERS } from "../src/members/seed.ts";
+import { loadMemberRecord } from "../src/members/store.ts";
+import { connect } from "../src/rag/store.ts";
+
+const client = connect();
+await client.connect();
+
+let leaks = 0;
+try {
+  for (const member of SEED_MEMBERS) {
+    const record = await loadMemberRecord(client, member.id);
+    if (record === null) throw new Error(`member ${String(member.id)} is not seeded`);
+    const body = JSON.stringify(record);
+
+    const foreign = SEED_MEMBERS.filter((other) => other.id !== member.id).flatMap((other) => [
+      ...other.claims.map((c) => c.id),
+      ...other.priorAuthorizations.map((p) => p.id),
+      ...other.appointments.map((a) => a.id),
+      other.email,
+      other.displayName,
+    ]);
+
+    for (const marker of foreign) {
+      if (!body.includes(marker)) continue;
+      leaks += 1;
+      console.error(`LEAK: member ${String(member.id)}'s record contains "${marker}"`);
+    }
+    console.log(`member ${String(member.id)}: ${String(record.facts.length)} facts, no foreign data`);
+  }
+} finally {
+  await client.end();
+}
+
+console.log(`\n${String(SEED_MEMBERS.length)} records checked, ${String(leaks)} leaks.`);
+if (leaks > 0) process.exit(1);

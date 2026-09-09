@@ -10,6 +10,7 @@ import { embed } from "./providers.ts";
 import { rerank, type RerankedChunk } from "./rerank.ts";
 import { loadDrugIndex, lookupDrugs, searchHybrid, type DrugLookup } from "./store.ts";
 import { chooseRoute, type RouteDecision } from "./router.ts";
+import { loadMemberRecord, memberFactAsChunk } from "../members/store.ts";
 import { latestSnapshotId } from "../corpus/snapshot.ts";
 import type pg from "pg";
 
@@ -85,7 +86,7 @@ export async function answerTurn(
   client: pg.Client,
   rawQuestion: string,
   scope: { contractId: string; planId: string; planYear: number },
-  options: { onToken?: (token: string) => void } = {},
+  options: { onToken?: (token: string) => void; memberId?: number } = {},
 ): Promise<TurnResult> {
   // FR-31, and D-034: redact before the model call, not only before the log write.
   const question = redactIdentifiers(rawQuestion);
@@ -139,7 +140,14 @@ export async function answerTurn(
     // FR-P2-09, D-061. Selection is a lookup against indexed drug names, so a
     // tier question about a drug we hold cannot degrade to prose search.
     const snapshotId = latestSnapshotId();
-    route = chooseRoute(question, await drugIndexFor(client, snapshotId));
+    const memberId = options.memberId;
+    route = chooseRoute(question, await drugIndexFor(client, snapshotId), memberId !== undefined);
+
+    // Scoped by member id in the query, never by the prompt. D-080.
+    const record =
+      memberId === undefined ? null : await loadMemberRecord(client, memberId);
+    const memberSources =
+      record === null ? [] : record.facts.map((fact) => memberFactAsChunk(record, fact));
 
     const structured = route.paths.includes("structured")
       ? (await lookupDrugs(client, snapshotId, route.drugs)).map((row) =>
@@ -156,7 +164,7 @@ export async function answerTurn(
       const pool = await searchHybrid(client, vector, question, scope, CANDIDATE_POOL);
       prose = (await rerank(question, pool)).slice(0, TOP_K);
     }
-    retrieved = [...structured, ...prose];
+    retrieved = [...memberSources, ...structured, ...prose];
     retrievedAt = Date.now();
   } catch (error) {
     // FR-09 and FR-25: an upstream failure never produces a factual claim.

@@ -201,3 +201,17 @@ _<How this concept will apply to future work in this project.>_
 **Falling back is part of the rule.** Grouping only helps when neighbours share sources. When every claim cites something different, one group per claim is the original wall with headings added, so the rule detects that and renders flat. A layout rule without its own off switch makes some inputs worse.
 
 **Not fixing something is a decision worth recording.** Two near-duplicate claims in A-24 became more visible under grouping. Hiding one would have been three lines of similarity check and would have made the application the editor of which cited claims a member sees. Leaving it visible is the smaller change and the more honest one.
+
+## P2 Stage 5 - what seeding a member tier taught
+
+**A projection built once pays for itself twice.** Stage 2 turned a drug row into a citable source so it could travel the existing prompt, citation and cite-or-refuse path. Stage 5 needed exactly that for a record field, and the whole member tier landed without touching the answering prompt - which, after D-069, is the most expensive thing in this codebase to touch.
+
+**Per-plan facts must be stored per plan.** The Part D deductible is $150 on one plan and $220 on another. A single constant would have placed a member in the wrong payment stage for a $70 band and produced a confidently wrong answer about their own drug costs, with nothing to catch it.
+
+**Refusing to invent is a deliverable.** The corpus does not state one plan's Part D deductible, so no seeded member is on that plan. The alternative - a plausible number - would have looked identical, demoed identically, and been wrong in a way no test could find.
+
+**Let the type system tell you where an abstraction ends.** Adding a member-record kind to the corpus document union broke the byte-floor table. That was the right failure: a record has no byte floor, no snapshot, no plan year of its own. Widening only the citation layer took one type and no casts.
+
+**A test can be wrong in a way only variance reveals.** One golden case matched a single phrasing of a question that has three correct answers. It passed for two stages, then failed twice on answers that were faithful and cited. The fix was not more accepted strings but asserting the property the case actually existed to prove - that the HMO quotes no out-of-network price.
+
+**Measure your harness's noise before you trust a single run.** Two cases moved between runs at temperature 0 with no code change. Without that number, the first failing run reads as a regression and sends you hunting a bug you did not write.

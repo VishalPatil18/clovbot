@@ -123,16 +123,16 @@
 - **Scope in:** Schema and seed for five synthetic members: enrollment, benefit accumulators, past appointments, assigned providers, at least one claim and one prior authorization each. Member-scoped query functions. A CLI taking a member id and a question. Records labelled synthetic in schema and seed.
 - **Scope out:** Authentication, sessions, login detection. Stages 6 and 7. Row-level security is P3.
 - **Acceptance criteria:**
-  - [ ] `npm run ask:member --id=<n> "what is the status of my prior authorization"` returns a correct answer from that member's record.
-  - [ ] Answers cite the record and field, not a document.
-  - [ ] A combined question returns both a plan-document citation and a record citation, each attributed to its own source.
-  - [ ] Querying member 1 never returns data belonging to member 2, asserted directly.
-  - [ ] Every seeded record is deep enough to answer at least four distinct question types.
-  - [ ] The synthetic label is present in the schema and visible in any output.
+  - [x] `npm run ask:member -- --id=<n> "..."` returns a correct answer from that member's record. Verified for a claim and a prior authorisation.
+  - [x] Answers cite the record and field, not a document. `Your member record · Claim CLM-0031 · What you owe`.
+  - [x] A combined question returns both a plan-document citation and a record citation, each attributed to its own source. Verified live: one answer citing the record and four plan documents.
+  - [x] Querying member 1 never returns data belonging to member 2, asserted directly. `scripts/member-scope-check.ts`, 5 records, 0 leaks, and shown capable of failing.
+  - [x] Every seeded record is deep enough to answer at least four distinct question types. Claim, prior authorisation, allowances and assigned provider, asserted per member.
+  - [x] The synthetic label is present in the schema and visible in any output. A check constraint refuses a non-synthetic row, and every fact carries the label in its text.
 - **Test plan:** Per-member integration tests over the four question types. A cross-member isolation test, which is the precursor to the P3 row-level security work. A combined-source test asserting two citation kinds in one answer.
 - **Effort:** M
 - **Exit signal:** A terminal command answers "what did my last claim cost" from a seeded record, with the field cited.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-09. No seeded member is on H8010-002: its Part D deductible is not stated in the converted corpus and D-081 refuses to invent one.
 
 ---
 
@@ -205,7 +205,7 @@
 - [x] Stage 2 - Structured lookup and router
 - [~] Stage 3 - Answer card and freshness (card not delivered, D-069)
 - [x] Stage 4 - Session UX cluster (follow-up chips not delivered, D-070)
-- [ ] Stage 5 - Synthetic member records
+- [x] Stage 5 - Synthetic member records
 - [ ] Stage 6 - Email OTP authentication
 - [ ] Stage 7 - Login detection and member answering
 - [ ] Stage 8 - Auth-tier eval and deploy
