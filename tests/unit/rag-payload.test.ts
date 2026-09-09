@@ -70,7 +70,7 @@ describe("renderAnswer", () => {
     const payload: AnswerPayload = {
       claims: [{ text: "Your specialist copay is $10.", citationIds: ["sob-01"] }],
       unanswered: [],
-      refusal: null,
+      refusal: null, headline: null,
     };
     const rendered = renderAnswer(payload, chunks);
     expect(rendered).toContain("$10");
@@ -83,7 +83,7 @@ describe("renderAnswer", () => {
     const payload: AnswerPayload = {
       claims: [{ text: "Your specialist copay is $10.", citationIds: ["sob-01"] }],
       unanswered: ["whether your specific doctor is in network"],
-      refusal: null,
+      refusal: null, headline: null,
     };
     const rendered = renderAnswer(payload, chunks);
     expect(rendered).toContain("whether your specific doctor is in network");
@@ -99,6 +99,7 @@ describe("renderAnswer", () => {
         explanation: "I cannot evaluate whether a denial was correct.",
         humanPathOffered: true,
       },
+      headline: null,
     };
     const rendered = renderAnswer(payload, chunks);
     expect(rendered).toContain("cannot evaluate");
@@ -109,7 +110,7 @@ describe("renderAnswer", () => {
     const payload: AnswerPayload = {
       claims: [],
       unanswered: [],
-      refusal: { trigger: "C-10", explanation: "Not found.", humanPathOffered: true },
+      refusal: { trigger: "C-10", explanation: "Not found.", humanPathOffered: true }, headline: null,
     };
     // D-026: the number must be obviously fake on an unaffiliated deploy.
     expect(renderAnswer(payload, [])).toMatch(/1-555-0100/);

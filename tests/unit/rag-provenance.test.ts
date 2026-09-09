@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildProvenance, isAllowedPlanYear } from "../../src/rag/provenance.ts";
+import { buildProvenance, isAllowedPlanYear, isInPlanScope } from "../../src/rag/provenance.ts";
 import type { Provenance } from "../../src/types.ts";
 
 const PROVENANCE: Provenance = {
@@ -65,5 +65,34 @@ describe("isAllowedPlanYear [FR-01]", () => {
     expect(isAllowedPlanYear(undefined, 2026)).toBe(false);
     expect(isAllowedPlanYear("2026", 2026)).toBe(false);
     expect(isAllowedPlanYear(Number.NaN, 2026)).toBe(false);
+  });
+});
+
+describe("isInPlanScope [FR-P2-03, D-056]", () => {
+  const scope = { contractId: "H8010", planId: "002", planYear: 2026 };
+
+  it("accepts a row from the session's own plan", () => {
+    expect(isInPlanScope(scope, { contractId: "H8010", planId: "002", planYear: 2026 })).toBe(true);
+  });
+
+  it("accepts a contract-wide row, which answers under every plan", () => {
+    expect(isInPlanScope(scope, { contractId: "*", planId: "*", planYear: 2026 })).toBe(true);
+  });
+
+  // The failure this stage exists to prevent: another plan's copay, stated confidently.
+  it("rejects another plan on the same contract", () => {
+    expect(isInPlanScope(scope, { contractId: "H8010", planId: "003", planYear: 2026 })).toBe(false);
+  });
+
+  it("rejects the same plan id on a different contract", () => {
+    expect(isInPlanScope(scope, { contractId: "H5141", planId: "002", planYear: 2026 })).toBe(false);
+  });
+
+  it("rejects a row from another plan year", () => {
+    expect(isInPlanScope(scope, { contractId: "H8010", planId: "002", planYear: 2025 })).toBe(false);
+  });
+
+  it("rejects a plan-wildcard row whose contract is a different real contract", () => {
+    expect(isInPlanScope(scope, { contractId: "H5141", planId: "*", planYear: 2026 })).toBe(false);
   });
 });

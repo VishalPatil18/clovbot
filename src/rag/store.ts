@@ -2,11 +2,12 @@ import { readFileSync } from "node:fs";
 import pg from "pg";
 import type { CorpusChunk } from "./chunk.ts";
 import type { DocumentKind } from "../corpus/types.ts";
+import type { CitableKind, PlanRef } from "../types.ts";
 import type { PromptChunk } from "./prompt.ts";
 
 export interface RetrievedChunk extends PromptChunk {
   /** Needed for citation rendering and EOC precedence. FR-06, FR-07. */
-  kind: DocumentKind;
+  kind: CitableKind;
   distance: number;
 }
 
@@ -25,6 +26,24 @@ export function connect(): pg.Client {
 }
 
 const toVector = (values: number[]): string => `[${values.join(",")}]`;
+
+/**
+ * The plans the index can actually answer for. Offering a plan whose documents
+ * are missing produces a refusal that reads as a model failure, so the picker is
+ * derived from the rows rather than from a list someone remembered to update.
+ * Wildcard rows answer under every plan and name none. D-055.
+ */
+export async function indexedPlans(client: pg.Client): Promise<PlanRef[]> {
+  const { rows } = await client.query(
+    "select distinct contract_id, plan_id, plan_year from chunks " +
+      "where plan_id <> '*' and contract_id <> '*' order by contract_id, plan_id",
+  );
+  return rows.map((row: Record<string, unknown>) => ({
+    contractId: String(row["contract_id"]),
+    planId: String(row["plan_id"]),
+    planYear: Number(row["plan_year"]),
+  }));
+}
 
 /** What the snapshot already holds, so unchanged chunks are never re-embedded. */
 export async function existingChunkContent(
@@ -126,16 +145,128 @@ export async function searchHybrid(
   }));
 }
 
+export interface DrugLookup {
+  normalizedName: string;
+  name: string;
+  category: string;
+  tier: number;
+  requirements: string;
+  documentId: string;
+  planYear: number;
+}
+
+/** Every indexed drug name, for the router's deterministic selection. D-061. */
+export async function loadDrugIndex(client: pg.Client, snapshotId: string): Promise<Set<string>> {
+  const { rows } = await client.query(
+    "select distinct normalized_name from drugs where snapshot_id = $1",
+    [snapshotId],
+  );
+  return new Set(rows.map((row: Record<string, unknown>) => String(row["normalized_name"])));
+}
+
+/** The rows behind a tier answer. Exact match, so no ranking and no floor. */
+export async function lookupDrugs(
+  client: pg.Client,
+  snapshotId: string,
+  names: string[],
+): Promise<DrugLookup[]> {
+  if (names.length === 0) return [];
+  const { rows } = await client.query(
+    "select normalized_name, name, category, tier, requirements, document_id, plan_year " +
+      "from drugs where snapshot_id = $1 and normalized_name = any($2) order by name",
+    [snapshotId, names],
+  );
+  return rows.map((row: Record<string, unknown>) => ({
+    normalizedName: String(row["normalized_name"]),
+    name: String(row["name"]),
+    category: String(row["category"]),
+    tier: Number(row["tier"]),
+    requirements: String(row["requirements"]),
+    documentId: String(row["document_id"]),
+    planYear: Number(row["plan_year"]),
+  }));
+}
+
+export async function upsertDrugs(
+  client: pg.Client,
+  snapshotId: string,
+  rows: DrugLookup[],
+): Promise<void> {
+  await client.query("begin");
+  try {
+    await client.query("delete from drugs where snapshot_id = $1", [snapshotId]);
+    for (const row of rows) {
+      await client.query(
+        "insert into drugs (snapshot_id, document_id, normalized_name, name, category, tier, requirements, plan_year) " +
+          "values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing",
+        [
+          snapshotId, row.documentId, row.normalizedName, row.name,
+          row.category, row.tier, row.requirements, row.planYear,
+        ],
+      );
+    }
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  }
+}
+
+export interface CorpusFreshness {
+  snapshotId: string;
+  /** When Clover's documents were fetched. What a member is asking about. */
+  documentsFetchedAt: string;
+  /** When they were indexed. An operator concern. */
+  ingestedAt: string;
+  planYear: number;
+}
+
+export async function recordCorpusSnapshot(
+  client: pg.Client,
+  snapshot: { snapshotId: string; documentsFetchedAt: string; planYear: number },
+): Promise<void> {
+  await client.query(
+    `insert into corpus_snapshots (snapshot_id, documents_fetched_at, plan_year)
+     values ($1,$2,$3)
+     on conflict (snapshot_id) do update
+       set documents_fetched_at = excluded.documents_fetched_at,
+           ingested_at = now(),
+           plan_year = excluded.plan_year`,
+    [snapshot.snapshotId, snapshot.documentsFetchedAt, snapshot.planYear],
+  );
+}
+
+export async function readCorpusFreshness(
+  client: pg.Client,
+  snapshotId: string,
+): Promise<CorpusFreshness | null> {
+  const { rows } = await client.query(
+    "select snapshot_id, documents_fetched_at, ingested_at, plan_year from corpus_snapshots where snapshot_id = $1",
+    [snapshotId],
+  );
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (row === undefined) return null;
+  return {
+    snapshotId: String(row["snapshot_id"]),
+    documentsFetchedAt: new Date(String(row["documents_fetched_at"])).toISOString(),
+    ingestedAt: new Date(String(row["ingested_at"])).toISOString(),
+    planYear: Number(row["plan_year"]),
+  };
+}
+
 export interface TurnRecord {
   question: string;
   planContext: string;
   chunkIds: string[];
   corpusSnapshotId: string;
-  outcome: "answered" | "refused" | "upstream_failure";
+  outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
   provider: string;
   latencyMs: Record<string, number>;
   sessionId?: string;
   refusalTrigger?: string | null;
+  /** FR-P2-09. Which retrieval paths ran, and why. D-063. */
+  route?: string | null;
+  routeReason?: string | null;
 }
 
 /** FR-26. The question written here is already redacted per FR-31. */
@@ -143,8 +274,8 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
   const { rows } = await client.query(
     `insert into turns
        (question, plan_context, chunk_ids, corpus_snapshot_id, outcome, provider,
-        latency_ms, session_id, refusal_trigger)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        latency_ms, session_id, refusal_trigger, route, route_reason)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      returning id`,
     [
       turn.question,
@@ -156,6 +287,8 @@ export async function writeTurn(client: pg.Client, turn: TurnRecord): Promise<st
       JSON.stringify(turn.latencyMs),
       turn.sessionId ?? null,
       turn.refusalTrigger ?? null,
+      turn.route ?? null,
+      turn.routeReason ?? null,
     ],
   );
   return String(rows[0]?.["id"]);

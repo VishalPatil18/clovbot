@@ -1,4 +1,4 @@
-import type { AnswerPayload, Claim, Refusal, RefusalTrigger, ValidationResult } from "./types.ts";
+import type { AnswerPayload, Claim, Headline, Refusal, RefusalTrigger, ValidationResult } from "./types.ts";
 
 const TRIGGERS: RefusalTrigger[] = [
   "C-01", "C-02", "C-03", "C-04", "C-05",
@@ -22,15 +22,39 @@ export function validateAnswerPayload(raw: unknown): ValidationResult {
   const claims = parseClaims(raw["claims"], errors);
   const unanswered = parseUnanswered(raw["unanswered"], errors);
   const refusal = parseRefusal(raw["refusal"], errors);
+  const headline = parseHeadline(raw["headline"], errors);
 
   // A payload that both asserts and declines leaves the caller no defensible
   // rendering, so it is rejected rather than resolved by precedence.
   if (refusal !== null && claims.length > 0) {
     errors.push("payload both makes claims and refuses");
   }
+  if (refusal !== null && headline !== null) {
+    errors.push("payload both states an amount and refuses");
+  }
 
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, value: { claims, unanswered, refusal } };
+  return { ok: true, value: { claims, unanswered, refusal, headline } };
+}
+
+/** Absent is the normal case: most answers are not a single amount. D-065. */
+function parseHeadline(raw: unknown, errors: string[]): Headline | null {
+  if (raw === undefined || raw === null) return null;
+  if (!isRecord(raw)) {
+    errors.push('"headline" is not an object');
+    return null;
+  }
+  const label = typeof raw["label"] === "string" ? raw["label"].trim() : "";
+  const amount = typeof raw["amount"] === "string" ? raw["amount"].trim() : "";
+  const citationIds = Array.isArray(raw["citationIds"])
+    ? raw["citationIds"].filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
+
+  if (label.length === 0) errors.push('"headline" has no label; a bare amount is ambiguous');
+  if (amount.length === 0) errors.push('"headline" has no amount');
+  if (citationIds.length === 0) errors.push('"headline" has no citation; FR-05 binds it as a claim');
+  if (errors.length > 0) return null;
+  return { label, amount, citationIds };
 }
 
 function parseClaims(raw: unknown, errors: string[]): Claim[] {

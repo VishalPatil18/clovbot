@@ -1664,6 +1664,1657 @@ Amending with evidence attached is the same treatment D-041 gave NFR-PERF-02, an
 
 ---
 
+## Decision D-047 - Zero real PHI, ever; synthetic member records permitted from v1.1
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 scope |
+| Status | accepted |
+| Supersedes | amends D-001 for v1.1 onward |
+
+### Context
+
+D-001 and `CLAUDE.md` rule 3 state "Zero PHI in v1. No member auth, no claims, no prior-auth status." P2 stages 5 through 8 build exactly those things over five synthetic member records. The rule as written forbids the plan the user has chosen to execute, so either the rule or the plan is wrong.
+
+The rule's real purpose was never to forbid authentication. It was to keep the project out of HIPAA scope, which is a statement about whose data is in the system, not about whether a login exists.
+
+### Options considered
+
+1. Amend the rule to "zero real PHI, ever" - synthetic records allowed, real member data never, at any version.
+2. Keep the rule and log a scoped override for stages 5 through 8.
+3. Keep the rule and drop stages 5 through 8 from v1.1.
+
+### Decision
+
+Option 1. `CLAUDE.md` rule 3 and `claude/context.md` section 3 are amended to forbid real PHI at every version rather than forbidding member identity in v1. Authentication and member-scoped answering are permitted from v1.1, over synthetic records only.
+
+### Rationale
+
+Option 2 leaves the working contract contradicting the build, which is the drift the contract exists to prevent. A rule every future cycle has to remember to override is a rule that will eventually not be overridden.
+
+The constraint that actually matters is unchanged and now stated for every version, not just v1: no real member data enters this system. That binds harder than the original, because the original expired at v1.
+
+### Consequences
+
+- Stages 5 through 8 are permitted. Synthetic records must be labelled synthetic in schema, seed and output, per P2-15.
+- Row-level security and audit logging remain P3. Until then, member scoping is application-layer only, and a code-path bug is not caught by the database. This is the residual risk `claude/plan-p2.md` already names.
+- D-001's v1 scope decision stands as history. It is amended, not reversed: the product still shipped v1 with no identity.
+
+---
+
+## Decision D-048 - The second indexed contract is H8010-002 Classic (HMO)
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`claude/plan-p2.md` Stage 1 requires a second benefit package under a distinct contract identifier, and offers "the HMO contract or a second PPO service area". The Hudson County catalog carries six plans across two contracts: H5141 004, 007, 054 and 061, all PPO, and H8010 002 Classic and 003 Value, both HMO.
+
+v1 already indexes H5141-004 and 007. Both sit on one contract and share one Summary of Benefits PDF, extracted per plan column.
+
+### Options considered
+
+1. H8010-002 Classic, one HMO plan on a distinct contract, same county.
+2. H8010-002 and 003, both HMO plans.
+3. H5141-054 Choice Giveback, a third PPO on the existing contract.
+4. H5141 in a second county or state.
+
+### Decision
+
+Option 1. H8010-002 Classic is indexed as a third plan under a second contract.
+
+### Rationale
+
+Option 3 fails the acceptance criterion outright: same contract id. Option 4 tests geography rather than benefit design and needs the county constants generalized first, which is P4's eleven-state work arriving early.
+
+HMO against PPO differs on more than price. Referral requirements and out-of-network coverage differ structurally, so paired cross-plan questions produce different answers of different shapes rather than two numbers. That is the stronger demonstration that plan scoping is load-bearing.
+
+Option 2 was rejected for cost, not correctness: a second HMO plan adds ingest surface and answers no question the first one does not.
+
+### Consequences
+
+- The corpus scope constants in `src/corpus/cli.ts` stop being a single contract with a plan list.
+- H8010's Summary of Benefits layout is unverified. `pdfToPlanColumn` handles the H5141 side-by-side two-column PDF; whether the HMO SB has the same shape is unknown until fetched, and is a Stage 1 risk.
+- Adding H8010-003 later is a one-line scope change, not a rebuild.
+
+---
+
+## Decision D-049 - Plan identity is a contract-and-plan pair throughout
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+v1 assumes one contract everywhere. `CONTRACT_ID` is a single environment variable in `src/server.ts`, `PLANS` is a list of bare plan ids, the retrieval scope passes `{ contractId, planId, planYear }` with the contract constant, the turn log writes `planContext` as a formatted string, and the web chips carry ids alone. D-048 introduces a second contract, which breaks that assumption at every one of those points.
+
+### Options considered
+
+1. Make plan identity an explicit contract-and-plan pair threaded through server, retrieval, turn log, golden set and web.
+2. Keep `planId` as the key and encode the contract into the string, as "H8010-002".
+3. Add a second contract environment variable.
+
+### Decision
+
+Option 1. One plan-reference shape carries contract and plan together, and every layer that scopes by plan takes it.
+
+### Rationale
+
+Option 2 turns the contract into an unvalidated substring. Cross-plan leakage is the failure this stage exists to prevent, and it produces a confidently wrong copay rather than an error; a leak that hides in string parsing is precisely the one no test catches. Stage 1's negative leakage assertion only means something if the thing being asserted on is typed.
+
+Option 3 is configuration for a case that is already known to grow: P4 expands to eleven states. A second variable would be removed by the next stage that touched it.
+
+### Consequences
+
+- Larger Stage 1 diff than the stage's "M" band assumed, touching files the stage description does not list.
+- The 49 golden cases keyed to plan "004" need their contract stated rather than implied.
+- P4's multi-state expansion inherits the right shape instead of paying to unwind the wrong one.
+
+---
+
+## Decision D-050 - P2 gets its own requirements document, srs-p2.md
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 requirements |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`claude/srs.md` v1.1.0 is frozen and covers P1. `claude/plan-p2.md` states in its own header that it has no frozen SRS behind it, and that the authenticated tier needs a requirements pass before Stage 5. `CLAUDE.md` rule 1 forbids production code without a spec entry. `/spec-feature` is explicitly forbidden from editing `srs.md`.
+
+### Options considered
+
+1. Write requirements per stage into `claude/features.md` inside each feature cycle.
+2. Run a full requirements pass before Stage 5 only, covering the auth tier.
+3. Run a full requirements pass now, covering all eight stages, into a new `claude/srs-p2.md`.
+
+### Decision
+
+Option 3. `claude/srs-p2.md` is written before Stage 1 begins and covers all eight P2 stages. `claude/srs.md` stays frozen at v1.1.0 as the P1 record.
+
+### Rationale
+
+The user's call. A single document covering the whole of P2 keeps the public-tier stages specified to the same standard as the authenticated ones, rather than treating stages 1 through 4 as self-evident because `docs/ideas.md` mentions them.
+
+Keeping P1's SRS frozen preserves it as the artefact v1.0.0 was actually built against, which is what makes the v1 record auditable.
+
+### Consequences
+
+- Stage 1 is delayed by a full requirements pass.
+- Two requirement documents exist, and requirement ids must not collide. P2 requirements are numbered in their own space.
+- `claude/srs.md` section 8's "deferred to v1.1, specified separately" now points at a document that exists.
+
+---
+
+## Decision D-051 - Structured lookup ships for the formulary only; provider search keeps refusing
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | narrows D-007 |
+
+### Context
+
+D-007 decided that provider search and formulary tier lookup both hit typed queries. `claude/plan-p2.md` Stage 2 carries that forward. But the provider directory in this corpus is not real: Clover publishes no downloadable directory, so `src/corpus/synthetic.ts` invents ten rows, and v1 answers provider questions by stating the directory is demo data and routing to a human.
+
+### Options considered
+
+1. Formulary only. Provider search keeps the v1 refuse-and-route behaviour.
+2. Both paths, with the demo-data label carried into every provider answer.
+3. Both, plus reversing D-036 to ingest the pharmacy directory as typed rows.
+
+### Decision
+
+Option 1. The formulary is ingested into typed rows and gets a typed tier lookup. Provider search is not built. The router is still built and still tested, selecting between one structured path and RAG.
+
+### Rationale
+
+Building exact structured search over invented data produces a confident, precise, wrong answer about whether a member's doctor is in network. That is the exact failure mode the whole product is built to avoid, and no label fully undoes a precise answer.
+
+The router, which `claude/plan-p2.md` calls the highest-uncertainty item in P2, is unaffected. It is exercised by the formulary path against RAG regardless.
+
+### Consequences
+
+- D-007's provider-search half is deferred with a reason, not delivered.
+- "Is my doctor in network" remains unanswerable and continues to route to a human.
+- Stage 2's routing test set covers formulary-versus-RAG selection. Provider questions belong to the guardrail path, not the router.
+- D-036's pharmacy exclusion stands unchanged.
+
+---
+
+## Decision D-052 - Email OTP delivery uses Resend on the free tier
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Stage 6 needs a six-digit code delivered to a seeded member's email address. `CLAUDE.md` rule 7 requires a defensible reason for any new dependency and rule "zero cost" requires free tier, open source or local.
+
+### Options considered
+
+1. Resend on the free tier: 3,000 emails a month, 100 a day.
+2. Print the code to the server log and surface it in a development-only panel, adding no dependency.
+
+### Decision
+
+Option 1. Resend, free tier, with the API key in an environment variable.
+
+### Rationale
+
+The user's call. A login whose code never leaves the server is not a login flow a reviewer can complete, and Stage 6's exit signal is receiving a code by email and pasting it into the panel.
+
+### Consequences
+
+- One new dependency and one new secret. The secret scan in `tests/unit/no-secrets.test.ts` already covers the key shape.
+- A sending domain must be verified with Resend, or delivery is limited to the account owner's own address.
+- Codes must never appear in any log, which Stage 6's test plan already asserts.
+
+---
+
+## Decision D-053 - Corpus scope is one typed module, not four sources of truth
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+FR-P2-01 requires corpus scope to be data rather than hardcoded constants. Investigating what that means found scope defined in four places by two different mechanisms: module constants in `src/corpus/cli.ts`, and `CORPUS_CONTRACT_ID` / `CORPUS_PLAN_IDS` / `CORPUS_PLAN_YEAR` read independently by `src/rag/cli.ts`, `src/server.ts` and `eval/harness/run.ts`. `scripts/deploy-api.sh` also forwards `CORPUS_COUNTY_ID` to Cloud Run, which no code reads.
+
+### Options considered
+
+1. One typed `src/corpus/scope.ts` holding a plan-reference array plus county and year, imported by all four call sites.
+2. A committed `corpus/scope.json` with a hand-rolled validator.
+3. CLI flags on `discover`, `fetch` and `convert`.
+
+### Decision
+
+Option 1. Scope lives in one typechecked module. The three `CORPUS_*` environment variables and the dead `CORPUS_COUNTY_ID` are deleted.
+
+### Rationale
+
+The defect FR-P2-01 points at is four sources of truth, not the file extension. Only option 1 collapses all four.
+
+Option 3 is actively unsafe: `fetch` and `convert` read the manifest `discover` wrote, so a run with mismatched flags produces a snapshot whose contents disagree with its declared scope, and nothing detects it.
+
+Option 2 adds a trust boundary and roughly thirty lines of validator - this project has no `zod`, so validation is hand-rolled - to protect a file only the author edits, and the file itself is not typechecked.
+
+### Consequences
+
+- Adding H8010-003 or a fourth plan is appending one record, which is what D-048's consequence promised.
+- `Snapshot.contractId` and `Snapshot.planId` become a plan-reference list, and `src/corpus/report.ts` renders the list.
+- P4's eleven-state expansion turns one county record into an array and a `flatMap` in `discover`. Deliberately not built now.
+- A reader taking "scope is data" to require a non-code artefact would not accept this. Recorded as the known objection.
+
+---
+
+## Decision D-054 - PlanRef types the scope, not every row that reports a plan
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | narrows D-049 |
+
+### Context
+
+D-049 makes plan identity a typed contract-and-plan pair throughout. `contractId:` appears 59 times across 35 files, including 13 test files and 8 one-off scripts. Taken literally, D-049 rewrites all of them.
+
+`searchHybrid` and `answerTurn` already take an anonymous `{ contractId, planId, planYear }`, so the scoping type largely exists and is unnamed.
+
+### Options considered
+
+1. `PlanRef` names the scoping shape only. Rows keep flat fields.
+2. As above, plus three structured columns on `turns` and `callbacks`.
+3. `PlanRef` nested into `Provenance`, `RetrievedChunk`, `CorpusChunk` and `ManifestEntry` as well.
+
+### Decision
+
+Option 1. `PlanRef` lives in `src/types.ts` and types what a caller scopes *with*. A row keeps flat fields describing what it *is*. `planContext` stays a text column, written by a single formatter from the answering reference.
+
+### Rationale
+
+The failure D-049 exists to prevent is leakage from a scope, and a scope is the one plan value that originates outside the system. A chunk's contract comes from the column it was selected by and cannot disagree with the scope that selected it, so nesting the pair into row projections defends against a bug that cannot occur.
+
+The real turn-log defect is not the column type. `src/server.ts` composes `planContext` from a module constant, so a turn answered under H8010-002 would have been logged as `H5141-002`. Writing it from the answering reference fixes that completely and needs no migration.
+
+Option 2's structured columns leave every pre-migration row null forever, or require a backfill that string-splits `plan_context` - the parsing D-049 exists to forbid.
+
+Option 3 rewrites citation rendering, which Stage 3 also touches.
+
+### Consequences
+
+- The line is: `PlanRef` is what you scope with; flat fields are what a row reports about itself.
+- No migration on `turns` or `callbacks`. `npm run reproduce` and `npm run insights` are unchanged.
+- Filtering the turn log by contract alone is not possible. No P2 requirement asks for it.
+- `/api/ask` gains membership validation against the derived plan list, returning 400 on an unknown reference rather than today's silent zero-result refusal.
+
+---
+
+## Decision D-055 - The offerable plan list is derived from the index; display names stay in code
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`PLANS` in `src/server.ts` is a hardcoded two-entry list served to the web chips, and it can silently disagree with what is indexed. Display names such as "Clover Health Choice (PPO)" exist nowhere in the `chunks` table.
+
+Reading `data/snapshots/<id>/catalog.json` at boot is already falsified: `data/` is gitignored and the Dockerfile copies only `src` and `certs`. The 2026-09-08 production incident was this exact class of assumption.
+
+### Options considered
+
+1. Derive the offerable set from `chunks` at boot; display names from a typed code-level map.
+2. A small `plans` table upserted at ingest, joined against `chunks`.
+3. A `plan_name` column on `chunks`.
+4. Read the catalog snapshot at boot.
+
+### Decision
+
+Option 1. `select distinct contract_id, plan_id, plan_year from chunks` runs once at startup. Names remain a typed key-to-label map, matching the existing `KIND_LABEL` pattern.
+
+### Rationale
+
+The safety property is the *set*: a plan must never be offerable without indexed documents. Option 1 derives exactly that part from the index and leaves in code the part that is presentation and changes once a year.
+
+It also strengthens boot. `connect()` constructs a `pg.Client` but never dials, so it throws only on a missing `DATABASE_URL` or an unreadable CA file - a wrong password or unreachable host still boots clean today, despite the comment claiming otherwise. A real query at boot makes an unindexed or unreachable deploy fail to start rather than serve an empty plan picker.
+
+Option 3's exclusion of wildcard rows encodes the invariant only by accident. Option 2 encodes it properly in a join and is the right answer if display names ever need to vary per deployment or plan year.
+
+### Consequences
+
+- Adding a plan needs two edits, the scope module and the name map, plus a restart. For this product a restart is a redeploy that was happening anyway.
+- A plan reference with no name entry must fail loudly rather than render a raw id to a member.
+- `web/src/components/CallbackPanel.tsx` currently shows a member the raw string "H5141-004" under a heading reading "Plan". The same name map should feed it.
+- If display names later vary per deployment, this is replaced by option 2.
+
+---
+
+## Decision D-056 - Contract-wide documents use a contract wildcard, mirroring the plan wildcard
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`src/rag/ingest.ts` stamps `planId = '*'` for the kinds in `CONTRACT_WIDE` - formulary and corporate. But `search_hybrid` still filters `c.contract_id = p_contract_id`, and `src/corpus/cli.ts` stamps corporate pages and filer documents with the single `CONTRACT_ID`. A session scoped to H8010 would therefore lose all six corporate pages and the entire formulary.
+
+### Options considered
+
+1. A contract wildcard mirroring the plan wildcard, with `search_hybrid` matching `(c.contract_id = p_contract_id or c.contract_id = '*')`.
+2. A wildcard for corporate only, discovering H8010's own formulary separately.
+3. Duplicating the rows once per contract.
+4. Substituting the session contract at query time.
+
+### Decision
+
+Option 1. `discover` leaves `contractId: ""` alongside the existing `planId: ""`, and ingest maps both wildcards from the one `CONTRACT_WIDE` list.
+
+### Rationale
+
+Symmetric with a mechanism that already exists and is already tested. One list, one place. `buildProvenance` keeps rejecting an empty id, so a blank can never reach a chunk.
+
+The formulary file is `formulary_ch_nj` - one New Jersey formulary with a contract-agnostic filename - so option 2 would be discovering a document that does not exist. Option 3 re-embeds the same text for every future contract. Option 4 moves scoping outside the SQL that D-033 deliberately put it inside.
+
+### Consequences
+
+- One migration, `create or replace function search_hybrid`, with unchanged parameters and return columns.
+- `citationLabel` needs a contract-wildcard branch or it renders "Plan \*" to a member.
+- `contextPrefix` embeds `contractId-planId` in the stored body, so changing these to the wildcard makes `existingChunkContent` see every formulary and corporate chunk as changed. They re-embed once. Roughly 500 chunks, one time.
+
+---
+
+## Decision D-057 - The column-gutter bug is fixed as a bug cycle nested inside Stage 1
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 1 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`extractPlanColumn` computes a `PlanColumns` struct per page and `nearestColumns` hands that whole struct - including absolute `boundary` and `labelBoundary` x coordinates - to pages carrying no `(Plan NNN)` header.
+
+H8010's Summary of Benefits has a two-column benefits table on page 11 with no header row, and the document alternates recto and verso margins. Measured: page 11's own correct gutter is 354.52, page 9's is 338.02, page 10's is 359.58. Inheriting either cuts a word in half and the existing safety throws "amounts on both sides of the column boundary and a word crossing it". H5141 never triggers this because every one of its table pages carries a header.
+
+The gutter is not a rigid translation of the margin. The recto/verso margin difference is about 41.5pt and the header spacing 18pt, while the gutters differ by 21.56pt, so any fix that shifts an inherited boundary by a margin delta is wrong by construction.
+
+### Options considered
+
+1. Split the struct: inherit plan identity and header x positions only, compute both gutters from the page being rendered.
+2. Fully page-local gutter detection from an x-histogram, inheriting only which plan is on which side.
+3. Stop inheriting and require every two-column page to carry a header.
+
+### Decision
+
+Option 1, prototyped and verified against both documents before this decision was taken. All four plans extract; H5141-004 still yields $10 and 007 still $2, matching the values hand-verified in P1 Stage 1.
+
+`nearestColumns` is additionally restricted to a backward-only search, so a page appearing before its document's first header page fails loudly rather than being attributed from a header it precedes.
+
+Sequenced as a `/spec-bug` cycle nested inside Stage 1: fetch far enough to save the page-10 and page-11 fixture, run the bug cycle against that artefact, then resume the stage.
+
+### Rationale
+
+The measured spread proves the gutter is content-derived per page, so option 1 recomputes exactly and only the quantity that is per-page, while leaving inherited the two things that genuinely are document-level.
+
+Option 2 solves a problem the evidence does not show exists and pays for it with a new silent failure: `findGutter` always returns something, so a full-width prose page with a coincidental gap would be cut without any error. A loud failure is better than a quiet wrong one.
+
+Option 3 breaks the existing H5141 page-15 test and fails H8010 page 11 outright, so neither document converts.
+
+The nesting satisfies `/spec-bug`'s "no repro, no fix" with a real artefact rather than a synthesised one, and keeps the fix diff separately reviewable inside a larger stage.
+
+### Consequences
+
+- This is a latent v1 defect. No document currently in the corpus triggers it, and it would have surfaced on any future document whose table pages do not all carry headers.
+- The residual: inherited header x positions still bound `findGutter`'s search window. A page whose columns sit outside that window falls back to the window midpoint. At 18pt of drift against a window roughly 200pt wide this is unlikely, and the existing money-on-both-sides throw catches it loudly.
+- Backward-only search means a pre-header two-column money table now throws instead of being silently attributed. Nothing currently converting is affected.
+- **Conflict flagged, not resolved:** `CLAUDE.md` section 3 says a bug logs under `### Fixed`, and section 8 says the changelog carries user-facing changes only. This fix is invisible to members. Taken as: not in `CHANGELOG.md`, recorded in `claude/context.md`. Reversible on the user's word.
+
+---
+
+## Decision D-058 - The formulary is parsed from bounding boxes, not from layout text
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`srs-p2.md` listed as an open question whether the formulary's tier column survives `pdftotext` extraction cleanly enough for typed ingest. Measured before deciding: the layout text yields all 2,468 drug rows, but wrapped lines carry real data - 564 strength continuations and 379 requirement continuations - and column offsets differ across pages, with three distinct header positions.
+
+One line carries both halves at once:
+
+```
+     37.5mcg/hr, 50mcg/hr, 62.5mcg/hr,                            days), PA
+```
+
+Dropping continuations loses step-therapy and prior-authorization flags, so a drug would read as carrying a quantity limit only when it also requires step therapy.
+
+### Options considered
+
+1. `pdftotext -bbox-layout`, reusing `parseBboxPages` from the Summary of Benefits path.
+2. Layout text with per-page column detection inferred from the repeated header.
+3. Layout text, joining continuations by an indentation threshold.
+
+### Decision
+
+Option 1. Column boundaries come from the `Drug Name / Drug Tier / Requirements/Limits` header's own word positions, measured on each page.
+
+### Rationale
+
+With real coordinates a continuation line's column is a fact rather than an inference, and the both-halves line resolves without a special case. Option 3's single indent threshold mis-assigns exactly that line.
+
+D-057 had just established that absolute column assumptions break across pages in this filer's documents. Choosing option 2 or 3 would have repeated the mistake in a second parser.
+
+Measured on the real document: 85 of 123 pages carry the table header, columns are stable at Tier x=375 and Requirements x=410, and the parse yields 2,468 rows across 105 categories with none orphaned. Pages 95 to 123 are the alphabetical index and carry no header, so they are skipped by the same signal.
+
+### Consequences
+
+- A second consumer of `parseBboxPages`, which was written for one document and is now shared.
+- The formulary needs a bbox conversion alongside its existing text conversion.
+- Category headers are identified by x position rather than by letter case, which is what D-059 exists to fix.
+
+---
+
+## Decision D-059 - Formulary class headings are identified by position, not by letter case
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FORMULARY_CLASS` in `src/rag/chunk.ts` is `/^(\s*)([A-Z][A-Z0-9 &,'/-]{5,})\s*$/`. The character class admits no lowercase letter and no parentheses, so two real drug-class headings never match:
+
+- `ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS` - lowercase `o` in `HMG-CoA`
+- `DISEASE-MODIFYING ANTI-RHEUMATIC DRUGS (DMARDS)` - parentheses
+
+A missed heading does not produce an error. The drugs beneath it inherit the previous class, so ten statins are indexed and cited under `ANTILIPEMICS, FIBRATES`. This is live in v1.0.0 and visible in `eval/results/2026-09-08T0947Z.json`, where atorvastatin is cited to `...formulary-cardiovascular-antilipemics-fibrates-001`.
+
+Statins are among the highest-volume drug classes for a 65+ population, so this is not an obscure corner.
+
+### Options considered
+
+1. Fix inside Stage 2 as a nested bug cycle, the shape D-057 used.
+2. Fix now as a standalone `/spec-bug` before Stage 2 begins.
+3. Leave it, and let the typed rows become the source of truth for drug questions.
+
+### Decision
+
+Option 1. Class headings are detected by their x position - they sit left of the drug-name column - rather than by asserting every character is uppercase.
+
+### Rationale
+
+Option 3 leaves the two paths disagreeing about the same drug. The formulary stays in RAG for its prose, so a member asking a class question would still receive the wrong section while the typed path returned the right one, which is worse than either being wrong alone.
+
+Option 2 pays for two re-ingests, since Stage 2 re-ingests anyway when the drugs table lands.
+
+Letter case was never the signal. Position is, and the typed parser needs the same correction, so one rule serves both paths.
+
+### Consequences
+
+- Affected chunks change their context prefix and re-embed. Ten drugs, one class.
+- A regression test pins both headings by name, so a future character-class edit cannot silently drop them again.
+- Invisible to members as a category label, but the citation they read changes, so it is recorded in `CHANGELOG.md` under Fixed rather than omitted as internal.
+
+---
+
+## Decision D-060 - Typed drug rows live in their own table, populated at ingest
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+D-007 requires typed queries for facts that live in tables. The parsed formulary is 2,468 rows across 105 categories, and it has to be queryable at answer time.
+
+### Options considered
+
+1. A `drugs` table populated by the existing ingest command.
+2. A JSON artefact written to the snapshot directory at convert time.
+3. Extra structured columns on the existing `chunks` table.
+
+### Decision
+
+Option 1. One migration, one table, populated in the same `npm run ingest` run that writes chunks.
+
+### Rationale
+
+Option 2 reads from `data/`, which is gitignored and absent from the container. That is precisely the assumption behind the 2026-09-08 production incident and the one D-055 was written to avoid.
+
+Option 3 overloads a table whose shape exists for embedding and retrieval with one that exists for exact lookup, and `chunks` is already carrying wildcard scoping semantics from D-056.
+
+### Consequences
+
+- A second migration in this stage, on top of the router's logging columns.
+- Tier is one column for all seven New Jersey plans the formulary names, so drug rows are contract-wide in the same sense as their chunks, and a tier answer does not vary by plan.
+
+---
+
+## Decision D-061 - The router is deterministic, driven by the drug names actually indexed
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`NFR-P2-03` makes misrouting a drug-tier question to prose search a zero-tolerance failure, and `claude/plan-p2.md` calls the router the highest-uncertainty item in P2. Comment T-3 records that D-007 is strong on the split and silent on the selection rule.
+
+### Options considered
+
+1. Deterministic: the structured path runs when the question names a drug the typed table holds.
+2. An LLM classifier with a routing prompt.
+3. Rules first, model as fallback.
+
+### Decision
+
+Option 1. Route selection is a lookup against the indexed drug names.
+
+### Rationale
+
+A zero-tolerance gate whose decision comes from a probabilistic component is not zero-tolerance. Option 1 makes tier-to-RAG misrouting impossible for any drug in the table, by construction rather than by measurement.
+
+This follows D-043, which put bucket C on deterministic rules evaluated before retrieval for the same reason: a guarded question must never depend on the model to be guarded.
+
+The cost is that a drug the table does not hold cannot trigger the structured path. That is correct behaviour - there is no row to cite - and it falls through to RAG, which is where an unknown drug belongs.
+
+### Consequences
+
+- The router cannot handle a misspelled drug name. This audience will misspell drug names, and the fallback is RAG rather than a failure, so the cost is a worse answer rather than a wrong one.
+- The confusion matrix measures a rule, so a non-perfect score is a gap in the name index rather than a model that needs prompting.
+
+---
+
+## Decision D-062 - Retrieval paths are additive, not exclusive
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-10` requires that "is this drug covered and what is the appeal process" answers both halves and drops neither. A router that selects one path has to decide which half to serve.
+
+### Options considered
+
+1. The router returns a set of paths; both results feed one prompt, each with its own citation.
+2. The router selects one path, and the structured path chains to RAG when its answer looks incomplete.
+3. Always run both and merge, with no routing decision at all.
+
+### Decision
+
+Option 1. A drug name adds the structured path; RAG runs unless the question is a pure lookup.
+
+### Rationale
+
+Dropping a half becomes structurally impossible rather than something a heuristic has to get right. Option 2's "looks incomplete" test is a new judgement call in the middle of an answer path that currently has none.
+
+Option 3 cannot be measured. The plan requires a router that logs a selection and a 30-case accuracy figure, and a router that always chooses everything has no selection to report.
+
+### Consequences
+
+- A pure tier question costs one extra retrieval unless it is recognised as pure, so "pure lookup" needs a definition and a test.
+- Both citation kinds can appear in one answer, which is the shape `FR-P2-29` will need for combined member answers in Stage 7.
+
+---
+
+## Decision D-063 - Router decisions are columns on the turn log, and routing has its own test set
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 2 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-09` requires the router to log its selection and reason on every turn, and Stage 8 has to report router accuracy in the same output as the answer metrics.
+
+### Options considered
+
+For storage: dedicated columns on `turns`; folding the decision into the existing `latency_ms` JSON blob; stdout only.
+For the test set: its own file run inside `npm run eval`; extra fields on the existing golden set; its own file and its own command.
+
+### Decision
+
+Two nullable text columns on `turns`, `route` and `route_reason`. A separate `eval/golden/routing-set.json` of at least 30 hand-labelled cases, evaluated inside the existing `npm run eval` run and reported in the same output.
+
+### Rationale
+
+The route is a categorical fact about a turn that Stage 8 must aggregate, so it is queryable rather than parsed back out of a column named for timings.
+
+Routing is a classification problem with a confusion matrix, and the 60 answer cases were chosen to cover call drivers rather than to stress a router's boundary. Keeping the sets apart keeps each one honest; running them together satisfies `FR-P2-51` without merging two reports.
+
+### Consequences
+
+- `npm run insights` can group by route and show where questions actually go.
+- The eval run gets longer by the routing set, which needs no model call because the router is deterministic.
+
+---
+
+## Decision D-064 - The headline amount is part of the answer contract
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | extends D-038 |
+
+### Context
+
+`FR-P2-13` requires the amount to be the visually dominant element of a cost answer. Nothing in the system knows what the amount is: the structured payload returns claim sentences such as "The specialist copay is $10", and the renderer receives prose.
+
+### Options considered
+
+1. Extend the payload with an optional headline the model fills, validated like every other field.
+2. Extract the first currency token from the leading claim on the server.
+3. Extract it in the browser.
+
+### Decision
+
+Option 1. `AnswerPayload` gains an optional `headline: { label, amount, citationIds }`, validated by the same hand-rolled parser that guards claims, and bound by cite-or-refuse exactly as a claim is.
+
+### Rationale
+
+Options 2 and 3 are a regular expression making a claim about money. "There is no $0 deductible" yields `$0`; "in-network $10, out-of-network $20" yields whichever comes first; an out-of-pocket maximum in the same sentence as a copay is indistinguishable. A wrong number rendered at 40px is the most legible possible way to be wrong, on the surface the product's trustworthiness rests on.
+
+The model already returns typed claims each carrying citation ids, and D-038 made an uncited claim structurally impossible rather than merely detectable. A headline is one more field on that contract, and it can be left empty, which is what makes the degradation rule in D-065 possible.
+
+### Consequences
+
+- The prompt gains an instruction and the validator a branch. An invalid headline fails the payload rather than rendering.
+- A headline without a citation is rejected, so the largest element on the screen cannot be uncited.
+- The model can decline to fill it, and a question with no single amount simply has none.
+
+---
+
+## Decision D-065 - The card appears only when the headline is filled
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-14` requires the card to degrade to readable prose when the answer is not a single amount. Something has to decide which shape an answer takes.
+
+### Options considered
+
+1. Card when the payload carries a headline; today's claim rendering otherwise.
+2. Card when exactly one claim contains exactly one amount.
+3. Card for cost-driver questions, decided from the question.
+
+### Decision
+
+Option 1. One rule, one source: the headline's presence.
+
+### Rationale
+
+Option 2 silently drops the card for "$10 in-network, $20 out-of-network", which is precisely the answer a member most wants a number from. Option 3 decides before the answer exists and fires the card on questions that turn out to have no amount.
+
+Degradation is then not a second layout but the absence of a first: a headline-less payload renders exactly as it does today, so the prose path is the one already tested by every existing case.
+
+### Consequences
+
+- Card coverage depends on the model filling the field, so the eval measures it rather than assuming it.
+- No client-side inference about answer shape.
+
+---
+
+## Decision D-066 - Two corpus dates, stored where the server can reach them
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-16` requires the corpus ingestion date to be visible from the interface. Two dates exist and mean different things: when Clover's documents were fetched, recorded in the snapshot manifest, and when they were indexed, recorded in `chunks.created_at`.
+
+The manifest lives under `data/`, which is gitignored and absent from the container. Reading it at query time is the assumption behind the 2026-09-08 production incident.
+
+### Options considered
+
+1. A `corpus_snapshots` table holding both dates, written at ingest and read at boot.
+2. `min` and `max` of `chunks.created_at`.
+3. An environment variable set at deploy.
+
+### Decision
+
+Option 1. Members see the document date; the ingest date stays in the operator tools.
+
+### Rationale
+
+A member asking whether an answer is current is asking about the documents, not about our pipeline. Option 2 cannot supply that date at all, and its ingest window is misleading besides: ingest is incremental, so after Stage 2 re-embedded 675 of 1,913 chunks the maximum reads as today while most of the corpus is older.
+
+Option 3 is a value that can drift from the corpus it describes, with nothing to detect the drift.
+
+Storing it follows the pattern D-060 set for drugs and D-055 set for the plan list: what the server needs at query time lives in the database, not on a disk the container does not have.
+
+### Consequences
+
+- A third migration in P2.
+- The date is as accurate as the last ingest, which is the correct coupling.
+
+---
+
+## Decision D-067 - The staleness warning rides on the answer, not on the chrome
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-17` requires a plain-language warning once the wall-clock year passes the corpus plan year.
+
+### Options considered
+
+1. On every answer, attached to the citation block.
+2. One persistent banner in the assistant header.
+3. Both.
+
+### Decision
+
+Option 1, with this copy:
+
+> These are your 2026 plan documents. It is now 2027, so your costs may have changed. Call to check before you rely on this.
+
+### Rationale
+
+A member reads one answer and may never scroll to a header. An answer that is printed, copied or read aloud carries its own warning only if the warning is part of it, and Stage 4 adds exactly those surfaces.
+
+The copy names both years so the member can see the gap rather than trust the word "stale", and it ends with what to do. "Plan year changed" was rejected as jargon.
+
+### Consequences
+
+- Repetition in a long transcript, accepted deliberately.
+- The warning travels into print, export and the spoken answer for free.
+
+---
+
+## Decision D-068 - Card layout: label, amount, sentence, source
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`claude/plan-p2.md` Stage 3 references the mock's bot message block and notes its citation chip is set at 11px, the smallest type on the screen, on the surface the product's trustworthiness rests on. D-042 already resolved that to 14px.
+
+### Options considered
+
+1. Label above, amount, then the sentence, then the source. Amount at `--text-heading`, 40px.
+2. Amount first at `--text-heading-lg`, 56px, label beneath.
+3. Sentence first with the amount pulled out into a side rail.
+
+### Decision
+
+Option 1.
+
+### Rationale
+
+The label first means the figure is never ambiguous on its own: "$10" alone does not say whether it is a copay, a deductible or a maximum, and a member glancing at a large number will read it as whichever they were worried about.
+
+Option 3's side rail collapses under the text on a phone, where most of this audience reads, and stops being dominant exactly where the requirement matters.
+
+40px is on the DESIGN.md scale and is dominant against an 18px reading surface without shouting.
+
+### Consequences
+
+- The reading surface stays 18px at a 68ch measure and the citation 14px, per D-042.
+- The amount must meet AA contrast at its rendered size, asserted statically.
+
+---
+
+## Decision D-069 - The headline field ships dormant; the answer card is not delivered
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 3 |
+| Status | accepted |
+| Supersedes | amends D-064 and D-065 |
+
+### Context
+
+D-064 put the headline amount in the answer contract on the reasoning that the model already returns typed claims, so one more field is cheap. The field, its validation and the card were built. Filling it needs an instruction in the system prompt, and that instruction is not free.
+
+Measured at temperature 0, against the identical corpus and index:
+
+| | Stage 2 run | With the headline rule |
+| --- | --- | --- |
+| Faithfulness | 1.000 | 0.989 |
+| Bucket A | 37/40 | 36/40 |
+| Refusal rate | 10.0% | 7.5% |
+| A-22 faithfulness | 1.0 | 0.6 |
+| A-31, a pharmacy question the corpus cannot answer | refused | **answered** |
+
+A-31 is the one that matters. D-036 excluded the pharmacy directory, so "which pharmacies near me are in network" must refuse. With the rule present it answers from the Evidence of Coverage's prose about network pharmacies instead.
+
+Rewording the rule as display-only, explicitly stating it changes nothing about what is answered or refused, did not restore the behaviour. Removing it did, verified by isolating that single change.
+
+The mechanism is dilution: seven standing rules became eight, and rule 4 is the refusal rule.
+
+### Options considered
+
+1. A second model call over the validated claims only, leaving the answering prompt untouched.
+2. Ship Stage 3 without the card. The contract field, validation, card markup, freshness and staleness all land; nothing fills the headline.
+3. Accept the regression and keep the rule.
+4. Deterministic extraction from the claims, reversing D-064.
+
+### Decision
+
+Option 2. The user's call. `FR-P2-13` - the amount as the visually dominant element - is **not delivered**.
+
+### Rationale
+
+Option 3 trades a refusal the corpus requires for a layout improvement. A member asking which pharmacies are in network would receive an answer the product cannot support, which is the failure the whole design exists to prevent, and it breaches NFR-P2-04 besides.
+
+Option 4 puts a regular expression in charge of which number is the headline, with the failure modes D-064 rejected it for.
+
+Option 1 remains open and is the likely route if the card is picked up later: it cannot change answering behaviour by construction, at the cost of one extra call on cost answers.
+
+### Consequences
+
+- **`FR-P2-13` is not met**, recorded like D-051's provider search rather than quietly dropped. The plan's first Stage 3 acceptance criterion is marked accordingly.
+- `AnswerPayload.headline` stays in the contract, validated and tested, and is always null. `parseHeadline` still rejects an uncited or unlabelled headline, so whatever fills it later is bound by cite-or-refuse.
+- The card markup and CSS ship dormant. `AnswerBody` renders it when a headline is present and renders today's prose when it is not, which is D-065's degradation rule doing its job with the card side unexercised.
+- Everything else in Stage 3 ships: both corpus dates, the staleness warning on every answer and in speech, and the citation completeness assertions.
+- **Recorded for the next model change:** a prompt whose rule count grows can weaken the rules already there. Any future addition to `SYSTEM` should be measured against the golden set before it is kept.
+
+---
+
+## Decision D-070 - Contextual follow-up chips are not built
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-22` folded `docs/ideas.md` P2-01 into Stage 4: two or three contextual follow-up questions after each answer. The obvious implementation asks the answering model for them.
+
+D-069 measured what touching that prompt costs. One added rule moved faithfulness from 1.000 to 0.989 and turned a pharmacy question the corpus cannot answer from a refusal into an answer. Even naming an unused field in the declared JSON shape moved a case from 1.0 to 0.667.
+
+### Options considered
+
+1. Drop follow-ups. Ship the three commands `docs/ideas.md` P2-06 actually names.
+2. A second model call over the finished answer, never the answering prompt.
+3. Deterministic suggestions from the cited sections' siblings.
+4. Static chips keyed to the call driver.
+
+### Decision
+
+Option 1. Quick replies are `help`, `talk to a person` and `start over`. P2-01 returns to unbuilt.
+
+### Rationale
+
+The user's call, taken with the Stage 3 measurement in hand. Option 2 is safe for the answer path but produces suggestions grounded in nothing, which on a cite-or-refuse product invites a member to ask a question the corpus cannot answer. Option 3 turns section headings into stilted questions and offers siblings unrelated to what was asked. Option 4 goes stale the moment the corpus changes.
+
+The deflection argument for P2-01 was that one session resolving three questions deflects three calls. That is real, and it is not worth a measurable drop in whether the answers are true.
+
+### Consequences
+
+- P2-01 is unbuilt and recorded as such rather than quietly folded away.
+- `FR-P2-22` is met only in its command half. The plan's chip criterion is marked partial.
+- The route if it is revisited is option 2 with the suggestions checked against the index before they are offered.
+
+---
+
+## Decision D-071 - Help is an inline expandable section, not a dialog
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-23` requires the help panel to be reachable by keyboard and to **not** trap focus. A modal dialog is defined by trapping focus; that is what makes it modal. The requirement is describing something that is not a dialog.
+
+### Options considered
+
+1. An inline expandable section in the normal document flow.
+2. A non-modal floating dialog closed by Escape.
+3. A separate `/help` route.
+
+### Decision
+
+Option 1. A disclosure button expands help in place, with `aria-expanded` and `aria-controls`.
+
+### Rationale
+
+Tab moves through the panel and out the other side, so nothing is trapped and Escape is unnecessary. A screen reader announces an expanded region rather than a dialog that has taken over.
+
+Option 2 is the pattern screen-reader users most often lose their place in. Option 3 leaves the conversation, which is the thing D-022's lazy plan prompt and Stage 6's inline login both exist to avoid.
+
+### Consequences
+
+- Help pushes content down rather than covering it, which on a 40vw panel means scrolling. Accepted: this audience scrolls more comfortably than it recovers from a lost focus position.
+- It is also the P4-06 tour's re-entry point, per P2-07, and an inline section is a stable target for that.
+
+---
+
+## Decision D-072 - Starting over and clearing history are different actions
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`docs/ideas.md` P2-06 names a `start over` command. `FR-P2-18` requires stored history to be clearable, and the acceptance criterion asks for clearing to be verified by inspecting storage rather than by the interface reporting success.
+
+### Options considered
+
+1. Separate: `start over` ends the current conversation; a distinct control erases stored conversations.
+2. One action that does both.
+3. `start over` only, with no clear control.
+
+### Decision
+
+Option 1. `start over` empties the thread and forgets the chosen plan. Clearing saved conversations is its own control and deletes the storage key.
+
+### Rationale
+
+Option 2 makes a member who wanted a clean slate for one question lose every prior conversation, with no undo. Two verbs with two consequences is less surprising than one verb with a hidden second effect.
+
+Option 3 fails `FR-P2-18` outright.
+
+### Consequences
+
+- Two controls where the mock draws one.
+- `start over` forgetting the plan is deliberate: a new conversation should re-ask lazily per D-022 rather than inherit a plan the member may have chosen for a different question.
+
+---
+
+## Decision D-073 - The chat panel pins its header and composer
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`.panel` is a single scrolling column, so the header, the "Talk to a person" button and the composer scroll away with the thread. The close control is a text button in a wrapping action row rather than an X at the top right, and `FR-13` requires the human path to be present in every state.
+
+### Options considered
+
+1. Pinned header and composer, with only the thread scrolling.
+2. A minimal header with the actions behind an overflow menu.
+3. Keep one scroll and move only the close control.
+
+### Decision
+
+Option 1. The panel becomes a three-row grid: header, scrolling thread, composer. The close control is an X at the top right of the title row.
+
+### Rationale
+
+Option 3 leaves FR-13 broken in the state where it matters most: a member who has scrolled into a long transcript cannot see the human path. Option 2 puts the voice toggle and help behind an extra tap for an audience with declining motor control, to buy vertical space a 40vw panel does not urgently need.
+
+### Consequences
+
+- The launcher, the full-page variant and the panel now share one layout rule rather than the panel inheriting the page's.
+- The X is icon-only and needs an accessible name, and it must clear the 44px target minimum.
+
+---
+
+## Decision D-074 - Framer Motion 13.2.0 is added for interface motion
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The interface pass asks for motion on the panel, the mic and the progress messages. The project has no animation dependency; every prior effect is CSS.
+
+### Options considered
+
+1. Plain CSS animations, no new package.
+2. Framer Motion, roughly 50KB gzipped.
+3. Motion One, roughly 5KB, same author.
+
+### Decision
+
+Option 2, `framer-motion@13.2.0`, pinned exactly. Version checked against the registry rather than recalled.
+
+### Rationale
+
+The user's call. It brings enter and exit animation, which plain CSS cannot do for an element being removed from the React tree - the panel, the help region and each rotating progress message all mount and unmount, and CSS can only animate the entrance.
+
+### Consequences
+
+- Roughly 50KB gzipped added to a bundle currently 78KB gzipped. Material on a slow connection for an audience that mostly reads.
+- Every animation must respect `prefers-reduced-motion`, which Framer Motion does through `useReducedMotion` rather than automatically.
+- First runtime dependency in the browser bundle beyond React and icons.
+
+---
+
+## Decision D-075 - The assistant panel becomes a true modal overlay
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | amends the Stage 7 panel, which set `aria-modal="false"` |
+
+### Context
+
+The panel sat beside the page: no backdrop, page still scrollable, `aria-modal="false"`, focus free to leave. The pass asks for a dimmed backdrop, a locked page and click-outside to close.
+
+### Options considered
+
+1. Full overlay with focus held inside, `aria-modal="true"`.
+2. Full overlay with focus free to leave.
+3. Keep it beside the page.
+
+### Decision
+
+Option 1. Backdrop at 20% black, body scroll locked, click outside or Escape or the X closes it, and focus is held within the panel while it is open.
+
+### Rationale
+
+Option 2 is the trap it looks like it avoids. Once a backdrop covers the page, a keyboard user tabbing out lands on controls they cannot see, behind a dark layer, with no way to know where they are. A dialog that visually blocks the page must block focus too, or it is only a dialog for people using a mouse.
+
+`FR-P2-23`'s no-focus-trap rule governs the **help region**, which remains a disclosure inside the panel. It says nothing about the panel itself.
+
+### Consequences
+
+- Focus returns to the launcher on close, which it already did.
+- `aria-modal` flips to `true` and the panel gains a focus loop.
+- Body scroll lock must be released on unmount or the page stays frozen after a close.
+
+---
+
+## Decision D-076 - A closed panel keeps what was typed
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Click-outside-to-close means a stray click discards a half-typed question.
+
+### Options considered
+
+1. Keep the draft and restore it on reopen.
+2. Confirm before closing when the box is not empty.
+3. Discard.
+
+### Decision
+
+Option 1. The draft survives a close and is put back on reopen.
+
+### Rationale
+
+This audience types slowly, and retyping a question is the real cost of a mis-click. Option 2 puts a decision in front of someone whose intent was to dismiss something.
+
+### Consequences
+
+- The draft outlives the panel, so it is held above the panel rather than inside it.
+
+---
+
+## Decision D-077 - Progress messages follow real stages, with a timed fallback
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+A single static "Searching your plan documents" sits on screen for the whole wait, which measured 2.8 seconds to answer and longer with voice.
+
+### Options considered
+
+1. Messages driven by the events the server already sends, with a timed fallback if a stage runs long.
+2. Purely timed rotation.
+3. One message plus a moving indicator.
+
+### Decision
+
+Option 1. The stream already reports when retrieval begins, when a plan is needed and when the first token arrives; messages follow those. Within a stage that runs long, a softer line appears so nothing looks frozen.
+
+### Rationale
+
+Option 2 would display "checking your plan documents" after that had finished. It is a small untruth, and this is a product whose entire claim is that it does not state things it cannot support. Cheap honesty is still honesty.
+
+### Consequences
+
+- Message changes are uneven, because real stages are uneven. That is the point.
+- The fallback timer must not advance past the last message for its stage, or it becomes option 2 by accident.
+
+---
+
+## Decision D-078 - Focus on the composer is drawn inside the field
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 4b, interface pass |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+The pass asked for the focus ring on the input to disappear while typing. `:focus-visible` matches on **every** focus of a text field, including a mouse click - browsers do this deliberately, because a text field must show where typing will land. So the ring cannot be conditional on the keyboard, and removing it fails `NFR-A11Y-04` and the test that forbids removing an outline.
+
+### Options considered
+
+1. Draw the same outline inside the field with a negative offset, plus a soft halo, so nothing sits outside the rounded shape.
+2. Keep the outer ring, tucked in.
+3. Remove it from the input.
+
+### Decision
+
+Option 1. `outline-offset: -2px` with a border weight change and a shadow halo on the field itself.
+
+### Rationale
+
+What made it ugly was a hard 3px rectangle sitting 2px outside a rounded pill, reading as a second box. Drawn inside, hugging the same radius, it becomes part of the control. Focus stays visible, the outline is never removed, and the test keeps passing without being weakened.
+
+### Consequences
+
+- The composer's focus treatment differs from the rest of the interface, deliberately, because it is the only control someone dwells inside.
+
+---
+
+## Decision D-079 - Long answers are grouped by cited source, not rendered as markdown
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | Long-answer readability |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Long answers read as an undifferentiated wall. Measured on the last eval run: median answer 2 claims and 392 characters, but 9 of 36 carry 3 or more claims and 3 carry 5 or more. The worst, A-24, is nine sentences at identical visual weight.
+
+The obvious fix - ask the model for markdown - is blocked three times over:
+
+- `FR-32` and D-038 state that prose is rendered by the application, never by the model. The model returns typed claims each carrying citation ids, and markdown would hand rendering back to it.
+- It needs a system-prompt change, and D-069 measured that cost precisely: faithfulness 1.000 to 0.989, and a pharmacy question the corpus cannot answer flipping from a refusal into an answer.
+- Rendering model output as markup is an injection surface on a product whose corpus is scraped text.
+
+### Options considered
+
+1. Group neighbouring claims that cite the same sources, under a heading taken from that source's section.
+2. As above, plus the first claim set a size larger as a lead.
+3. Render three or more claims as a bulleted list.
+4. Leave it alone.
+5. Markdown from the model.
+
+### Decision
+
+Option 1. Grouping happens in the renderer, over the claims the payload already carries.
+
+### Rationale
+
+The grouping is a fact the system already holds - which claim cites what - rather than anything inferred from the words. No prompt change, no dependency, no markup from the model, so none of the three objections apply.
+
+Option 3 reads as a checklist even when the claims are not a sequence, which is the structural dishonesty `frontend-design` warns about with numbered markers.
+
+Option 4 was a real candidate at 8% of answers affected, and was rejected because the answers it affects are the process questions - appeals, grievances, dental limits - where a member most needs to find one part again.
+
+### Consequences
+
+- Grouping applies only at three or more claims, and only when neighbouring claims actually share sources. One group per claim is the same wall with headings added, so that case falls back to flat rendering.
+- Claim order is never changed. The model returned a sequence and reordering it would change the answer.
+- Near-duplicate claims become more visible, not less. A-24 opens with two claims that say nearly the same thing. Suppressing one would make the application decide which cited claims a member sees, which this product has not done; the repetition is left visible and recorded as an answer-quality signal instead.
+
+---
+
+## Decision D-080 - Member records are citable sources on a third router path
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 5 |
+| Status | accepted |
+| Supersedes | extends D-062 |
+
+### Context
+
+`FR-P2-29` requires one answer to cite a plan document and a member record separately, each attributed to its own source. Stage 2 solved the same shape for drug rows: a typed row is projected into the retrieved-chunk shape and travels the existing prompt, citation, validation and cite-or-refuse path unchanged.
+
+### Options considered
+
+1. The same projection, with the router gaining a third path alongside structured and RAG.
+2. A separate answering path for member questions.
+3. A new claim kind in the payload, distinguished by the model.
+
+### Decision
+
+Option 1. A record field becomes a citable source exactly as a drug row does, and `RoutePath` gains `member`.
+
+### Rationale
+
+Paths stay additive per D-062, so a combined question keeps both halves by construction rather than by a stitch that has to be got right. Option 2 would need the two paths joined by hand, which is the half-dropping D-062 exists to prevent.
+
+Option 3 needs a system-prompt change, and D-069 measured that cost exactly: faithfulness 1.000 to 0.989 and a required refusal flipping into an answer. Nothing here touches the prompt; the model simply sees more sources.
+
+### Consequences
+
+- Cite-or-refuse binds record claims with no new code, satisfying `FR-P2-28` by construction.
+- The router's confusion matrix grows a third class, and Stage 8 reports it.
+- Member scoping is enforced in the query, not in the prompt. A prompt cannot be relied on to keep one member's data from another.
+
+---
+
+## Decision D-081 - The Part D stage is derived from spend, against per-plan thresholds read from the corpus
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 5 |
+| Status | accepted |
+| Supersedes | closes an `srs-p2.md` open question |
+
+### Context
+
+`srs-p2.md` left open whether the Part D coverage stage is seeded flat or worked out from spend.
+
+### Options considered
+
+1. Derive it from year-to-date drug spend.
+2. Seed it as a flat field.
+3. Seed it flat with a test asserting it agrees with the spend.
+
+### Decision
+
+Option 1. The stage is a function of spend against that member's own plan thresholds.
+
+### Rationale
+
+A record that says "catastrophic" beside a spend that says otherwise is exactly the kind of internal contradiction this product cannot afford, and option 2 permits it silently. Option 3 catches it but still maintains the same fact in two places.
+
+### Thresholds, read from the corpus rather than recalled
+
+| Plan | Yearly drug deductible | Out-of-pocket limit |
+| --- | --- | --- |
+| H5141-004 | $150 on tiers 3, 4 and 5 | $2,100 |
+| H5141-007 | $220 on tiers 3, 4 and 5 | $2,100 |
+
+### Consequences
+
+- Thresholds differ by plan, so they are stored per member rather than as one constant.
+- **No seeded member is on H8010-002.** Its Part D deductible is not stated in the converted Evidence of Coverage, and `CLAUDE.md` rule 6 forbids inventing it. Recorded as an open question rather than filled with a plausible number.
+
+---
+
+## Decision D-082 - A record citation names the record, the item and the field
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 5 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-28` requires a record-sourced claim to cite the record and the field, not a document. A document citation reads `Summary of Benefits 2026 · Plan H5141-004 · Doctor's Office`.
+
+### Decision
+
+`Your member record · Claim CLM-0031 · What you owe`.
+
+### Rationale
+
+The same three-part shape as a document citation - what it is, which one, which field - so both kinds scan as one list when a combined answer carries both. Naming the field is what `FR-P2-28` asks for; a date-led alternative reads more naturally but only half satisfies it.
+
+### Consequences
+
+- `citationLabel` grows a record branch beside the contract-wildcard branch D-056 added.
+- Field names are member-facing, so they are written as a member would say them: "What you owe", not `member_owes`.
+
+---
+
+## Decision D-083 - Members are seeded from a typed module, not from a migration
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-08 |
+| Cycle / Feature | P2 Stage 5 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+Five synthetic members with enrolment, accumulators, claims, prior authorisations, appointments and an assigned provider each.
+
+### Decision
+
+A migration creates the tables; a typed TypeScript module holds the records and a command applies them.
+
+### Rationale
+
+A malformed record fails the build rather than the insert, and the synthetic labelling is checkable by test rather than by reading SQL. Data inside a migration is awkward to change: re-seeding would mean editing applied history or writing a second migration.
+
+### Consequences
+
+- One more command, `npm run seed:members`.
+- Re-seeding is idempotent and safe to repeat, which is what makes the demo reproducible.
+
+---
+
+## Decision D-084 - A separate member cookie, minted fresh on every sign-in
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+An anonymous `clovbot_sid` cookie already exists, carrying rate limiting and the loop breaker. Signing in has to bind a member to a session somehow.
+
+### Options considered
+
+1. Keep the anonymous cookie as it is; mint a separate id, bound to the member row, on sign-in.
+2. Reuse the same cookie and attach a member to it.
+3. A second cookie that mirrors the first's lifetime.
+
+### Decision
+
+Option 1. `clovbot_member` is a distinct `HttpOnly; SameSite=Lax` cookie, generated fresh at sign-in and again discarded at sign-out.
+
+### Rationale
+
+Option 2 is session fixation: the id that existed before sign-in keeps working after it, so anyone who already knew that value inherits the authenticated session. Rotating on login is the standard defence and costs one `randomUUID`.
+
+Keeping them separate also keeps the anonymous session's 24-hour rate-limit window from setting the authenticated session's lifetime, which FR-P2-35 caps at eight hours.
+
+### Consequences
+
+- Two cookies, and sign-out must clear the member one and end its row.
+- A session row is the authority; the cookie is only a pointer, and a value that is not a UUID shape is refused before any query runs.
+
+---
+
+## Decision D-085 - Codes are stored as scrypt hashes, and an unknown address is answered identically
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 6 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+A six-digit code is a live credential with a million possibilities and a ten-minute life. Two questions follow: what the database holds, and what the endpoint reveals.
+
+### Decision
+
+Only a scrypt hash and a per-row salt are stored; the code exists in memory and in one email. The request endpoint returns the same body whether or not the address belongs to a member.
+
+### Rationale
+
+A plaintext column, or a fast hash, falls to an offline sweep of a million candidates the moment the table leaks. scrypt is deliberately slow, and at most five verifications per code makes that cost invisible.
+
+Replying "no such address" would turn the endpoint into a membership oracle: anyone could enumerate which addresses are enrolled. The same reply either way costs nothing and removes that.
+
+Expiry, single use and lockout are all decided **before** the code is compared, so a dead code cannot be probed for correctness after its window closes.
+
+### Consequences
+
+- A member who mistypes their address gets "a code is on its way" and no code. The copy says "if that address is on file" so the message is not a lie.
+- Claiming a code marks it spent in the same statement that reads it, so two requests racing the same code cannot both succeed.
+
+---
+
+## Decision D-086 - Real addresses live in the environment, never in the repository
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 6 |
+| Status | accepted |
+| Supersedes | extends FR-P2-40 |
+
+### Context
+
+FR-P2-40 planned for one member seeded with an operator-controlled address. The user supplied five, one per member, so any member can be demoed live.
+
+`members.email` is unique and a code has to identify exactly one member, so five members cannot share one address.
+
+### Decision
+
+`OPERATOR_MEMBER_EMAILS` holds five addresses in member-id order, in `.env` only. The seed module keeps unreachable `@example.invalid` fallbacks, so the repository contains no personal data and the build works without the variable.
+
+### Rationale
+
+`CLAUDE.md` forbids personal data in specs, prompts and memory files, and requires an environment variable instead. Five real addresses in `src/members/seed.ts` would have been committed, and a case-study repository is the wrong place for anyone's inbox.
+
+### Consequences
+
+- A checkout without the variable seeds five members nobody can sign in as, which is the correct default for a public repository.
+- The sending domain is `v-ai.org`, verified with Resend. Delivery was confirmed: the provider accepted a real send and returned success.
+
+---
+
+## Decision D-087 - Login detection is deterministic rules, and needs_login is its own outcome
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 7 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-42` defines member-specific as "answering requires a value stored against that member". `NFR-P2-02` gates a false negative at zero and false positives at 95%. A turn was answered, refused, or an upstream failure.
+
+### Options considered
+
+For the decision: deterministic rules; a separate model call before retrieval; rules with a model fallback.
+For the outcome: a fourth kind; a refusal carrying a login flag; an answered turn with a prompt to sign in.
+
+### Decision
+
+Deterministic rules, in the shape D-043 used for bucket C and D-061 used for the router. A fourth outcome, `needs_login`, decided before retrieval.
+
+### Rationale
+
+A zero-tolerance gate cannot rest on something probabilistic, and every decision has to be explainable by pointing at the rule that fired.
+
+The outcome is its own kind because a refusal it is not: `FR-P2-43` requires the assistant to offer a way forward rather than decline. Folding it into refusals would also inflate the refusal rate, which is a gated metric, with turns that are not refusals.
+
+Deciding it before retrieval means such a question never reaches the model, so it cannot leak a partial answer on its way to asking for a login - the same reasoning D-043 gives for bucket C.
+
+### The rules needed adjacency, not proximity
+
+Two bugs surfaced in the first draft, both from matching a possessive anywhere in the sentence:
+
+- "what is my copay for a specialist **visit**" was gated as an appointment question. A price is not a visit.
+- "what is the status of **my prior authorization**" was let through, because the general-phrasing exception matched "what is ... prior authorization".
+
+Both are fixed by requiring the possessive to sit directly on the noun. "my prior auth" is theirs; "does my plan need prior authorization" is the rule in general.
+
+### Consequences
+
+- A phrasing nobody anticipated falls through to the documents rather than to a login prompt, which is the safe direction: the query layer already refuses member data without a session, so a miss cannot disclose anything.
+- The rules are a maintenance surface. `eval/golden/login-set.json` carries 34 hand-labelled cases in both directions, scored inside `npm run eval` and gated separately per direction.
+
+---
+
+## Decision D-088 - The regression gate sits one case below the measured baseline
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 Stage 8 |
+| Status | accepted |
+| Supersedes | - |
+
+### Context
+
+`FR-P2-52` requires CI to fail on any regression in a P1 metric, and `NFR-P2-04` pins faithfulness at 1.000. CI's existing floor is P1's 0.90, which would let a slide from 1.000 to 0.91 pass silently.
+
+But faithfulness moves on its own. Across six runs with no code change, A-21 scored 0 three times, and PAIR-03b once scored 0.667. One case of thirty-six is 0.028, so a gate at 1.000 would fail the build on a single flip.
+
+### Options considered
+
+1. Gate one case below the measured baseline, and record the measurement.
+2. Gate strictly at 1.000 and change the case that keeps flipping.
+3. Keep the 0.90 floor and report the baseline without gating it.
+
+### Decision
+
+Option 1. Faithfulness floors at 0.96, bucket A at 36/40, structural at 1, refusal at 0.20. One flip passes; two do not.
+
+### Rationale
+
+Option 3 is the gap `NFR-P2-04` exists to close. Option 2 means editing a case because it fails, which is selecting the result rather than measuring it.
+
+The tolerance is one case wide, and the measurement that justifies it sits in the code beside the number rather than being a round figure someone chose.
+
+### What the flipping actually is
+
+Not noise, on inspection. Both cases share a pattern: the model adds a clause its cited chunk does not state - "before the drug will be covered", "waived if you are admitted". The judge is correctly refusing to support them. This is an answer-quality signal about unsupported glosses, recorded as such rather than tuned away.
+
+### Consequences
+
+- The gate is tight. The last run measured 0.963 against a 0.96 floor; a third simultaneous dip would fail it.
+- Raising the floor when it next fails would be moving the goalposts. The correct response is to look at what the model added.
+
+---
+
+## Decision D-089 - The sign-in form is anchored to the turn that needs it
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-09-09 |
+| Cycle / Feature | P2 bug fixes, manual test pass |
+| Status | accepted |
+| Supersedes | the placement half of D-071 |
+
+### Context
+
+The form rendered at the top of the scroll region, above the help panel and above every turn. Manual testing found the failure that placement guarantees: after a second question, the card sat off screen above the conversation, so the member had to scroll up or zoom out to find the thing the answer had just asked them to do. It also stayed open above the next answer, reading as unrelated to anything.
+
+### Options considered
+
+1. Anchor the form inside the turn that was gated, under that question's answer.
+2. Keep it at the top and scroll it into view whenever it opens.
+3. Make it a modal over the conversation.
+
+### Decision
+
+Option 1, plus two rules: a new question closes an open form, and a close control sits at the top right of the card on both steps.
+
+### Rationale
+
+Option 2 treats the symptom. The card is still detached from the question it belongs to, and a second gated question has no way to say which one it means.
+
+Option 3 is the pattern D-071 rejected for help, for the same reason: it covers the conversation the member is trying to keep, and it needs a focus trap and an Escape handler that an inline region does not.
+
+Anchoring also removes a duplicate state. `heldQuestion` existed only to carry the gated question across the detour; the anchored turn already holds it, so the question asked on return is read from the turn rather than from a second copy that could disagree with it.
+
+### Consequences
+
+- Two gated questions can each carry their own form, and only one can be open, because the anchor is a turn id rather than a boolean.
+- The card is paper-coloured inside the keylime invitation. Same colour on same colour read as one flat block.
+- Focus moves into the form when it opens, which is also what scrolls it into view.
+
+---
+
 ## Comments on rationale and conflicts
 
 Collected here rather than inside the entries, so the entries stay as stated.

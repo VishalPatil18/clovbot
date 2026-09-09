@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPrompt, findUncitedIds, parseCitations } from "../../src/rag/prompt.ts";
+import { buildStructuredPrompt } from "../../src/rag/payload.ts";
 
 const chunks = [
   {
@@ -116,5 +117,43 @@ describe("findUncitedIds", () => {
   it("catches a citation to a chunk that was not retrieved", () => {
     const answer = "$10 [H5141-999-2026-invented-01]";
     expect(findUncitedIds(answer, retrieved)).toEqual(["H5141-999-2026-invented-01"]);
+  });
+});
+
+describe("headline instruction [FR-P2-13, D-064]", () => {
+  const system = buildStructuredPrompt("what is my copay", [
+    {
+      id: "c1",
+      documentId: "d",
+      kind: "summary_of_benefits" as const,
+      contractId: "H5141",
+      planId: "004",
+      planYear: 2026,
+      section: "Doctor's Office",
+      content: "Specialist visit: $10 copay",
+    },
+  ]).system;
+
+  // Even naming the field in the declared shape moved A-22's faithfulness from
+  // 1.000 to 0.667 with retrieval unchanged. Nothing fills it, so the model is
+  // told nothing about it and the prompt stays byte-identical to Stage 2. D-069.
+  it("does not mention the field at all, since nothing fills it", () => {
+    expect(system).not.toContain("headline");
+  });
+
+  /*
+   * Measured: adding an eighth rule describing the headline diluted rule 4, the
+   * refusal rule. A-31 flipped from refusing a pharmacy question the corpus
+   * cannot answer to answering it, and faithfulness fell from 1.000 to 0.989.
+   * Rewording it as "display only" did not help; only removing it restored the
+   * behaviour. The field stays in the contract and nothing fills it. D-069.
+   */
+  it("gives the model no instruction that could change what it answers", () => {
+    expect(system).not.toMatch(/Leave headline null|invent a headline|display only/);
+  });
+
+  it("keeps the seven answering rules it had before the field existed", () => {
+    const rules = system.split("\n").filter((line) => /^\d+\. /.test(line));
+    expect(rules).toHaveLength(7);
   });
 });

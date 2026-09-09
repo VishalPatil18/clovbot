@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Citation, Claim } from "../api.ts";
+import type { Citation, Claim, Headline } from "../api.ts";
+import { groupClaims } from "../claims.ts";
 
 const HIGHLIGHT_MS = 5_000;
 
@@ -10,6 +11,10 @@ interface Props {
   /** Cited chunk id to display number. Falls back to list position if absent. */
   citationNumbers?: Record<string, number>;
   unanswered: string[];
+  /** Present only when the answer is a single amount. Absent is the prose path. D-065. */
+  headline?: Headline | null;
+  /** Plain-language notice that the calendar has passed the plan year. FR-P2-17. */
+  staleness?: string | null;
   /** Used when there is no structured payload: refusals and upstream failures. */
   fallback: string;
 }
@@ -26,6 +31,8 @@ export function AnswerBody({
   citations,
   citationNumbers,
   unanswered,
+  headline = null,
+  staleness = null,
   fallback,
 }: Props): React.JSX.Element {
   const [highlighted, setHighlighted] = useState<string | null>(null);
@@ -80,7 +87,24 @@ export function AnswerBody({
 
   return (
     <>
-      {claims.map((claim, index) => (
+      {headline !== null && (
+        <div className="headline">
+          {/* The label first: "$10" alone does not say copay, deductible or
+              maximum, and a glance at a large number reads it as whichever the
+              member was worried about. D-068. */}
+          <p className="headline__label">{headline.label}</p>
+          <p className="headline__amount">{headline.amount}</p>
+        </div>
+      )}
+      {/* Long answers read as a few labelled parts rather than one run of
+          equal sentences. The grouping comes from which claim cites what, a
+          fact the payload already carries. */}
+      {groupClaims(claims, citations).groups.map((group, groupIndex) => (
+        <section key={groupIndex} className="claim-group">
+          {group.heading !== null && (
+            <h4 className="claim-group__heading">{group.heading}</h4>
+          )}
+          {group.claims.map((claim, index) => (
         <p key={index} className="claim">
           {claim.text}
           {[...new Set(claim.citationIds.map((id) => targetFor(id)?.id).filter((id): id is string => id !== undefined))].map(
@@ -105,6 +129,8 @@ export function AnswerBody({
             },
           )}
         </p>
+          ))}
+        </section>
       ))}
 
       {unanswered.length > 0 && (
@@ -121,6 +147,9 @@ export function AnswerBody({
       {citations.length > 0 && (
         <div className="citations">
           <h4 className="citations__title">Where this comes from</h4>
+          {/* Attached to the source block, so it survives print, copy and speech
+              rather than living in chrome the member may never scroll to. D-067. */}
+          {staleness !== null && <p className="citations__staleness">{staleness}</p>}
           <ol className="citations__list">
             {citations.map((citation) => (
               <li

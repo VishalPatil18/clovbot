@@ -133,6 +133,45 @@ container on Google Cloud Run. Vercel proxies `/api/*` to Cloud Run, which keeps
 the session cookie first-party: it is `HttpOnly; SameSite=Lax`, so a cross-origin
 call would drop it and take rate limiting and the loop breaker with it.
 
+### Before deploying P2 (the authenticated tier)
+
+Both steps below are irreversible against the production database and are yours to run.
+
+**1. Apply the migrations, in order.** Everything from P2 that has not reached production yet:
+
+```
+migrations/005_contract_wildcard.sql   # contract-wide documents reachable from any contract
+migrations/006_drugs_and_routing.sql   # typed drug rows, and the router's decision per turn
+migrations/007_corpus_snapshots.sql    # when the documents were fetched and indexed
+migrations/008_member_records.sql      # five synthetic members and their records
+migrations/009_member_login.sql        # one-time codes and member sessions
+migrations/010_needs_login_outcome.sql # let a turn record the outcome "needs_login"
+```
+
+Each is additive and guarded with `if not exists` or `if exists`, so re-running one is safe.
+Without 010 a gated question still answers, but the turn row is rejected and the
+sign-in card is replaced by an error.
+
+**2. Seed and index.** After the migrations:
+
+```bash
+npm run corpus:discover && npm run corpus:fetch && npm run corpus:convert
+npm run ingest          # chunks, typed drug rows, and the corpus dates
+npm run seed:members    # the five synthetic members
+```
+
+**3. Set the three new secrets** before `npm run deploy:api`, which forwards them:
+
+| Variable | What it is |
+| --- | --- |
+| `RESEND_API_KEY` | Resend key for the verified sending domain |
+| `OTP_FROM_ADDRESS` | `Clovbot <clovbot@v-ai.org>` |
+| `OPERATOR_MEMBER_EMAILS` | Five addresses in member-id order, comma separated |
+
+Without `OPERATOR_MEMBER_EMAILS` the members keep unreachable `@example.invalid` addresses and nobody can sign in. That is the correct default for a checkout, and the wrong one for a demo.
+
+**One thing to know about a public deploy.** Anyone who guesses a seeded address can make the site email a code to that inbox, capped at ten an hour per address and thirty per IP. A code is useless without the inbox, so the worst case is nuisance mail.
+
 ### Deploy the API
 
 ```bash

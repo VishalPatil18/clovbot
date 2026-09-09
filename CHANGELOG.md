@@ -8,6 +8,85 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- _<new capabilities>_
+
+### Changed
+
+- _<changed behaviour>_
+
+### Fixed
+
+- _<bug fixes>_
+
+### Removed
+
+- _<removed capabilities>_
+
+### Security
+
+- _<security-relevant changes>_
+
+---
+
+## [1.1.0] - 2026-09-09
+
+The authenticated tier: a member can sign in with an emailed code and ask about their own record, and every answer still cites the line it came from. A second Medicare contract, typed drug lookups, and a conversation that survives a refresh.
+
+### Added
+
+- A second Medicare contract is indexed: **Clover Health Classic (HMO), H8010-002**, alongside the two Choice PPO plans. The same question now returns each plan's own answer - the out-of-pocket maximum is $6,000 under the HMO and $9,250 under the PPO - each cited to that plan's own documents.
+- The chosen plan stays visible in the assistant header with a **Change plan** control. Switching re-scopes what you ask next and leaves earlier answers exactly as they were answered.
+- You can sign in without a password. Enter your email, get a six-digit code, and type or paste it in - all inside the assistant, so the conversation you were having is still there afterwards. The code works once and lasts ten minutes.
+- While signed in, the assistant says who you are signed in as, and one tap signs you out. Signing out removes anything about your own record from the conversation saved on that device, and leaves the general answers.
+- Ask something only your own record can answer while signed out, and the assistant now says so plainly and offers to sign you in, rather than refusing or guessing. Sign in and it answers the question you already asked, without you retyping it. Questions the plan documents can answer are never put behind a sign-in.
+- The assistant can answer questions about a member's own record at a terminal: what a claim cost, where a prior authorisation stands, how much of an allowance is left, and who the assigned provider is. Answers cite the record and the exact field, and a question that spans both gets the record and the plan documents in one reply, each with its own source. Every record is invented demonstration data.
+- Your conversation is kept on your own device and comes back when you return. A **Clear saved conversations** control deletes it, and **Start over** empties the current conversation without touching what is saved.
+- **Print** produces a clean copy of the conversation with every source intact and none of the buttons, which your browser can save as a PDF or send to a printer.
+- **Copy this answer** puts one answer, its sources, your plan and the document date on the clipboard as plain text, ready to paste into an email or a message.
+- A **Help** panel lists what you can ask, what the assistant cannot do, and what each button does. It opens in place rather than covering the conversation.
+- Once the calendar passes the plan year the documents cover, every answer says so in plain words and tells you to call and check. The notice is read aloud with the answer too, since audio cannot be scrolled back to.
+- The date the plan documents were collected is now recorded and served alongside the plan list.
+- Longer answers are now grouped under the part of the plan document each set of sentences came from, so you can find one section again instead of re-reading the whole reply.
+- Every quality check now runs in one pass and reports together: answer faithfulness, which retrieval path each question took, whether sign-in was asked for correctly in both directions, and whether any earlier measure has slipped. A drop in any of them fails the build.
+
+### Changed
+
+- Plans are named wherever they are shown. The callback request used to label a member's plan "H5141-004"; it now reads "Clover Health Choice (PPO)".
+- Drug list and Clover information answers work under every plan rather than only the plans on one contract.
+- Drug tier answers now come from the drug list itself rather than from a search over its text, and cite the drug they read. Asking what tier a drug is on returns its tier, its therapeutic class and any prior-authorization, quantity or step-therapy limit.
+- Asking about a drug and a rule in one sentence answers both. "Is Eliquis covered and how do I appeal a denial" returns the tier from the drug list and the appeal process from the Evidence of Coverage, each with its own source.
+- The assistant panel now keeps its header and its message box in view while the conversation scrolls between them, so **Talk to a person** is always reachable. Close is an **X** at the top right.
+- Opening the assistant dims the page behind it so the conversation is the only thing competing for attention. Click outside it, press Escape, or use the X to close. Anything you had started typing is still there when you come back.
+- While an answer is being prepared, the assistant says what it is doing at each step rather than showing one unchanging line.
+- The question box now grows to four lines as you type and holds a much longer question.
+- You can play an answer aloud and scroll back through the written version at the same time.
+- Tidier panel throughout: a single row of controls at the top, matching heights on the question box, microphone and Ask button, and slimmer scrollbars that stay out of the way until you need them.
+
+### Fixed
+
+- Asking something only your own record can answer showed the sign-in card and then replaced it with "Something went wrong reaching the plan documents." The answer was right; recording the question failed, and the failure was shown instead of the answer.
+- The sign-in card now opens under the question that needs it rather than at the top of the conversation, where a second question pushed it off screen. It closes with an **X** at its top right, and asking something else closes it too.
+- A code that does not match now reads as an error, in red, rather than in the same colour as everything else on the card.
+- Statin citations named the wrong drug class. Ten drugs under "ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS" were indexed and cited under the class listed above them, so an answer about atorvastatin pointed a member at the wrong part of the drug list. The tier was right; the source line was not.
+
+### Security
+
+- Sign-in codes are never stored. Only a scrypt hash and a per-code salt are kept, and the comparison is timing-safe.
+- A code works once, expires after ten minutes, and stops accepting attempts after five wrong tries.
+- Asking for a code at an address that is not enrolled returns the same message as one that is, and sends nothing. The page cannot be used to find out who is a member.
+- A sign-in mints a fresh session id in its own `HttpOnly; SameSite=Lax` cookie. It expires after 30 minutes idle or 8 hours in total, whichever comes first.
+- Which member's record is read comes from the session row and from nothing the member or the model can say. No classifier can cause someone else's record to be retrieved.
+- Code requests are capped at ten an hour per address and thirty an hour per network.
+- Every member record in this system is invented. No real member data enters it at any version.
+
+---
+
+## [1.0.0] - 2026-09-08
+
+Member-facing plan-document assistant: cited answers, guardrails, voice, and a public deploy.
+
+### Added
+
 - **You can talk to it instead of typing.** Hold the microphone button and speak, or tap once to start and tap again to stop. Both work, always.
 - **It shows you what it heard before it answers**, so you can fix a word it got wrong rather than getting an answer to the wrong question.
 - **Answers are read aloud and written down at the same time.** The text never disappears, so you can re-read it or check where it came from. You can replay or stop the audio.
@@ -41,21 +120,12 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Fixed
 
 - **"Did this answer your question?" now records the answer.** The control had been showing your choice without saving it anywhere since it was added. Regression covered by `migrations/004_release.sql` and the feedback endpoint.
+- **The deployed assistant can answer questions again.** Every question came back as "The assistant could not be reached" while the plan list loaded normally, because the deploy script folded its own separator into each variable name and the running service was left without a database address. Regression test: `tests/unit/deploy-config.test.ts`.
 - **Spoken answers no longer read the source list aloud.** The assistant was reading the citation markers and every "Where this comes from" line, so a 191-character answer took 400 characters to say. Regression test: `tests/unit/spoken-answer.test.ts`.
-
-- _<bug fixes; populated by `/spec-bug`>_
-
-### Removed
-
-- _<removed capabilities>_
-
-### Security
-
-- _<security-relevant changes>_
 
 ---
 
-## [0.1.0] - _<YYYY-MM-DD>_
+## [0.1.0] - 2026-09-07
 
 ### Added
 

@@ -1,0 +1,269 @@
+{
+  "note": "Hand-labelled routing cases. Expected paths are the retrieval paths the router must select. Gated at 90% aggregate, with zero tolerance on any case whose expected paths include \"structured\" resolving to prose search alone - that is the silent degradation D-007 exists to prevent. NFR-P2-03.",
+  "cases": [
+    {
+      "id": "R-01",
+      "question": "what tier is atorvastatin on",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names atorvastatin calcium"
+    },
+    {
+      "id": "R-02",
+      "question": "what tier is metformin",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names metformin hcl"
+    },
+    {
+      "id": "R-03",
+      "question": "is eliquis covered",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names eliquis"
+    },
+    {
+      "id": "R-04",
+      "question": "what tier is levothyroxine on",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names levothyroxine sodium"
+    },
+    {
+      "id": "R-05",
+      "question": "is gabapentin on the drug list",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names gabapentin"
+    },
+    {
+      "id": "R-06",
+      "question": "what tier is omeprazole",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names omeprazole"
+    },
+    {
+      "id": "R-07",
+      "question": "is warfarin covered by my plan",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names warfarin sodium"
+    },
+    {
+      "id": "R-08",
+      "question": "what tier is furosemide on",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names furosemide"
+    },
+    {
+      "id": "R-09",
+      "question": "is albuterol on the formulary",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names albuterol sulfate"
+    },
+    {
+      "id": "R-10",
+      "question": "what tier is ELIQUIS",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "pure lookup, names eliquis"
+    },
+    {
+      "id": "R-11",
+      "question": "is eliquis covered and how do I appeal a denial",
+      "expectedPaths": [
+        "structured",
+        "rag"
+      ],
+      "note": "drug plus a rule (appeal); neither half may be dropped"
+    },
+    {
+      "id": "R-12",
+      "question": "what tier is atorvastatin on and why does it need prior authorization",
+      "expectedPaths": [
+        "structured",
+        "rag"
+      ],
+      "note": "drug plus a rule (prior authorization); neither half may be dropped"
+    },
+    {
+      "id": "R-13",
+      "question": "how do I get an exception for gabapentin",
+      "expectedPaths": [
+        "structured",
+        "rag"
+      ],
+      "note": "drug plus a rule (exception); neither half may be dropped"
+    },
+    {
+      "id": "R-14",
+      "question": "my omeprazole was denied, what do I do",
+      "expectedPaths": [
+        "structured",
+        "rag"
+      ],
+      "note": "drug plus a rule (denied); neither half may be dropped"
+    },
+    {
+      "id": "R-15",
+      "question": "why does metformin need step therapy",
+      "expectedPaths": [
+        "structured",
+        "rag"
+      ],
+      "note": "drug plus a rule (step therapy); neither half may be dropped"
+    },
+    {
+      "id": "R-16",
+      "question": "how do I refill my levothyroxine",
+      "expectedPaths": [
+        "structured",
+        "rag"
+      ],
+      "note": "drug plus a rule (refill); neither half may be dropped"
+    },
+    {
+      "id": "R-17",
+      "question": "can I get warfarin by mail order",
+      "expectedPaths": [
+        "structured",
+        "rag"
+      ],
+      "note": "drug plus a rule (mail order); neither half may be dropped"
+    },
+    {
+      "id": "R-18",
+      "question": "how do I store my insulin",
+      "expectedPaths": [
+        "structured",
+        "rag"
+      ],
+      "note": "drug plus a rule (how do i); neither half may be dropped"
+    },
+    {
+      "id": "R-19",
+      "question": "how do I file an appeal",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-20",
+      "question": "what is my specialist copay",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-21",
+      "question": "what is the out of pocket maximum",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-22",
+      "question": "how do I find a doctor in my network",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-23",
+      "question": "what is prior authorization",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-24",
+      "question": "when can I change plans",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-25",
+      "question": "what does the plan cover for dental",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-26",
+      "question": "how do I get a ride to my appointment",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-27",
+      "question": "what is a coverage determination",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-28",
+      "question": "what is my monthly premium",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "no drug named"
+    },
+    {
+      "id": "R-29",
+      "question": "what tier is ozempic on",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "brand name on this formulary, Tier 3 with PA; labelled 'not covered' by assumption and corrected against the table"
+    },
+    {
+      "id": "R-30",
+      "question": "is mounjaro covered",
+      "expectedPaths": [
+        "structured"
+      ],
+      "note": "brand name on this formulary, Tier 3 with PA; corrected against the table"
+    },
+    {
+      "id": "R-31",
+      "question": "what tier is aspirin",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "over the counter, not a formulary row"
+    },
+    {
+      "id": "R-32",
+      "question": "what is eliquisation",
+      "expectedPaths": [
+        "rag"
+      ],
+      "note": "drug name inside a longer word must not match"
+    }
+  ]
+}

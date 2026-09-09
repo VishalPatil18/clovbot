@@ -59,6 +59,14 @@ function groupIntoLines(words: BboxWord[]): BboxLine[] {
   return lines;
 }
 
+/** Which plan sits on which side, and roughly where. Document-level, so inheritable. */
+interface PlanHeaders {
+  leftPlanId: string;
+  rightPlanId: string;
+  leftX: number;
+  rightX: number;
+}
+
 interface PlanColumns {
   leftPlanId: string;
   rightPlanId: string;
@@ -69,7 +77,7 @@ interface PlanColumns {
 }
 
 /** Header words read "(Plan" "004)", so the plan id is the token after "(Plan". */
-function findPlanColumns(page: BboxPage): PlanColumns | null {
+function findPlanHeaders(page: BboxPage): PlanHeaders | null {
   const headers: { planId: string; x: number }[] = [];
   for (const line of page.lines) {
     for (const [index, word] of line.words.entries()) {
@@ -80,12 +88,21 @@ function findPlanColumns(page: BboxPage): PlanColumns | null {
   }
   const [left, right] = [...headers].sort((a, b) => a.x - b.x);
   if (left === undefined || right === undefined) return null;
+  return { leftPlanId: left.planId, rightPlanId: right.planId, leftX: left.x, rightX: right.x };
+}
+
+/**
+ * Gutters are measured on the page being rendered. They are a function of which
+ * words land where, so a page inheriting another page's absolute boundary cuts
+ * text in half wherever the two pages differ - which recto and verso always do.
+ */
+function columnsFor(page: BboxPage, headers: PlanHeaders): PlanColumns {
   const pageLeftEdge = Math.min(...page.words.map((w) => w.x));
   return {
-    leftPlanId: left.planId,
-    rightPlanId: right.planId,
-    labelBoundary: findGutter(page.words, pageLeftEdge, left.x),
-    boundary: findGutter(page.words, left.x, right.x),
+    leftPlanId: headers.leftPlanId,
+    rightPlanId: headers.rightPlanId,
+    labelBoundary: findGutter(page.words, pageLeftEdge, headers.leftX),
+    boundary: findGutter(page.words, headers.leftX, headers.rightX),
   };
 }
 
@@ -130,8 +147,8 @@ function findGutter(words: BboxWord[], lo: number, hi: number): number {
  */
 export function extractPlanColumn(xhtml: string, planId: string): string {
   const pages = parseBboxPages(xhtml);
-  const columnsPerPage = pages.map(findPlanColumns);
-  const known = columnsPerPage.filter((c): c is PlanColumns => c !== null);
+  const headersPerPage = pages.map(findPlanHeaders);
+  const known = headersPerPage.filter((c): c is PlanHeaders => c !== null);
 
   if (known.length > 0) {
     const seen = new Set(known.flatMap((c) => [c.leftPlanId, c.rightPlanId]));
@@ -144,18 +161,23 @@ export function extractPlanColumn(xhtml: string, planId: string): string {
   }
 
   return pages
-    .map((page, index) => renderPage(page, nearestColumns(columnsPerPage, index), planId))
+    .map((page, index) => {
+      const headers = nearestHeaders(headersPerPage, index);
+      return renderPage(page, headers === null ? null : columnsFor(page, headers), planId);
+    })
     .filter((text) => text.length > 0)
     .join("\n\n");
 }
 
-/** Nearest page carrying a header, preferring the one before this page. */
-function nearestColumns(columnsPerPage: (PlanColumns | null)[], index: number): PlanColumns | null {
-  for (let offset = 0; offset < columnsPerPage.length; offset += 1) {
-    const before = columnsPerPage[index - offset];
-    if (before != null) return before;
-    const after = columnsPerPage[index + offset];
-    if (after != null) return after;
+/**
+ * Nearest preceding page carrying a header. Searching forward too would attribute
+ * a table that appears before any header to plans it has not introduced yet, and
+ * a page that cannot be attributed must fail rather than guess. D-031.
+ */
+function nearestHeaders(headersPerPage: (PlanHeaders | null)[], index: number): PlanHeaders | null {
+  for (let i = index; i >= 0; i -= 1) {
+    const headers = headersPerPage[i];
+    if (headers != null) return headers;
   }
   return null;
 }

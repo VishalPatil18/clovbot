@@ -13,6 +13,24 @@ const DOCUMENT_KINDS: DocumentKind[] = [
 /** Documents that cover the whole contract rather than one plan benefit package. */
 export const ALL_PLANS = "*";
 
+/** Documents that cover every contract, such as the formulary and corporate pages. */
+export const ALL_CONTRACTS = "*";
+
+/**
+ * Whether a retrieved row belongs to the session's plan. Contract-wide rows carry
+ * the wildcard and answer under every plan by design; anything else is leakage,
+ * and leakage reads as a confidently wrong copay rather than as an error. D-056.
+ */
+export function isInPlanScope(
+  scope: { contractId: string; planId: string; planYear: number },
+  row: { contractId: string; planId: string; planYear: number },
+): boolean {
+  if (row.planYear !== scope.planYear) return false;
+  const contractOk = row.contractId === scope.contractId || row.contractId === ALL_CONTRACTS;
+  const planOk = row.planId === scope.planId || row.planId === ALL_PLANS;
+  return contractOk && planOk;
+}
+
 /**
  * Raises rather than defaulting. A citation missing plan year or plan is not a
  * citation, so a chunk that cannot state its provenance must never be indexed.

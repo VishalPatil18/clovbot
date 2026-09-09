@@ -8,9 +8,11 @@ const assistant = readFileSync("web/src/components/Assistant.tsx", "utf8");
 
 describe("callback request [FR-22]", () => {
   it("is pre-filled with the question, the plan and the documents searched", () => {
-    for (const field of ["question", "planContext", "documentsSearched"]) {
+    // The plan reads as its name; the raw id stays on the stored record. D-055.
+    for (const field of ["question", "planName", "documentsSearched"]) {
       expect(panel).toContain(`draft.${field}`);
     }
+    expect(panel).not.toContain("draft.planContext");
   });
 
   it("keeps the phone number visible alongside the form", () => {

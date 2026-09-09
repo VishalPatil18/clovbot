@@ -45,7 +45,15 @@ const EOC_CHAPTER = /^\s*CHAPTER\s+\d+\s*[:.]?\s*(.+?)\s*$/;
 const EOC_SECTION = /^\s*SECTION\s+\d+(?:\.\d+)?\s+(.+?)\s*$/;
 const EOC_SUBSECTION = /^\s*Section\s+\d+\.\d+\s+(.+?)\s*$/;
 
-const FORMULARY_CLASS = /^(\s*)([A-Z][A-Z0-9 &,'/-]{5,})\s*$/;
+/**
+ * A therapeutic class heading. Mostly uppercase, but not entirely: "HMG-CoA" and
+ * "(DMARDS)" are real headings, and requiring every character to be uppercase
+ * silently indexed ten statins under the class above them. D-059.
+ */
+const FORMULARY_CLASS = /^(\s*)([A-Z][A-Za-z0-9 &,'/()-]{5,})\s*$/;
+
+/** A drug row carries a tier digit in its own column; a class heading never does. */
+const FORMULARY_ROW = /\s{2,}[1-5](\s|$)/;
 
 const SOB_BENEFIT =
   /^([A-Z][A-Za-z’'()&,\- ]{2,40}?)\s+(In-Network|Out-of-Network|In-Network and Out-of-Network)[:.]?\s*$/;
@@ -76,6 +84,7 @@ function detectHeading(line: string, kind: DocumentKind): Heading | null {
   }
 
   if (kind === "formulary") {
+    if (FORMULARY_ROW.test(line)) return null;
     const klass = FORMULARY_CLASS.exec(line);
     if (klass?.[2] !== undefined) {
       const indent = (klass[1] ?? "").length;

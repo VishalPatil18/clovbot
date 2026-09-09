@@ -1,3 +1,5 @@
+import type { PlanRef } from "../types.ts";
+
 export type DocumentKind =
   | "evidence_of_coverage"
   | "summary_of_benefits"
@@ -72,7 +74,7 @@ export interface Snapshot {
   createdAt: string;
   countyId: string;
   planYear: number;
-  contractId: string;
-  planId: string;
+  /** Every plan the snapshot covers, across however many contracts. D-053. */
+  plans: PlanRef[];
   entries: ManifestEntry[];
 }

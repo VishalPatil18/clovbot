@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { stalenessWarning } from "../../src/freshness.ts";
 import { renderAnswer, spokenAnswer } from "../../src/rag/payload.ts";
 import type { AnswerPayload } from "../../src/types.ts";
 
@@ -24,7 +26,7 @@ const PAYLOAD: AnswerPayload = {
     { text: "As a member of Clover Health H5141-004, you do not need a referral from your PCP.", citationIds: ["b"] },
   ],
   unanswered: [],
-  refusal: null,
+  refusal: null, headline: null,
 };
 
 describe("spokenAnswer [FR-19]", () => {
@@ -69,6 +71,7 @@ describe("spokenAnswer [FR-19]", () => {
         explanation: "I cannot judge whether a denial was correct.",
         humanPathOffered: true,
       },
+      headline: null,
     };
     const text = spokenAnswer(refusal);
     expect(text).toContain("cannot judge whether a denial was correct");
@@ -76,6 +79,21 @@ describe("spokenAnswer [FR-19]", () => {
   });
 
   it("returns nothing to say when there is nothing to say", () => {
-    expect(spokenAnswer({ claims: [], unanswered: [], refusal: null })).toBe("");
+    expect(spokenAnswer({ claims: [], unanswered: [], refusal: null, headline: null })).toBe("");
+  });
+});
+
+describe("staleness in speech [FR-P2-17, D-067]", () => {
+  // Audio cannot be scrolled back to, so a spoken answer carries its own warning.
+  it("appends the warning to what is read aloud", () => {
+    const warning = stalenessWarning(2026, new Date("2027-06-01T00:00:00Z"));
+    expect(warning).not.toBeNull();
+    const server = readFileSync("src/server.ts", "utf8");
+    expect(server).toContain("withStaleness");
+    expect(server).toMatch(/spokenAnswer:\s*withStaleness/);
+  });
+
+  it("leaves the spoken answer untouched while the corpus is current", () => {
+    expect(stalenessWarning(2026, new Date("2026-06-01T00:00:00Z"))).toBeNull();
   });
 });

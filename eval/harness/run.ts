@@ -1,23 +1,76 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { latestSnapshotId } from "../../src/corpus/snapshot.ts";
 import { answerTurn } from "../../src/rag/answer-turn.ts";
-import { connect } from "../../src/rag/store.ts";
+import { connect, loadDrugIndex } from "../../src/rag/store.ts";
+import { chooseRoute, type RoutePath } from "../../src/rag/router.ts";
+import { needsMemberData } from "../../src/auth/login-required.ts";
 import { judgeFaithfulness } from "../judges/faithfulness.ts";
 import { buildReport, type Bucket, type CaseOutcome } from "./score.ts";
+import type { PlanRef } from "../../src/types.ts";
 
-const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
-const PLAN_YEAR = Number(process.env["CORPUS_PLAN_YEAR"] ?? "2026");
+
 const TOP_K = 5;
+/** NFR-P2-03. Aggregate floor; the structured direction is zero-tolerance. */
+const ROUTING_FLOOR = 0.9;
+/** NFR-P2-02. False positives are gated; false negatives are not tolerated. */
+const LOGIN_FALSE_POSITIVE_FLOOR = 0.95;
+
+/*
+ * NFR-P2-04. Regression floors, set one case below the measured baseline rather
+ * than at it.
+ *
+ * A-21's faithfulness has scored 0 in two of six runs with no code change: the
+ * model sometimes adds "before the drug will be covered", which its cited chunk
+ * does not say. One case of 36 is 0.028, so a strict 1.000 gate would fail the
+ * build on that alone. One flip passes here; two do not.
+ */
+const BASELINE = {
+  faithfulness: 0.96,
+  structural: 1,
+  refusalRate: 0.2,
+  buckets: { A: 36 / 40, B: 8 / 8, C: 10 / 10 },
+} as const;
+
+function checkRegression(report: ReturnType<typeof buildReport>): boolean {
+  const failures: string[] = [];
+  // Null means nothing was judged, which is itself a reason not to pass.
+  if (report.faithfulness === null || report.faithfulness < BASELINE.faithfulness) {
+    failures.push(
+      `faithfulness ${report.faithfulness?.toFixed(3) ?? "not measured"} below ${String(BASELINE.faithfulness)}`,
+    );
+  }
+  if (report.structuralCompliance < BASELINE.structural) {
+    failures.push(`structural compliance ${report.structuralCompliance.toFixed(3)} below 1`);
+  }
+  if (report.refusalRate > BASELINE.refusalRate) {
+    failures.push(`refusal rate ${report.refusalRate.toFixed(3)} above ${String(BASELINE.refusalRate)}`);
+  }
+  for (const bucket of report.buckets) {
+    const floor = BASELINE.buckets[bucket.bucket as keyof typeof BASELINE.buckets];
+    if (floor === undefined || (bucket.accuracy ?? 0) >= floor) continue;
+    failures.push(`bucket ${bucket.bucket} ${bucket.passed}/${bucket.total} below its floor`);
+  }
+
+  console.log("\n=== Regression gate (NFR-P2-04) ===");
+  if (failures.length === 0) {
+    console.log("  every P1 metric is at or above its floor");
+    return false;
+  }
+  for (const failure of failures) console.log(`  REGRESSION: ${failure}`);
+  return true;
+}
 
 interface GoldenCase {
   id: string;
   bucket: Bucket;
   driver: string;
   question: string;
-  plan: string;
+  planRef: PlanRef;
   enforced: boolean;
   expect: {
-    outcome: "answered" | "refused";
+    outcome: "answered" | "refused" | "needs_login";
+    /** Which kind of record data the login is for. FR-P2-49. */
+    recordTopic?: string;
     keyFact?: string | string[];
     sourceDocument?: string;
     mustCite?: boolean;
@@ -52,17 +105,19 @@ try {
   await client.end();
 }
 
+const routing = await scoreRouting();
+const login = scoreLogin();
+
 const report = buildReport(outcomes);
 print(report, outcomes);
+const regressed = checkRegression(report);
 persist(report, outcomes);
 
-if (report.failures.length > 0) process.exit(1);
+if (report.failures.length > 0 || routing.failed || login.failed || regressed) process.exit(1);
 
 async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
   const turn = await answerTurn(client, testCase.question, {
-    contractId: CONTRACT_ID,
-    planId: testCase.plan,
-    planYear: PLAN_YEAR,
+    ...testCase.planRef,
   });
 
   const refused = turn.outcome !== "answered";
@@ -87,7 +142,7 @@ async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
     faithfulness = judged.score;
   }
 
-  const passed = evaluate(testCase, { answer: turn.answer, refused, structural });
+  const passed = evaluate(testCase, { answer: turn.answer, refused, outcome: turn.outcome, structural });
   process.stdout.write(`${passed ? "pass" : "FAIL"}${testCase.enforced ? "" : " (not enforced)"}\n`);
 
   return {
@@ -106,8 +161,20 @@ async function runCase(testCase: GoldenCase): Promise<CaseOutcome> {
 
 function evaluate(
   testCase: GoldenCase,
-  actual: { answer: string; refused: boolean; structural: { compliant: boolean } },
+  actual: {
+    answer: string;
+    refused: boolean;
+    outcome: string;
+    structural: { compliant: boolean };
+  },
 ): boolean {
+  /*
+   * FR-P2-49. A gated turn is neither answered nor refused: it offered a login.
+   * Checked before the refusal branch, because a needs_login turn is not
+   * refused and would otherwise read as a failure.
+   */
+  if (testCase.expect.outcome === "needs_login") return actual.outcome === "needs_login";
+  if (actual.outcome === "needs_login") return false;
   if (testCase.expect.outcome === "refused") return actual.refused;
   if (actual.refused) return false;
   if (testCase.expect.mustCite === true && !actual.structural.compliant) return false;
@@ -122,6 +189,130 @@ function evaluate(
   if (accepted.length === 0) return true;
   const haystack = actual.answer.toLowerCase();
   return accepted.some((value) => haystack.includes(value.toLowerCase()));
+}
+
+interface LoginCase {
+  id: string;
+  question: string;
+  needsMemberData: boolean;
+  note: string;
+}
+
+function scoreLogin(): { failed: boolean } {
+  const cases = (
+    JSON.parse(readFileSync("eval/golden/login-set.json", "utf8")) as { cases: LoginCase[] }
+  ).cases;
+
+  const falseNegatives: string[] = [];
+  const falsePositives: string[] = [];
+  for (const testCase of cases) {
+    const gated = needsMemberData(testCase.question) !== null;
+    if (testCase.needsMemberData && !gated) falseNegatives.push(testCase.id);
+    if (!testCase.needsMemberData && gated) falsePositives.push(testCase.id);
+  }
+
+  const publicCases = cases.filter((c) => !c.needsMemberData).length;
+  const positiveAccuracy =
+    publicCases === 0 ? 1 : (publicCases - falsePositives.length) / publicCases;
+  // Never one aggregate: the two directions cost different things.
+  const failed = falseNegatives.length > 0 || positiveAccuracy < LOGIN_FALSE_POSITIVE_FLOOR;
+
+  console.log("\n=== Login detection report ===");
+  console.log(`  cases               ${String(cases.length)}`);
+  console.log(`  member questions answered without identity  ${String(falseNegatives.length)} [zero tolerance]`);
+  console.log(`  public questions gated  ${String(falsePositives.length)} of ${String(publicCases)}` +
+    ` (accuracy ${positiveAccuracy.toFixed(3)}, floor ${String(LOGIN_FALSE_POSITIVE_FLOOR)})`);
+  if (falseNegatives.length > 0) console.log(`  false negatives: ${falseNegatives.join(", ")}`);
+  if (falsePositives.length > 0) console.log(`  false positives: ${falsePositives.join(", ")}`);
+
+  writeFileSync(
+    "eval/results/login-latest.json",
+    `${JSON.stringify({ snapshotId, cases: cases.length, falseNegatives, falsePositives, positiveAccuracy, failed }, null, 2)}\n`,
+    "utf8",
+  );
+  return { failed };
+}
+
+interface RoutingCase {
+  id: string;
+  question: string;
+  expectedPaths: RoutePath[];
+  note: string;
+}
+
+interface RoutingResult {
+  total: number;
+  correct: number;
+  accuracy: number;
+  /** The direction D-007 exists to prevent: a lookup falling through to prose. */
+  structuredMissed: string[];
+  confusion: Record<string, number>;
+  failed: boolean;
+  wrong: { id: string; expected: string; actual: string }[];
+}
+
+async function scoreRouting(): Promise<RoutingResult> {
+  const routingCases = (
+    JSON.parse(readFileSync("eval/golden/routing-set.json", "utf8")) as { cases: RoutingCase[] }
+  ).cases;
+
+  const client = connect();
+  await client.connect();
+  let index: Set<string>;
+  try {
+    index = await loadDrugIndex(client, snapshotId);
+  } finally {
+    await client.end();
+  }
+
+  const key = (paths: readonly string[]): string => [...paths].sort().join("+");
+  const confusion: Record<string, number> = {};
+  const structuredMissed: string[] = [];
+  const wrong: RoutingResult["wrong"] = [];
+  let correct = 0;
+
+  for (const testCase of routingCases) {
+    const actual = chooseRoute(testCase.question, index).paths;
+    const expected = key(testCase.expectedPaths);
+    const got = key(actual);
+    confusion[`${expected} -> ${got}`] = (confusion[`${expected} -> ${got}`] ?? 0) + 1;
+    if (expected === got) correct += 1;
+    else wrong.push({ id: testCase.id, expected, actual: got });
+    // Zero tolerance: a case expecting a table row that reached prose alone.
+    if (testCase.expectedPaths.includes("structured") && !actual.includes("structured")) {
+      structuredMissed.push(testCase.id);
+    }
+  }
+
+  const accuracy = routingCases.length === 0 ? 0 : correct / routingCases.length;
+  const result: RoutingResult = {
+    total: routingCases.length,
+    correct,
+    accuracy,
+    structuredMissed,
+    confusion,
+    wrong,
+    failed: accuracy < ROUTING_FLOOR || structuredMissed.length > 0,
+  };
+
+  console.log("\n=== Router report ===");
+  console.log(`  cases               ${result.total}`);
+  console.log(`  accuracy            ${accuracy.toFixed(3)} (floor ${ROUTING_FLOOR})`);
+  console.log(`  drug question to prose search only  ${structuredMissed.length} [zero tolerance]`);
+  console.log("  confusion (expected -> actual):");
+  for (const [pair, count] of Object.entries(confusion).sort()) {
+    console.log(`    ${pair}  ${count}`);
+  }
+  if (wrong.length > 0) {
+    console.log("  misrouted:");
+    for (const item of wrong) console.log(`    ${item.id} expected ${item.expected}, got ${item.actual}`);
+  }
+  writeFileSync(
+    "eval/results/routing-latest.json",
+    `${JSON.stringify({ snapshotId, ...result }, null, 2)}\n`,
+    "utf8",
+  );
+  return result;
 }
 
 function print(report: ReturnType<typeof buildReport>, all: CaseOutcome[]): void {

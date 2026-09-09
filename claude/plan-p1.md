@@ -6,29 +6,29 @@
 >
 > **Effort bands for this project** (hours, not days): **S** ≤ 3h · **M** 4-8h · **L** 9-14h.
 
-| Field | Value |
-| --- | --- |
-| Plan version | 1.0.0 |
-| Source | `claude/srs.md` v1.0.0 |
-| Last Updated | 2026-09-07 |
-| Total estimate | ~61h across 10 stages |
+| Field          | Value                  |
+| -------------- | ---------------------- |
+| Plan version   | 1.0.0                  |
+| Source         | `claude/srs.md` v1.0.0 |
+| Last Updated   | 2026-09-07             |
+| Total estimate | ~61h across 10 stages  |
 
 ---
 
 ## Stage Map
 
-| # | Stage | Deliverable | Effort | Cumulative |
-| --- | --- | --- | --- | --- |
-| 1 | Corpus spike | Real Clover documents fetched and converted, with a retrievability report | S | ~3h |
-| 2 | Voice latency spike | Measured numbers against all four latency budgets, before anything depends on them | S | ~6h |
-| 3 | Thinnest end-to-end answer | Cited answer at a terminal from one document. **First demoable artifact.** | M | ~12h |
-| 4 | Full ingest + hybrid retrieval | Whole corpus, contextual chunks, idempotent snapshots, RRF fusion | M | ~19h |
-| 5 | Golden set + eval harness | 50 hand-pinned questions and four scored metrics, failing in CI | M | ~25h |
-| 6 | Rerank, floor, cite-or-refuse | The answer contract, driven by Stage 5's failing tests | M | ~31h |
-| 7 | Chat surface + accessibility | The member-facing product, WCAG 2.2 AA | L | ~43h |
-| 8 | Guardrails + escalation | Bucket C refusals, loop breaker, failure states, callback | M | ~50h |
-| 9 | Voice integration | Full voice loop against the Stage 2 measurements | M | ~58h |
-| 10 | Deploy + release verification | Live, instrumented, eval green, measured on a real device | S | ~61h |
+| #   | Stage                          | Deliverable                                                                        | Effort | Cumulative |
+| --- | ------------------------------ | ---------------------------------------------------------------------------------- | ------ | ---------- |
+| 1   | Corpus spike                   | Real Clover documents fetched and converted, with a retrievability report          | S      | ~3h        |
+| 2   | Voice latency spike            | Measured numbers against all four latency budgets, before anything depends on them | S      | ~6h        |
+| 3   | Thinnest end-to-end answer     | Cited answer at a terminal from one document. **First demoable artifact.**         | M      | ~12h       |
+| 4   | Full ingest + hybrid retrieval | Whole corpus, contextual chunks, idempotent snapshots, RRF fusion                  | M      | ~19h       |
+| 5   | Golden set + eval harness      | 50 hand-pinned questions and four scored metrics, failing in CI                    | M      | ~25h       |
+| 6   | Rerank, floor, cite-or-refuse  | The answer contract, driven by Stage 5's failing tests                             | M      | ~31h       |
+| 7   | Chat surface + accessibility   | The member-facing product, WCAG 2.2 AA                                             | L      | ~43h       |
+| 8   | Guardrails + escalation        | Bucket C refusals, loop breaker, failure states, callback                          | M      | ~50h       |
+| 9   | Voice integration              | Full voice loop against the Stage 2 measurements                                   | M      | ~58h       |
+| 10  | Deploy + release verification  | Live, instrumented, eval green, measured on a real device                          | S      | ~61h       |
 
 **Ordering logic.** Stages 1 and 2 are spikes. They are deliberately not product, because they are the two things that must fail early if they are going to fail at all. The demoable-at-any-stop guarantee begins at Stage 3, around hour 12. Stage 5 precedes Stage 6 so that the answer contract is implemented against tests that already exist and already fail.
 
@@ -55,7 +55,7 @@
 - **Test plan:** Integration test runs the fetch against fixtures captured from the live site so it is repeatable offline. Assertions target the two content-survival checks above, which are the ones that catch a conversion that "succeeded" and produced garbage. One manual read of the Summary of Benefits markdown against the source PDF.
 - **Effort:** S
 - **Exit signal:** You can open the converted Summary of Benefits and read a copay amount that matches the PDF.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done
 
 **If this stage fails,** the product changes shape at hour 3, not hour 34. A corpus that will not convert cleanly means either a different document source, manual extraction of a narrower set, or a scope change - all of which are cheap decisions now and catastrophic ones later.
 
@@ -81,7 +81,7 @@
 - **Test plan:** Manual, scripted, repeated. This is a measurement harness rather than a unit-tested component. The results file is the artifact and is committed, so the numbers can be cited later rather than remembered.
 - **Effort:** S
 - **Exit signal:** A committed results file stating, with real numbers, whether time to first audio under 1.5s is achievable.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] skipped - budgets measured at Stage 9 instead. Cost recorded in D-046.
 
 **If this stage fails,** the budgets get renegotiated at hour 6 while voice is still a plan, rather than at hour 50 when it is half-built. A failed time-to-first-audio measurement is an SRS amendment, not a crisis.
 
@@ -109,7 +109,7 @@
 - **Test plan:** Integration test against a seeded database with a fixed three-question set whose answers were hand-verified. Assert the amount appears, assert a citation exists, assert the turn log row is written with non-empty chunk ids. The no-content case asserts absence of a dollar figure in the output.
 - **Effort:** M
 - **Exit signal:** You can type a question at a terminal and read back a correct, cited copay.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done
 
 **This is the first demoable artifact.** From here, every subsequent stage leaves the system in a state you could show someone.
 
@@ -139,7 +139,7 @@
 - **Test plan:** Unit tests on the chunker for header handling and prefix generation. Integration test running ingest twice and asserting snapshot stability and no duplication. Integration test on the rejection path. Two named retrieval cases asserting the hybrid result beats each single-mode baseline - these are the tests that prove D-004 was worth its complexity.
 - **Effort:** M
 - **Exit signal:** One command rebuilds the whole corpus reproducibly, and a drug-name query retrieves the right formulary row.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done
 
 ---
 
@@ -170,7 +170,7 @@
 - **Test plan:** The harness is itself tested with fixtures - one known-good answer, one uncited answer, one unfaithful answer, one correct refusal. Those four fixtures prove the harness detects what it claims to detect, which is the failure mode that would otherwise make every later number meaningless.
 - **Effort:** M
 - **Exit signal:** `npm run eval` prints four real numbers and CI goes red on the ones that are not yet met.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done
 
 ---
 
@@ -200,7 +200,7 @@
 - **Test plan:** Stage 5's harness is the primary gate. Additional integration tests force each named edge: below-floor, partial coverage, source conflict, datastore down, missing provenance. The datastore-down test is the most important one in the plan - it is the only failure that looks like success.
 - **Effort:** M
 - **Exit signal:** `npm run eval` is green, and killing the database connection produces a refusal rather than a confident answer.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done
 
 ---
 
@@ -233,7 +233,7 @@
 - **Test plan:** Automated axe scan in CI on three routes. Keyboard-only integration test walking a complete flow. Target-size and contrast assertions from computed styles. Two plan-context integration tests, one each side of the boundary. Lighthouse throttled run in CI gating the two latency numbers. One manual screen-reader pass, because automated scans do not catch a nonsensical reading order.
 - **Effort:** L
 - **Exit signal:** You can drive a complete question and cited answer using only the keyboard, at 200% zoom, with no accessibility violations.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done, except accessibility verification, deferred to P3 by D-040.
 
 ---
 
@@ -267,7 +267,7 @@
 - **Test plan:** One integration test per bucket C trigger, driven from the Stage 5 refusal cases so the harness and the product share a single definition. The A-11 versus C-01 pair gets its own paired test. Fault injection for the upstream failure and rate-limit paths. The injection test reuses the Stage 5 hostile fixture rather than defining a second one.
 - **Effort:** M
 - **Exit signal:** Every bucket C question refuses correctly, and forcing a provider outage produces an honest error rather than a wrong answer.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done
 
 ---
 
@@ -299,7 +299,7 @@
 - **Test plan:** Integration tests with mocked provider responses for the chain and the cache. Fault injection at each chain level, including the all-fail case, which is the one that proves the chain terminates somewhere safe. The two latency numbers gate in CI under the same throttled profile as Stage 7. One manual pass speaking a real question on a real device.
 - **Effort:** M
 - **Exit signal:** You can ask a benefits question out loud, hear a cited answer, read the same answer on screen, and the latency numbers hold.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done
 
 ---
 
@@ -330,36 +330,36 @@
 - **Test plan:** Smoke test against the deployed URL in CI. Secret scan as a hard gate. A reproduction test that takes a real turn id from the deployed log and asserts identical chunk reconstruction. Manual real-device pass with numbers written down and committed alongside the Stage 2 results file for comparison.
 - **Exit signal:** A shareable URL answers a cited question, and any answer it has ever given can be reconstructed from its log.
 - **Effort:** S
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [ ] not started · [ ] in progress · [x] done
 
 ---
 
 ## Completion Checklist
 
-- [ ] Stage 1 - Corpus spike
-- [ ] Stage 2 - Voice latency spike
-- [ ] Stage 3 - Thinnest end-to-end answer
-- [ ] Stage 4 - Full ingest and hybrid retrieval
-- [ ] Stage 5 - Golden set and eval harness
-- [ ] Stage 6 - Reranking, confidence floor, cite-or-refuse
-- [ ] Stage 7 - Chat surface and accessibility
-- [ ] Stage 8 - Guardrails and escalation
-- [ ] Stage 9 - Voice integration
-- [ ] Stage 10 - Deploy and release verification
+- [x] Stage 1 - Corpus spike
+- [x] Stage 2 - Voice latency spike
+- [x] Stage 3 - Thinnest end-to-end answer
+- [x] Stage 4 - Full ingest and hybrid retrieval
+- [x] Stage 5 - Golden set and eval harness
+- [x] Stage 6 - Reranking, confidence floor, cite-or-refuse
+- [x] Stage 7 - Chat surface and accessibility
+- [x] Stage 8 - Guardrails and escalation
+- [x] Stage 9 - Voice integration
+- [x] Stage 10 - Deploy and release verification
 
 ---
 
 ## Cross-Cutting Risks
 
-| Risk | Impact | Mitigated by | Residual |
-| --- | --- | --- | --- |
-| Clover documents are not retrievable or convert badly | Fatal. No corpus, no product. | Stage 1, deliberately first | If conversion is partial, the corpus narrows and the refusal rate rises. Detected at hour 3. |
-| Voice latency budgets are unachievable | Voice becomes a liability rather than a feature | Stage 2, measured before anything depends on it | Budgets get renegotiated by SRS amendment rather than quietly missed |
-| No free reranker exists under the zero-cost constraint | FR-03's confidence signal has no implementation | Stage 6 spikes two candidates and picks on measured accuracy | Falls back to raw similarity, which requirements rejected; would need an ADR |
-| Parametric fallback on retrieval failure | Silent, total violation of the citation contract while appearing to work | Stage 6 acceptance criterion, tested directly with the datastore down | The single most important test in this plan |
-| Prompt injection through corpus content | Citation rules bypassed | Stage 5 hostile fixture, Stage 8 assertion, NFR-SEC-04 fencing | Larger threat in P4 when uploads open the corpus |
-| A-11 versus C-01 misclassification | Regulatory. Explaining appeals versus evaluating a denial are one word apart | Paired test in Stage 8, both directions in the golden set | Highest-consequence classifier error in the build |
-| ElevenLabs free tier exhausts during the demonstration | Voice fails live | Stage 2 measures credits per loop; Stage 9 caches audio and terminates the chain at the native synthesiser | The native tier cannot be exhausted, so voice degrades rather than breaking |
-| Refusal rate above 20% from a thin corpus | Product looks unhelpful | Stage 6 requires a corpus-gap analysis rather than a lowered floor, per NFR-QUAL-03 | Prohibition on lowering the floor is what keeps this honest |
-| Eval judge is itself wrong | Every quality number becomes meaningless | Stage 5 calibrates against a hand-checked sample and tests the harness with four fixtures | Judge error is bounded but not eliminated |
-| Accessibility retrofitted rather than built in | Expensive rework, or a floor that is quietly missed | Stage 7 gates it in CI rather than checking at the end | Automated scans miss reading-order problems; one manual pass covers it |
+| Risk                                                   | Impact                                                                       | Mitigated by                                                                                               | Residual                                                                                     |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Clover documents are not retrievable or convert badly  | Fatal. No corpus, no product.                                                | Stage 1, deliberately first                                                                                | If conversion is partial, the corpus narrows and the refusal rate rises. Detected at hour 3. |
+| Voice latency budgets are unachievable                 | Voice becomes a liability rather than a feature                              | Stage 2, measured before anything depends on it                                                            | Budgets get renegotiated by SRS amendment rather than quietly missed                         |
+| No free reranker exists under the zero-cost constraint | FR-03's confidence signal has no implementation                              | Stage 6 spikes two candidates and picks on measured accuracy                                               | Falls back to raw similarity, which requirements rejected; would need an ADR                 |
+| Parametric fallback on retrieval failure               | Silent, total violation of the citation contract while appearing to work     | Stage 6 acceptance criterion, tested directly with the datastore down                                      | The single most important test in this plan                                                  |
+| Prompt injection through corpus content                | Citation rules bypassed                                                      | Stage 5 hostile fixture, Stage 8 assertion, NFR-SEC-04 fencing                                             | Larger threat in P4 when uploads open the corpus                                             |
+| A-11 versus C-01 misclassification                     | Regulatory. Explaining appeals versus evaluating a denial are one word apart | Paired test in Stage 8, both directions in the golden set                                                  | Highest-consequence classifier error in the build                                            |
+| ElevenLabs free tier exhausts during the demonstration | Voice fails live                                                             | Stage 2 measures credits per loop; Stage 9 caches audio and terminates the chain at the native synthesiser | The native tier cannot be exhausted, so voice degrades rather than breaking                  |
+| Refusal rate above 20% from a thin corpus              | Product looks unhelpful                                                      | Stage 6 requires a corpus-gap analysis rather than a lowered floor, per NFR-QUAL-03                        | Prohibition on lowering the floor is what keeps this honest                                  |
+| Eval judge is itself wrong                             | Every quality number becomes meaningless                                     | Stage 5 calibrates against a hand-checked sample and tests the harness with four fixtures                  | Judge error is bounded but not eliminated                                                    |
+| Accessibility retrofitted rather than built in         | Expensive rework, or a floor that is quietly missed                          | Stage 7 gates it in CI rather than checking at the end                                                     | Automated scans miss reading-order problems; one manual pass covers it                       |

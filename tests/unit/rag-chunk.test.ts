@@ -169,3 +169,43 @@ describe("chunkDocument, contextual prefixes [D-006]", () => {
     expect(specialist?.embedText).toContain("Specialist visit: $10 copay");
   });
 });
+
+describe("formulary class headings [D-059]", () => {
+  const drugList = (heading: string): string =>
+    `${heading}\n     atorvastatin calcium TABS 10mg                       1       QL (30 tabs / 30 days)\n`;
+
+  const sectionsOf = (text: string) =>
+    chunkDocument({
+      text,
+      kind: "formulary",
+      documentId: "2026-formulary",
+      contractId: "*",
+      planId: "*",
+      planYear: 2026,
+      snapshotId: "s",
+    }).map((chunk) => chunk.section);
+
+  it("detects a heading carrying a lowercase letter", () => {
+    // Ten statins are indexed under the class above this one without the fix.
+    expect(sectionsOf(drugList("  ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS")).join(" ")).toContain(
+      "ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS",
+    );
+  });
+
+  it("detects a heading carrying parentheses", () => {
+    expect(
+      sectionsOf(drugList("  DISEASE-MODIFYING ANTI-RHEUMATIC DRUGS (DMARDS)")).join(" "),
+    ).toContain("DISEASE-MODIFYING ANTI-RHEUMATIC DRUGS (DMARDS)");
+  });
+
+  it("still detects an ordinary all-caps heading", () => {
+    expect(sectionsOf(drugList("  ANTILIPEMICS, FIBRATES")).join(" ")).toContain(
+      "ANTILIPEMICS, FIBRATES",
+    );
+  });
+
+  it("does not read a drug row as a heading", () => {
+    const sections = sectionsOf(drugList("  ANTILIPEMICS, FIBRATES"));
+    expect(sections.join(" ")).not.toContain("atorvastatin");
+  });
+});

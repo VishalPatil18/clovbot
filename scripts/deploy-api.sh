@@ -56,9 +56,11 @@ for name in DATABASE_URL AZURE_OPENAI_ENDPOINT AZURE_OPENAI_API_KEY AZURE_OPENAI
             AZURE_OPENAI_DEPLOYMENT AZURE_OPENAI_EMBEDDING_DEPLOYMENT GEMINI_API_KEY GEMINI_MODEL \
             ELEVENLABS_API_KEY ELEVENLABS_VOICE_ID ELEVENLABS_TTS_MODEL ELEVENLABS_STT_MODEL \
             FISH_AUDIO_API_KEY FISH_AUDIO_VOICE_ID \
-            CORPUS_CONTRACT_ID CORPUS_PLAN_IDS CORPUS_PLAN_YEAR CORPUS_COUNTY_ID; do
+            RESEND_API_KEY OTP_FROM_ADDRESS OPERATOR_MEMBER_EMAILS; do
   value="${!name:-}"
-  [[ -n "${value}" ]] && env_vars+="^@@^${name}=${value}"
+  # Only the first element declares the separator; repeating ^@@^ would fold it
+  # into the next variable name and silently drop the variable.
+  [[ -n "${value}" ]] && env_vars+="@@${name}=${value}"
 done
 
 gcloud run deploy "${SERVICE}" \

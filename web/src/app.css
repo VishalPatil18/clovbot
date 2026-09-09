@@ -54,7 +54,7 @@
 .button {
   display: inline-flex; align-items: center; justify-content: center;
   gap: var(--spacing-8); padding: var(--spacing-12) var(--spacing-24);
-  min-height: var(--target-min); border-radius: var(--radius-pill);
+  min-height: var(--target-min); border-radius: var(--radius-md);
   border: 2px solid transparent; cursor: pointer; text-decoration: none;
   font-size: var(--text-body); font-weight: var(--font-weight-semibold);
 }
@@ -67,40 +67,196 @@
 .launcher {
   position: fixed; right: var(--spacing-24); bottom: var(--spacing-24); z-index: 40;
   background: var(--color-forest-ink); color: var(--color-cream-paper);
-  border: 2px solid var(--color-cream-paper); border-radius: var(--radius-pill);
+  border: 2px solid var(--color-cream-paper); border-radius: var(--radius-md);
   padding: var(--spacing-16) var(--spacing-24); font-size: var(--text-body);
   font-weight: var(--font-weight-semibold); cursor: pointer;
+  display: inline-flex; align-items: center; gap: var(--spacing-8);
+}
+
+/*
+ * The panel no longer scrolls as one column. Header and composer are pinned and
+ * only the thread moves, so FR-13's human path stays reachable from inside a
+ * long transcript rather than scrolling away with it. D-073.
+ */
+/* 20% black, so the page stays legible behind but stops competing. D-075. */
+.backdrop {
+  position: fixed; inset: 0; z-index: 40; background: rgb(0 0 0 / 20%);
+  /* A wheel over the backdrop has nothing of its own to scroll, so without this
+     it chains to the nearest scrollable ancestor: the page behind it. */
+  overscroll-behavior: none; touch-action: none;
 }
 
 .panel {
   position: fixed; right: 0; top: 0; bottom: 0; z-index: 50;
   width: 40vw; min-width: 24rem; max-width: 100vw;
   background: var(--color-cream-paper); border-left: 1px solid var(--color-border-mist);
-  overflow-y: auto; padding: var(--spacing-16);
+  box-shadow: -18px 0 48px -24px rgb(15 62 23 / 28%);
+  overflow: hidden; padding: 0;
+  display: flex; flex-direction: column;
 }
 
 .assistant { display: flex; flex-direction: column; gap: var(--spacing-16); }
-.assistant--page { max-width: 52rem; }
-.assistant__header { display: flex; flex-wrap: wrap; gap: var(--spacing-16); justify-content: space-between; align-items: flex-start; }
-.assistant__title { font-family: var(--font-display); font-size: var(--text-heading-sm); color: var(--color-forest-ink); margin: 0; }
-.assistant__context { margin: var(--spacing-4) 0 0; font-size: var(--text-body); }
+
+.assistant--panel {
+  flex: 1; min-height: 0; gap: 0;
+  display: grid; grid-template-rows: auto 1fr auto;
+}
+
+.assistant--panel > .assistant__header,
+.assistant--panel > .assistant__foot {
+  padding: var(--spacing-16); background: var(--color-cream-paper);
+}
+
+.assistant--panel > .assistant__header { border-bottom: 1px solid var(--color-border-mist); }
+.assistant--panel > .assistant__foot { border-top: 1px solid var(--color-border-mist); }
+
+/* The only scrolling region. min-height:0 lets a grid row actually shrink. */
+.assistant--panel > .assistant__scroll {
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0;
+  padding: var(--spacing-16);
+  display: flex; flex-direction: column; gap: var(--spacing-16);
+}
+
+.assistant--page > .assistant__scroll,
+.assistant--page > .assistant__foot { display: flex; flex-direction: column; gap: var(--spacing-16); }
+
+.assistant__header { display: grid; gap: var(--spacing-8); }
+
+.assistant__bar { display: flex; gap: var(--spacing-8); justify-content: space-between; align-items: center; }
+
+/* Title row: heading on the left, icon controls hard against the right edge. */
+.assistant__titles { flex: 1; min-width: 0; }
+
+.assistant__corner { display: flex; gap: var(--spacing-8); align-items: flex-start; flex-shrink: 0; }
+
+/*
+ * Visually compact, still 44px of target. Padding is what made these look
+ * heavy; the hit area is unchanged and NFR-A11Y-02 still holds.
+ */
+.assistant__icon-button {
+  min-width: 44px; min-height: 44px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; border-radius: var(--radius-md);
+  color: var(--color-forest-ink); font-size: var(--text-subheading); cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.assistant__icon-button:hover { background: var(--color-keylime-wash); border-color: var(--color-mint-veil); }
+
+.assistant__corner { gap: var(--spacing-4); align-items: center; }
+
+/*
+ * The one named control in the bar. Compact so the title, it and the four icons
+ * hold a single row in a 40vw panel; the title truncates before this wraps.
+ */
+.assistant__mode {
+  display: inline-flex; align-items: center; gap: var(--spacing-4);
+  min-height: var(--target-min); padding: 0 var(--spacing-12); margin-right: var(--spacing-4);
+  flex-shrink: 0; white-space: nowrap;
+  background: var(--color-cream-paper); color: var(--color-forest-ink);
+  border: 1px solid var(--color-forest-ink); border-radius: var(--radius-md);
+  font-size: var(--text-cite); font-weight: var(--font-weight-semibold);
+  cursor: pointer; transition: background 140ms ease;
+}
+
+.assistant__mode:hover { background: var(--color-keylime-wash); }
+.assistant__mode[aria-pressed="true"] { background: var(--color-keylime-wash); border-width: 2px; }
+
+/* The title yields first, so the named control never wraps to a second row. */
+.assistant__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Faire Octave is a sans, so the display face carries weight rather than a
+   serif's contrast. A Garamond substitute is what read wrong here. */
+.assistant__title {
+  font-family: var(--font-display); font-size: var(--text-heading-sm);
+  font-weight: var(--font-weight-semibold); letter-spacing: -0.01em;
+  color: var(--color-forest-ink); margin: 0; white-space: nowrap;
+}
+.assistant__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-4); }
+
+/* Each fact its own chip, so the plan in force reads as a state, not a sentence. */
+.meta-chip {
+  display: inline-flex; align-items: center; gap: var(--spacing-4);
+  min-height: 30px;
+  background: var(--color-keylime-wash); color: var(--color-forest-ink);
+  border: 1px solid var(--color-mint-veil); border-radius: var(--radius-pill);
+  padding: 2px var(--spacing-8); font-size: var(--text-body);
+}
+
+.meta-chip--quiet { background: transparent; border-color: var(--color-border-mist); color: var(--color-charcoal); }
+
+/* Replaces a whole sentence of chrome with one small, permanent statement. */
+.assistant__badge {
+  font-size: var(--text-caption); font-weight: var(--font-weight-semibold);
+  color: var(--color-forest-ink); background: var(--color-keylime-wash);
+  border-radius: var(--radius-pill); padding: 2px var(--spacing-8);
+}
+/*
+ * Inline inside the plan chip's own text. WCAG 2.2 excepts targets inline in a
+ * block of text from the target-size criteria, as .cite-marker already relies
+ * on; forcing 44px here inflated the chip around it.
+ */
+.assistant__plan-change {
+  min-height: 0; padding: 0 var(--spacing-4);
+  background: none; border: 0; font: inherit; color: var(--color-forest-ink);
+  text-decoration: underline; cursor: pointer;
+}
+
 .assistant__header-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
 
-.assistant__thread { display: flex; flex-direction: column; gap: var(--spacing-24); min-height: 12rem; }
+.assistant__thread { display: flex; flex-direction: column; gap: var(--spacing-24); min-height: 12rem; flex: 1; }
 
 .empty__title {
-  font-family: var(--font-display); font-size: var(--text-heading-sm);
-  line-height: var(--leading-heading-sm); color: var(--color-forest-ink); margin: 0 0 var(--spacing-8);
+  font-family: var(--font-display); font-size: var(--text-heading);
+  line-height: 1.15; letter-spacing: -0.02em; text-align: center;
+  color: var(--color-forest-ink); margin: 0 0 var(--spacing-24);
 }
-.empty__body { margin: 0 0 var(--spacing-16); }
-.starters { display: grid; gap: var(--spacing-8); list-style: none; margin: 0; padding: 0; }
+.empty__body { margin: 0 0 var(--spacing-16); font-size: var(--text-body); }
+
+.empty__ask {
+  display: block; color: var(--color-forest-ink);
+  font-family: var(--font-display); font-weight: var(--font-weight-light);
+}
+
+/* Sits under the cards: it answers a question the cards raise, not one before them. */
+.empty__body { text-align: center; margin: var(--spacing-16) 0 0; }
+/* Cards, not a list: an icon, what it answers, and an example of the kind. */
+.starters {
+  display: grid; gap: var(--spacing-8); list-style: none; margin: 0; padding: 0;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
 .starter {
-  display: block; width: 100%; text-align: left; cursor: pointer;
-  min-height: var(--target-min); padding: var(--spacing-12) var(--spacing-16);
-  background: var(--color-keylime-wash); border: 2px solid var(--color-mint-veil);
-  border-radius: var(--radius-md); font-size: var(--text-message); color: var(--color-charcoal);
+  display: grid; gap: var(--spacing-4); width: 100%; height: 100%;
+  text-align: left; cursor: pointer;
+  min-height: var(--target-min); padding: var(--spacing-12);
+  background: var(--color-cream-paper); border: 1px solid var(--color-border-mist);
+  border-radius: var(--radius-md); color: var(--color-charcoal);
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
-.starter:hover { border-color: var(--color-forest-ink); }
+
+.starter__icon {
+  display: grid; place-items: center; width: 34px; height: 34px;
+  border-radius: var(--radius-sm); background: var(--color-keylime-wash);
+  color: var(--color-forest-ink); font-size: 18px; margin-bottom: var(--spacing-4);
+}
+
+.starter__title {
+  font-size: var(--text-message); line-height: var(--leading-message);
+  font-weight: var(--font-weight-semibold); color: var(--color-forest-ink);
+}
+
+.starter__caption { font-size: var(--text-body); line-height: 1.45; color: var(--color-charcoal); }
+
+.starter:hover {
+  border-color: var(--color-sage-mist);
+  box-shadow: 0 8px 20px -14px rgb(15 62 23 / 40%);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .starter { transition: none; }
+  .starter:hover { transform: none; }
+}
 
 .turn { border-bottom: 1px solid var(--color-border-mist); padding-bottom: var(--spacing-16); }
 .turn__question {
@@ -115,6 +271,31 @@
 }
 .turn__answer p { font-size: var(--text-message); line-height: var(--leading-message); margin: 0 0 var(--spacing-12); max-width: 68ch; }
 .turn__answer--refused, .turn__answer--upstream_failure { background: var(--color-slate-hush); padding: var(--spacing-16); border-radius: var(--radius-md); }
+
+/*
+ * The amount is the thing a member came for, so it is the dominant element on
+ * the card. Label first: a bare figure does not say copay, deductible or
+ * maximum. Forest ink on cream clears AA well past the large-text threshold.
+ * D-068.
+ */
+.headline { margin: 0 0 var(--spacing-16); }
+
+.headline__label {
+  margin: 0; font-size: var(--text-caption); font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-forest-ink);
+}
+
+.headline__amount {
+  margin: var(--spacing-4) 0 0; font-family: var(--font-display);
+  font-size: var(--text-heading); line-height: 1.05; letter-spacing: -0.4px;
+  color: var(--color-forest-ink);
+}
+
+/* Rides with the source block so it survives print, copy and speech. D-067. */
+.citations__staleness {
+  margin: 0 0 var(--spacing-8); font-size: var(--text-body);
+  line-height: 1.5; color: var(--color-charcoal);
+}
 
 .claim { position: relative; }
 
@@ -174,6 +355,7 @@
   padding: 0 var(--spacing-4);
 }
 @media (prefers-reduced-motion: reduce) {
+  .assistant__mode { transition: none; }
   .citation--found { transition: none; }
 }
 
@@ -182,15 +364,38 @@
 .feedback button[aria-pressed="true"] { background: var(--color-forest-ink); color: var(--color-cream-paper); }
 
 .plan-prompt { background: var(--color-mint-veil); border-radius: var(--radius-md); padding: var(--spacing-16); }
-.plan-prompt__title { margin: 0 0 var(--spacing-8); font-size: var(--text-subheading); color: var(--color-forest-ink); }
+.plan-prompt__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--spacing-8); }
+.plan-prompt__title { margin: 0; font-size: var(--text-subheading); color: var(--color-forest-ink); }
 .plan-prompt__options { display: grid; gap: var(--spacing-8); list-style: none; margin: var(--spacing-12) 0 0; padding: 0; }
 
-.composer { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
+/* One row, three controls, one height. Items stretch so the mic and Ask match
+   the field however tall it has grown. */
+.composer { display: flex; gap: var(--spacing-8); align-items: flex-end; }
 .composer__input {
-  flex: 1 1 14rem; min-height: var(--target-min);
-  padding: var(--spacing-12) var(--spacing-16);
-  border: 2px solid var(--color-forest-ink); border-radius: var(--radius-pill);
-  font-size: var(--text-input); background: var(--color-cream-paper); color: var(--color-charcoal);
+  flex: 1; min-width: 0;
+  /* Whole pixels so one line fits exactly: 11 + 24 + 11 + 2px of border = 48.
+     A fractional line box overflowed the content area by ~1px, which made the
+     field scroll and pushed the text off centre. */
+  font: inherit; font-size: var(--text-input); line-height: 24px;
+  color: var(--color-charcoal); background: var(--color-cream-paper);
+  border: 1px solid var(--color-forest-ink); border-radius: var(--radius-md);
+  padding: 11px var(--spacing-12);
+  min-height: var(--target-min); height: var(--composer-height);
+  /* Four lines, then it scrolls rather than growing further. */
+  max-height: calc(24px * 4 + 11px * 2 + 2px);
+  resize: none; overflow-y: auto;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+/*
+ * A text field matches :focus-visible on a mouse click too, by design, so the
+ * ring cannot be keyboard-only. Drawn inside the radius instead of 2px outside
+ * it, the indicator becomes part of the control rather than a second box. D-078.
+ */
+.composer__input:focus-visible {
+  outline-offset: -2px;
+  border-color: var(--color-forest-ink);
+  box-shadow: 0 0 0 4px rgb(15 62 23 / 12%);
 }
 
 .assistant__status { margin: 0; min-height: 1.6em; }
@@ -220,14 +425,22 @@
 
 /* Stage 9: voice mode. The mic follows the mock: a 112px circle on a keylime panel. */
 .voice { display: grid; gap: var(--spacing-12); }
+/*
+ * Horizontal: the 112px control keeps its size, which D-045 and the mock both
+ * require for a hand with tremor, but it no longer sits in a column of its own
+ * with the text stacked under it. That column was what filled the panel.
+ */
 .voice__stage {
-  display: grid; justify-items: center; gap: var(--spacing-16);
+  display: flex; align-items: center; gap: var(--spacing-16);
   background: var(--color-keylime-wash); border-radius: var(--radius-md);
-  padding: var(--spacing-32) var(--spacing-24);
+  padding: var(--spacing-12) var(--spacing-16);
+  overflow: hidden;
 }
 
+.voice__lines { display: grid; gap: var(--spacing-4); min-width: 0; text-align: left; }
+
 /* The well reserves room for the rings so they never shift the layout. */
-.mic-well { position: relative; display: grid; place-items: center; width: 200px; height: 200px; }
+.mic-well { position: relative; display: grid; place-items: center; width: 128px; height: 128px; flex-shrink: 0; }
 
 .mic {
   position: relative; z-index: 1;
@@ -269,27 +482,41 @@
   .mic { transition: none; }
 }
 
-.voice__state { margin: 0; text-align: center; font-size: var(--text-message); font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
-.voice__hint { margin: 0; text-align: center; max-width: 32rem; }
+.voice__state { margin: 0; text-align: left; font-size: var(--text-message); font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+.voice__hint { margin: 0; text-align: left; max-width: 32rem; }
 .voice__status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .voice__notice { margin: 0; text-align: center; color: var(--color-forest-ink); font-weight: var(--font-weight-semibold); }
 .voice__error { margin: 0; display: flex; align-items: center; gap: var(--spacing-8); color: #7a1f1f; font-weight: var(--font-weight-semibold); }
 
 .voice__review { display: grid; gap: var(--spacing-8); width: 100%; }
 .voice__label { font-weight: var(--font-weight-semibold); color: var(--color-forest-ink); }
+.voice__transcript:focus-visible {
+  outline-offset: -2px;
+  border-color: var(--color-forest-ink);
+  box-shadow: 0 0 0 4px rgb(15 62 23 / 12%);
+}
+
 .voice__transcript {
   width: 100%; padding: var(--spacing-12);
   border: 2px solid var(--color-forest-ink); border-radius: var(--radius-sm);
   font-size: var(--text-message); line-height: var(--leading-message);
   background: var(--color-cream-paper);
 }
-.voice__actions, .voice__playback { display: flex; flex-wrap: wrap; gap: var(--spacing-8); justify-content: center; }
+/* Stacked rows centred on their own widths did not line up with each other.
+   One edge, shared. */
+.voice__actions, .voice__playback {
+  display: flex; flex-wrap: wrap; gap: var(--spacing-8); justify-content: flex-start;
+  margin-top: 5px;
+}
+
+.voice__actions .button, .voice__playback .button { flex: 0 1 auto; }
 
 /* Dictation from the text composer. Round, to echo the voice-mode control. */
 .dictate {
   display: grid; place-items: center;
-  width: var(--target-min); height: var(--target-min);
-  min-width: var(--target-min); padding: 0;
+  /* Matches the composer field's resting height so the row reads as one bar. */
+  width: var(--composer-height); height: var(--composer-height);
+  min-width: var(--composer-height); flex-shrink: 0; padding: 0;
   border: 2px solid var(--color-forest-ink); border-radius: 999px;
   background: var(--color-cream-paper); color: var(--color-forest-ink);
   font-size: 20px; cursor: pointer; touch-action: none;
@@ -379,7 +606,408 @@
  * from colour, icon and the text beside them, so the movement simply stops.
  */
 @media (prefers-reduced-motion: reduce) {
+  .assistant__icon-button, .composer__input { transition: none; }
+  .turn__pending-text {
+    animation: none;
+    background: none; color: var(--color-forest-ink);
+    -webkit-text-fill-color: currentColor;
+  }
   .turn__answer--speaking { animation: none; background-position: 0 0, 50% 0; }
   .mic-halo__sweep { animation: none; }
   .equaliser span { animation: none; transform: scaleY(0.8); }
+}
+
+/* Stage 4: session surfaces. */
+
+.help {
+  background: var(--color-keylime-wash); border: 1px solid var(--color-mint-veil);
+  border-radius: var(--radius-md); padding: var(--spacing-16);
+}
+
+.help__title {
+  margin: var(--spacing-12) 0 var(--spacing-8); font-size: var(--text-subheading);
+  font-family: var(--font-display); color: var(--color-forest-ink);
+}
+
+.help__title:first-child { margin-top: 0; }
+.help__list { margin: 0; padding-left: var(--spacing-24); font-size: var(--text-message); line-height: var(--leading-message); }
+.help__list li { margin-bottom: var(--spacing-8); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--spacing-8); margin-bottom: var(--spacing-12); }
+
+/* NFR-P2-11: 44px minimum on every chip. */
+.chip {
+  display: inline-flex; align-items: center; gap: var(--spacing-8);
+  min-height: 44px; min-width: 44px; padding: 0 var(--spacing-16);
+  background: var(--color-cream-paper); color: var(--color-forest-ink);
+  border: 1px solid var(--color-forest-ink); border-radius: var(--radius-md);
+  font-size: var(--text-body); font-weight: var(--font-weight-semibold);
+  text-decoration: none; cursor: pointer;
+}
+
+.chip:hover { background: var(--color-keylime-wash); }
+
+/*
+ * FR-P2-20. Print carries the transcript and every source and drops the chrome.
+ * The browser's own print-to-PDF is the export path, so this stylesheet is the
+ * whole export feature.
+ */
+@media print {
+  .launcher,
+  .chips,
+  .composer,
+  .feedback,
+  .assistant__corner,
+  .assistant__header-actions,
+  .button--human,
+  .cite-marker,
+  .help,
+  .voice,
+  .dictate { display: none !important; }
+
+  .panel {
+    position: static; width: auto; min-width: 0; border: 0;
+    overflow: visible; display: block;
+  }
+
+  .assistant--panel { display: block; }
+
+  /* Every region prints; nothing is left inside a scroll box. */
+  .assistant__scroll,
+  .assistant__foot { overflow: visible !important; max-height: none !important; padding: 0; }
+
+  .turn { break-inside: avoid; }
+  .citations { break-inside: avoid; }
+
+  body { background: #ffffff; color: #000000; }
+}
+
+/* Stage 4b: the interface pass. */
+
+/* The send control matches the field and the mic, so the row has one baseline. */
+.composer .button--primary {
+  height: var(--composer-height); min-height: var(--composer-height); flex-shrink: 0;
+  padding: 0 var(--spacing-16); border-radius: var(--radius-md);
+}
+
+/* Compact chips: half the side padding, same 44px of target. */
+.chip { padding: 0 var(--spacing-12); font-size: var(--text-cite); gap: var(--spacing-4); }
+.chip--human { border-width: 2px; }
+.chips { gap: var(--spacing-4); margin-bottom: var(--spacing-8); }
+
+.feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-8); }
+.feedback__copy { margin-left: auto; }
+
+/* FR-15, kept short and quiet rather than removed. */
+.assistant__scope {
+  text-align: center; font-size: var(--text-caption); line-height: 1.5;
+  color: var(--color-charcoal); opacity: 0.75;
+  padding-top: var(--spacing-8); margin: 0;
+}
+
+.assistant__status { text-align: center; font-size: var(--text-body); color: var(--color-forest-ink); }
+
+/*
+ * Thin scrollbars that appear only while scrolling on platforms that support
+ * it, and a consistent thin bar on Windows and Linux where overlay scrollbars
+ * are not the default.
+ */
+.assistant__scroll,
+.composer__input {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-sage-mist) transparent;
+}
+
+.assistant__scroll::-webkit-scrollbar,
+.composer__input::-webkit-scrollbar { width: 8px; height: 8px; }
+
+.assistant__scroll::-webkit-scrollbar-track,
+.composer__input::-webkit-scrollbar-track { background: transparent; }
+
+.assistant__scroll::-webkit-scrollbar-thumb,
+.composer__input::-webkit-scrollbar-thumb {
+  background: transparent; border-radius: 999px; border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.assistant__scroll:hover::-webkit-scrollbar-thumb,
+.assistant__scroll:focus-within::-webkit-scrollbar-thumb,
+.composer__input:hover::-webkit-scrollbar-thumb,
+.composer__input:focus-within::-webkit-scrollbar-thumb {
+  background: var(--color-sage-mist); background-clip: content-box;
+}
+
+/*
+ * Voice mode sat in the pinned foot at full height, squeezing the thread to a
+ * sliver, so an answer could be heard but not read. The stage is capped and the
+ * thread keeps its share.
+ */
+/*
+ * No cap and no scroll here. The cap existed when the stage was a tall column;
+ * it is horizontal now and the transcript is a fixed three rows, so nothing in
+ * this region varies in height. All the scrollbar did was expose the rings,
+ * which pulse to about 1.8x their 112px base and overflow the well by design.
+ */
+.assistant--panel .voice__stage { padding: var(--spacing-12); }
+
+/* Smaller, quieter placeholder: the field should not shout its own instructions. */
+.composer__input::placeholder { font-size: var(--text-body); color: var(--color-charcoal); opacity: 0.6; }
+
+/* Yes and no sit inside a row of small controls, so they carry small padding. */
+.feedback .button--quiet { padding: 0 var(--spacing-12); font-size: var(--text-cite); }
+.feedback > span { font-size: var(--text-body); }
+
+/*
+ * Full page. The reference's sidebar carries an account, saved chats and an
+ * upgrade tier; none exist here, so the rail carries the plan, the actions and
+ * the way to reach a person, and the conversation gets the rest.
+ */
+/*
+ * The banner sits above the workspace, so a workspace of 100vh made the document
+ * taller than the viewport and the whole page scrolled. The column owns the
+ * height instead, and the workspace takes what is left.
+ */
+.fullscreen {
+  display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh; overflow: hidden;
+}
+
+/* The rail and the conversation each scroll on their own; the composer stays put. */
+.workspace {
+  display: grid; grid-template-columns: 15rem 1fr;
+  flex: 1; min-height: 0; overflow: hidden;
+}
+
+.rail {
+  display: flex; flex-direction: column; gap: var(--spacing-16);
+  padding: var(--spacing-16); overflow-y: auto;
+  background: var(--color-keylime-wash);
+  border-right: 1px solid var(--color-border-mist);
+}
+
+/* Pushed to the bottom so the rail reads as a column with a foot, not a void. */
+.rail__human {
+  margin-top: auto; display: grid; gap: var(--spacing-8);
+  background: var(--color-mint-veil); border: 1px solid var(--color-sage-mist);
+  border-radius: var(--radius-md); padding: var(--spacing-16);
+}
+
+.rail__hours {
+  margin: 0; display: grid; justify-items: start; gap: var(--spacing-4);
+  font-size: var(--text-body);
+}
+
+.rail__live {
+  justify-self: start;
+  background: var(--color-forest-ink); color: var(--color-cream-paper);
+  border-radius: var(--radius-pill); padding: 2px var(--spacing-8);
+  font-size: var(--text-caption); font-weight: var(--font-weight-semibold);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+.rail__human-copy { margin: 0; font-size: var(--text-body); line-height: 1.45; }
+
+.rail__call {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--spacing-8); min-height: var(--target-min);
+  background: var(--color-forest-ink); color: var(--color-cream-paper);
+  border-radius: var(--radius-md); text-decoration: none;
+  font-size: var(--text-body); font-weight: var(--font-weight-semibold);
+}
+
+.rail__call:hover { background: #0c2f10; }
+.rail__tty { margin: 0; font-size: var(--text-caption); color: var(--color-charcoal); text-align: center; }
+
+/* The rail already carries the human path, so the tools do not repeat it. */
+.rail .chip--human { display: none; }
+
+/* Two across on the full page, whatever the column width. */
+.assistant--page .starters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 48rem) {
+  .assistant--page .starters { grid-template-columns: 1fr; }
+}
+
+.rail__back {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--spacing-8); min-height: var(--target-min); padding: 0 var(--spacing-16);
+  background: var(--color-cream-paper); border: 1px solid var(--color-forest-ink);
+  border-radius: var(--radius-md); text-decoration: none;
+  color: var(--color-forest-ink); font-size: var(--text-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rail__back:hover { background: var(--color-mint-veil); }
+
+/* Stacked in the rail, wrapped in the panel. */
+.rail .chips { flex-direction: column; align-items: stretch; gap: var(--spacing-4); }
+.rail .chip { justify-content: flex-start; }
+
+.page {
+  min-height: 0; padding: 0; max-width: none; margin: 0;
+  display: flex; flex-direction: column;
+}
+
+/* Same three-row shape as the panel: pinned header, one scrolling region, pinned
+   composer. The full page had none of it, so everything drifted. */
+.assistant--page {
+  flex: 1; min-height: 0; max-width: none; gap: 0;
+  display: grid; grid-template-rows: auto 1fr auto;
+}
+
+.assistant--page > .assistant__header,
+.assistant--page > .assistant__foot { padding: var(--spacing-16) var(--spacing-24); }
+.assistant--page > .assistant__header { border-bottom: 1px solid var(--color-border-mist); }
+.assistant--page > .assistant__foot { border-top: 1px solid var(--color-border-mist); }
+
+.assistant--page > .assistant__scroll {
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0;
+  padding: var(--spacing-24);
+  display: flex; flex-direction: column; gap: var(--spacing-16);
+}
+
+/*
+ * Left-aligned to the same edge as the heading and the chips above it, so the
+ * conversation and the composer line up with the header rather than floating
+ * away from it.
+ */
+.assistant--page > .assistant__scroll > * { width: 100%; max-width: 52rem; margin-inline: 0; }
+.assistant--page > .assistant__foot > * { max-width: 52rem; margin-inline: 0; width: 100%; }
+
+/*
+ * Until a question is asked there is no conversation to align to, so the
+ * opening screen sits in the middle of the column. The first answer moves it
+ * left, where it stays.
+ */
+.assistant--page.assistant--empty > .assistant__scroll > *,
+.assistant--page.assistant--empty > .assistant__foot > * { margin-inline: auto; }
+
+/* Centred vertically while it is the only thing on screen; a real conversation
+   pushes it out and the thread flows from the top again. */
+.empty { margin-block: auto; }
+
+@media (max-width: 60rem) {
+  .workspace { grid-template-columns: 1fr; }
+  .rail { border-right: 0; border-bottom: 1px solid var(--color-border-mist); }
+  .rail .chips { flex-direction: row; flex-wrap: wrap; }
+}
+
+/*
+ * The waiting line, where the answer will appear. A slow sweep of light across
+ * the text says the system is working without a spinner competing with the
+ * message; the message itself cross-fades as the real stage advances.
+ */
+.turn__pending {
+  margin: 0; min-height: var(--leading-message);
+  font-size: var(--text-message); line-height: var(--leading-message);
+}
+
+.turn__pending-text {
+  display: inline-block;
+  background: linear-gradient(
+    100deg,
+    var(--color-charcoal) 30%,
+    var(--color-forest-ink) 45%,
+    var(--color-sage-mist) 52%,
+    var(--color-forest-ink) 59%,
+    var(--color-charcoal) 74%
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: pending-sweep 2.4s linear infinite;
+}
+
+@keyframes pending-sweep {
+  from { background-position: 160% 0; }
+  to { background-position: -60% 0; }
+}
+
+/*
+ * A long answer as a few labelled parts. The heading names the source section
+ * the claims beneath it came from, so the structure carries provenance rather
+ * than decorating the text.
+ */
+.claim-group + .claim-group { margin-top: var(--spacing-16); }
+
+.claim-group__heading {
+  margin: 0 0 var(--spacing-8);
+  font-size: var(--text-body); font-weight: var(--font-weight-semibold);
+  color: var(--color-forest-ink);
+  padding-left: var(--spacing-12);
+  border-left: 3px solid var(--color-sage-mist);
+}
+
+/* Stage 6: signing in, inside the panel. */
+
+.signin {
+  background: var(--color-keylime-wash); border: 1px solid var(--color-mint-veil);
+  border-radius: var(--radius-md); padding: var(--spacing-16);
+  display: grid; gap: var(--spacing-8);
+}
+
+.signin__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--spacing-8);
+  /* Pulls the 44px target back into the card's own padding. */
+  margin: calc(var(--spacing-8) * -1) calc(var(--spacing-8) * -1) 0 0;
+}
+
+.signin__title {
+  margin: 0; display: flex; align-items: center; gap: var(--spacing-8);
+  font-size: var(--text-subheading); font-family: var(--font-display);
+  color: var(--color-forest-ink);
+}
+
+.signin__body { margin: 0; font-size: var(--text-body); }
+.signin__form { display: grid; gap: var(--spacing-8); }
+.signin__label { font-size: var(--text-body); font-weight: var(--font-weight-semibold); }
+
+.signin__input {
+  /* 16px floor: below it iOS zooms the page when the field takes focus. */
+  font: inherit; font-size: var(--text-input); line-height: 24px;
+  min-height: var(--target-min); padding: 11px var(--spacing-12);
+  background: var(--color-cream-paper); color: var(--color-charcoal);
+  border: 1px solid var(--color-forest-ink); border-radius: var(--radius-md);
+}
+
+.signin__input:focus-visible {
+  outline-offset: -2px;
+  box-shadow: 0 0 0 4px rgb(15 62 23 / 12%);
+}
+
+/* Spaced digits are easier to read back from an email. */
+.signin__input--code { letter-spacing: 0.35em; font-variant-numeric: tabular-nums; }
+
+.signin__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
+.signin__notice { margin: 0; font-size: var(--text-body); line-height: 1.45; }
+
+/* A wrong code is a dead end until it reads as one. Same danger red the
+   callback and voice surfaces already use. */
+.signin__error {
+  margin: 0; font-size: var(--text-body); line-height: 1.45;
+  display: flex; align-items: flex-start; gap: var(--spacing-8);
+  padding: var(--spacing-8) var(--spacing-12);
+  border-radius: var(--radius-sm);
+  background: #fdeceb; color: #7a1f1f;
+  font-weight: var(--font-weight-semibold);
+}
+
+.signin__error svg { flex-shrink: 0; font-size: var(--text-subheading); }
+
+.meta-chip--signed { background: var(--color-mint-veil); border-color: var(--color-sage-mist); }
+
+/* FR-P2-43. An invitation, not a dead end: it says why and offers the way in. */
+.turn__answer--needs-login {
+  background: var(--color-keylime-wash); border: 1px solid var(--color-mint-veil);
+  border-radius: var(--radius-md); padding: var(--spacing-16);
+  display: grid; gap: var(--spacing-12); justify-items: start;
+}
+.turn__answer--needs-login p { margin: 0; font-size: var(--text-message); line-height: var(--leading-message); }
+
+/* The form belongs to the question above it. Paper on keylime so the card
+   inside the invitation does not read as one flat block. */
+.turn__answer--needs-login .signin {
+  width: 100%; background: var(--color-cream-paper);
 }

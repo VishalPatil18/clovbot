@@ -6,9 +6,30 @@ import { answerTurn } from "./rag/answer-turn.ts";
 import { citationLabel, citationNumbers, numberCitations, spokenAnswer } from "./rag/payload.ts";
 import { needsPlanContext } from "./rag/plan-scope.ts";
 import {
+  CORPUS_SCOPE,
+  formatPlanRef,
+  planDisplayName,
+  resolveIndexedPlan,
+  toPlanChoices,
+  type PlanChoice,
+} from "./corpus/scope.ts";
+import type { PlanRef } from "./types.ts";
+import { stalenessWarning } from "./freshness.ts";
+import { sendLoginCode } from "./auth/mail.ts";
+import {
+  currentSession,
+  endSession,
+  issueCode,
+  memberByEmail,
+  redeemCode,
+  startSession,
+} from "./auth/store.ts";
+import {
   checkRate,
   connect,
   consecutiveRefusals,
+  indexedPlans,
+  readCorpusFreshness,
   recordFeedback,
   writeCallback,
   writeTurn,
@@ -19,14 +40,31 @@ import { degradeNotice } from "./voice/chain.ts";
 import { speak, transcribe } from "./voice/providers.ts";
 
 const PORT = Number(process.env["PORT"] ?? "5174");
-const CONTRACT_ID = process.env["CORPUS_CONTRACT_ID"] ?? "H5141";
-const PLAN_YEAR = Number(process.env["CORPUS_PLAN_YEAR"] ?? "2026");
+const PLAN_YEAR = CORPUS_SCOPE.planYear;
 
-/** Names come from the Stage 1 catalog, not from the mock's invented placeholders. */
-export const PLANS = [
-  { id: "004", name: "Clover Health Choice (PPO)" },
-  { id: "007", name: "Clover Health Choice Value (PPO)" },
-] as const;
+/**
+ * Offered plans, built from the corpus scope so the picker cannot name a plan the
+ * corpus does not cover. Names come from the catalog, not from the mock's invented
+ * placeholders, and a plan without one raises here rather than showing a member a
+ * contract number. D-055.
+ */
+/** Populated at boot from the index, so the picker cannot outrun the corpus. */
+export let PLANS: PlanChoice[] = [];
+
+/** FR-P2-16. Read at boot from the index, never from a disk the container lacks. */
+export let CORPUS: { documentsFetchedAt: string; ingestedAt: string; planYear: number } | null = null;
+
+/** A spoken answer carries its own warning; audio cannot be scrolled back to. */
+const withStaleness = (spoken: string, warning: string | null): string =>
+  warning === null ? spoken : `${spoken} ${warning}`;
+
+/** The plan answered when a question needs no plan context. Retrieval always scopes. */
+function firstIndexedPlan(): PlanRef {
+  const first = PLANS[0];
+  if (first === undefined) throw new Error("no plans are indexed");
+  return { contractId: first.contractId, planId: first.id, planYear: first.planYear };
+}
+
 
 const MAX_QUESTION = 500;
 const MAX_NOTE = 1_000;
@@ -38,6 +76,8 @@ const IP_LIMIT = 60;
 const IP_WINDOW = "1 hour";
 
 const SESSION_COOKIE = "clovbot_sid";
+/* Separate from the anonymous session, and rotated on every sign-in. D-084. */
+const MEMBER_COOKIE = "clovbot_member";
 
 /** Opaque and server-issued. Carries no member identity. NFR-SEC-01. */
 function sessionId(req: IncomingMessage, res: ServerResponse): string {
@@ -62,10 +102,133 @@ const send = (res: ServerResponse, event: unknown): void => {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 };
 
+const memberCookie = (req: IncomingMessage): string | null =>
+  new RegExp(`${MEMBER_COOKIE}=([0-9a-f-]{36})`).exec(req.headers.cookie ?? "")?.[1] ?? null;
+
+const setMemberCookie = (res: ServerResponse, value: string, maxAge: number): void => {
+  res.setHeader(
+    "set-cookie",
+    `${MEMBER_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${String(maxAge)}`,
+  );
+};
+
+const json = (res: ServerResponse, status: number, body: unknown): void => {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify(body));
+};
+
+/**
+ * FR-P2-32. Ten codes an hour per address and thirty per address family, counted
+ * in the same Postgres mechanism the question limits already use.
+ */
+const CODE_LIMIT_PER_EMAIL = 10;
+const CODE_LIMIT_PER_IP = 30;
+
+/** FR-P2-35. The cookie outlives neither cap. */
+const MEMBER_COOKIE_MAX_AGE = 8 * 60 * 60;
+
+/**
+ * The same reply whether or not the address is enrolled, so the endpoint cannot
+ * be used to discover which of the five exist.
+ */
+const CODE_SENT = { sent: true } as const;
+
+async function handleLoginRequest(body: string, res: ServerResponse, ip: string): Promise<void> {
+  let email = "";
+  try {
+    const parsed = JSON.parse(body) as { email?: unknown };
+    email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 254) : "";
+  } catch {
+    json(res, 400, { error: "malformed request" });
+    return;
+  }
+  if (email.length === 0) {
+    json(res, 400, { error: "email is required" });
+    return;
+  }
+
+  const client = connect();
+  await client.connect();
+  try {
+    const byEmail = await checkRate(client, `otp:${email.toLowerCase()}`, CODE_LIMIT_PER_EMAIL, "1 hour");
+    const byIp = await checkRate(client, `otp-ip:${ip}`, CODE_LIMIT_PER_IP, "1 hour");
+    if (!byEmail.allowed || !byIp.allowed) {
+      json(res, 429, {
+        error: "Too many codes requested. Wait an hour, or call Member Services.",
+      });
+      return;
+    }
+
+    const member = await memberByEmail(client, email);
+    if (member !== null) {
+      const code = await issueCode(client, member);
+      const delivery = await sendLoginCode(member.email, code);
+      // Never the code, and never whether the address matched anyone.
+      console.log(`login code requested: delivery ${delivery.detail}`);
+    }
+    json(res, 200, CODE_SENT);
+  } finally {
+    await client.end();
+  }
+}
+
+async function handleLoginVerify(body: string, res: ServerResponse): Promise<void> {
+  let email = "";
+  let code = "";
+  try {
+    const parsed = JSON.parse(body) as { email?: unknown; code?: unknown };
+    email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 254) : "";
+    code = typeof parsed.code === "string" ? parsed.code.slice(0, 32) : "";
+  } catch {
+    json(res, 400, { error: "malformed request" });
+    return;
+  }
+
+  const client = connect();
+  await client.connect();
+  try {
+    const { result, memberId } = await redeemCode(client, email, code, new Date());
+    if (result.kind !== "ok" || memberId === null) {
+      json(res, 401, { error: SIGN_IN_MESSAGE[result.kind] });
+      return;
+    }
+    const sessionId = await startSession(client, memberId);
+    setMemberCookie(res, sessionId, MEMBER_COOKIE_MAX_AGE);
+    const session = await currentSession(client, sessionId, new Date());
+    json(res, 200, { signedInAs: session?.displayName ?? null });
+  } finally {
+    await client.end();
+  }
+}
+
+/** FR-P2-36. Plain language, and never a raw error. */
+const SIGN_IN_MESSAGE: Record<string, string> = {
+  wrong: "That code did not match. Check it and try again, or ask for a new one.",
+  expired: "That code has expired. Ask for a new one and it will arrive in a moment.",
+  used: "That code has already been used. Ask for a new one to sign in again.",
+  locked: "Too many tries with that code. Ask for a new one to start again.",
+  ok: "",
+};
+
+async function handleLogout(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const existing = memberCookie(req);
+  if (existing !== null) {
+    const client = connect();
+    await client.connect();
+    try {
+      await endSession(client, existing);
+    } finally {
+      await client.end();
+    }
+  }
+  setMemberCookie(res, "", 0);
+  json(res, 200, { signedOut: true });
+}
+
 const server = createServer((req, res) => {
   if (req.method === "GET" && req.url === "/api/plans") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ plans: PLANS, planYear: PLAN_YEAR, contractId: CONTRACT_ID }));
+    res.end(JSON.stringify({ plans: PLANS, planYear: PLAN_YEAR, corpus: CORPUS }));
     return;
   }
 
@@ -76,6 +239,35 @@ const server = createServer((req, res) => {
 
   if (req.method === "POST" && req.url === "/api/speak") {
     collect(req, (body) => void handleSpeak(body, res));
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/session") {
+    void (async (): Promise<void> => {
+      const client = connect();
+      await client.connect();
+      try {
+        const session = await currentSession(client, memberCookie(req), new Date());
+        json(res, 200, { signedInAs: session?.displayName ?? null });
+      } finally {
+        await client.end();
+      }
+    })();
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/login/request") {
+    collect(req, (body) => void handleLoginRequest(body, res, clientIp(req)));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/login/verify") {
+    collect(req, (body) => void handleLoginVerify(body, res));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/logout") {
+    void handleLogout(req, res);
     return;
   }
 
@@ -93,6 +285,7 @@ const server = createServer((req, res) => {
   const route = req.url;
   const session = sessionId(req, res);
   const ip = clientIp(req);
+  const memberToken = memberCookie(req);
 
   let body = "";
   req.on("data", (chunk: Buffer) => {
@@ -105,7 +298,7 @@ const server = createServer((req, res) => {
       void handleCallback(body, res, session);
       return;
     }
-    void handleAsk(body, res, session, ip);
+    void handleAsk(body, res, session, ip, memberToken);
   });
 });
 
@@ -322,13 +515,17 @@ async function handleAsk(
   res: ServerResponse,
   session: string,
   ip: string,
+  /** The member cookie as sent. Resolved to a session row, never trusted as an id. */
+  memberToken: string | null,
 ): Promise<void> {
   let question = "";
   let planId: string | null = null;
+  let contractId: string | null = null;
   try {
-    const parsed = JSON.parse(body) as { question?: unknown; planId?: unknown };
+    const parsed = JSON.parse(body) as { question?: unknown; planId?: unknown; contractId?: unknown };
     question = typeof parsed.question === "string" ? parsed.question.slice(0, MAX_QUESTION).trim() : "";
     planId = typeof parsed.planId === "string" ? parsed.planId : null;
+    contractId = typeof parsed.contractId === "string" ? parsed.contractId : null;
   } catch {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "malformed request" }));
@@ -341,6 +538,15 @@ async function handleAsk(
     return;
   }
 
+  // An unindexed plan retrieves nothing and reads as a refusal. Say it is a bad
+  // request instead. Contract defaults only while the corpus covers one.
+  const planRef = planId === null ? null : resolveIndexedPlan(PLANS, contractId, planId);
+  if (planId !== null && planRef === null) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "unknown plan" }));
+    return;
+  }
+
   res.writeHead(200, {
     "content-type": "text/event-stream",
     "cache-control": "no-cache",
@@ -349,13 +555,16 @@ async function handleAsk(
 
   // FR-10, D-022: ask for plan only when the answer depends on it, and only
   // once per session. The member may ask anything before choosing.
-  if (planId === null && needsPlanContext(question)) {
+  if (planRef === null && needsPlanContext(question)) {
     send(res, { type: "needs_plan", plans: PLANS, question });
     res.end();
     return;
   }
 
   const client = connect();
+  // Instrumentation runs after the answer is on screen. A failure there must not
+  // replace a delivered answer with an error the member cannot act on.
+  let delivered = false;
   try {
     await client.connect();
 
@@ -376,18 +585,34 @@ async function handleAsk(
       }
     }
 
+    /*
+     * FR-P2-45's structural half. The member id comes from a live session row
+     * and from nowhere else, so no classifier - Stage 7's or any later one -
+     * can cause member data to be retrieved for someone without a session.
+     */
+    const member = await currentSession(client, memberToken, new Date());
+
     const turn = await answerTurn(
       client,
       question,
-      { contractId: CONTRACT_ID, planId: planId ?? PLANS[0].id, planYear: PLAN_YEAR },
-      { onToken: () => send(res, { type: "progress" }) },
+      planRef ?? firstIndexedPlan(),
+      {
+        onToken: () => send(res, { type: "progress" }),
+        ...(member === null ? {} : { memberId: member.memberId }),
+      },
     );
+
+    // FR-P2-17. Computed once so the written, spoken and printed copies agree.
+    const stale = stalenessWarning(CORPUS?.planYear ?? PLAN_YEAR, new Date());
 
     send(res, {
       type: "answer",
       answer: turn.answer,
       // The written answer carries the source list; the spoken one must not.
-      spokenAnswer: turn.payload === null ? turn.answer : spokenAnswer(turn.payload),
+      spokenAnswer: withStaleness(
+        turn.payload === null ? turn.answer : spokenAnswer(turn.payload),
+        stale,
+      ),
       outcome: turn.outcome,
       claims: turn.payload?.claims ?? [],
       unanswered: turn.payload?.unanswered ?? [],
@@ -406,12 +631,17 @@ async function handleAsk(
       // marker resolves even when two chunks render the same citation.
       claimCitationNumbers:
         turn.payload === null ? {} : Object.fromEntries(citationNumbers(turn.payload, turn.retrieved)),
+      headline: turn.payload?.headline ?? null,
+      staleness: stale,
       latencyMs: turn.latencyMs,
     });
+    delivered = true;
 
     const turnId = await writeTurn(client, {
       question: turn.question,
-      planContext: `${CONTRACT_ID}-${planId ?? PLANS[0].id}`,
+      planContext: formatPlanRef(planRef ?? firstIndexedPlan()),
+      route: turn.route.paths.join("+"),
+      routeReason: turn.route.reason,
       chunkIds: turn.retrieved.map((chunk) => chunk.id),
       corpusSnapshotId: latestSnapshotId(),
       outcome: turn.outcome,
@@ -433,24 +663,53 @@ async function handleAsk(
       send(res, {
         type: "offer_callback",
         question: turn.question,
-        planContext: `${CONTRACT_ID}-${planId ?? PLANS[0].id}`,
+        planContext: formatPlanRef(planRef ?? firstIndexedPlan()),
+        // The record keeps the id; the member reads the name.
+        planName: planDisplayName(planRef ?? firstIndexedPlan()),
         documentsSearched: [...new Set(turn.retrieved.map((chunk) => chunk.documentId))],
         refusalTrigger: turn.refusalTrigger,
       });
     }
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     // FR-25: an upstream failure is an explicit error state with the human path,
     // never a silent degrade into an uncited answer.
-    send(res, {
-      type: "error",
-      message: "Something went wrong reaching the plan documents.",
-      detail: error instanceof Error ? error.message : String(error),
-    });
+    if (delivered) console.error(`turn instrumentation failed: ${detail}`);
+    else send(res, { type: "error", message: "Something went wrong reaching the plan documents.", detail });
   } finally {
     await client.end().catch(() => {});
     res.end();
   }
 }
+
+/**
+ * A revision with a broken environment must fail to start, not answer /api/plans
+ * and 503 every question. Constructing a client only checks the URL and the CA,
+ * so the plan query is what actually proves the database is reachable and holds
+ * an index. An empty result is a deploy with nothing to answer from. D-055.
+ */
+async function boot(): Promise<void> {
+  const client = connect();
+  await client.connect();
+  try {
+    const refs = await indexedPlans(client);
+    if (refs.length === 0) throw new Error("no plans are indexed; run npm run ingest");
+    PLANS = toPlanChoices(refs);
+    const freshness = await readCorpusFreshness(client, latestSnapshotId());
+    if (freshness !== null) {
+      CORPUS = {
+        documentsFetchedAt: freshness.documentsFetchedAt,
+        ingestedAt: freshness.ingestedAt,
+        planYear: freshness.planYear,
+      };
+    }
+    console.log(`indexed plans: ${PLANS.map((p) => `${p.contractId}-${p.id}`).join(", ")}`);
+  } finally {
+    await client.end();
+  }
+}
+
+await boot();
 
 server.listen(PORT, () => {
   console.log(`api listening on http://localhost:${PORT}`);

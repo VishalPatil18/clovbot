@@ -5,7 +5,7 @@ import type { AnswerPayload } from "../../src/types.ts";
 const VALID: AnswerPayload = {
   claims: [{ text: "Your specialist copay is $45.", citationIds: ["eoc-specialist-copay-01"] }],
   unanswered: [],
-  refusal: null,
+  refusal: null, headline: null,
 };
 
 describe("validateAnswerPayload [FR-32]", () => {
@@ -81,7 +81,7 @@ describe("findContainmentViolations [FR-32]", () => {
     const payload: AnswerPayload = {
       claims: [{ text: "Your copay is $45.", citationIds: ["sob-invented-99"] }],
       unanswered: [],
-      refusal: null,
+      refusal: null, headline: null,
     };
     expect(findContainmentViolations(payload, ["eoc-specialist-copay-01"])).toEqual(["sob-invented-99"]);
   });
@@ -93,8 +93,71 @@ describe("findContainmentViolations [FR-32]", () => {
         { text: "b", citationIds: ["ghost-2"] },
       ],
       unanswered: [],
-      refusal: null,
+      refusal: null, headline: null,
     };
     expect(findContainmentViolations(payload, []).sort()).toEqual(["ghost-1", "ghost-2"]);
+  });
+});
+
+describe("headline amount [FR-P2-13, D-064]", () => {
+  const base = {
+    claims: [{ text: "You pay $10 for a specialist visit.", citationIds: ["c1"] }],
+    unanswered: [],
+    refusal: null, headline: null,
+  };
+
+  it("accepts a payload with no headline, which is the prose path", () => {
+    const result = validateAnswerPayload(base);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.headline).toBeNull();
+  });
+
+  it("accepts a cited headline", () => {
+    const result = validateAnswerPayload({
+      ...base,
+      headline: { label: "Specialist visit, in-network", amount: "$10", citationIds: ["c1"] },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.headline?.amount).toBe("$10");
+  });
+
+  // The largest element on the screen cannot be the one uncited element. FR-05.
+  it("rejects a headline with no citation", () => {
+    const result = validateAnswerPayload({
+      ...base,
+      headline: { label: "Specialist visit", amount: "$10", citationIds: [] },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(" ")).toMatch(/headline/i);
+  });
+
+  it("rejects a headline with no amount", () => {
+    const result = validateAnswerPayload({
+      ...base,
+      headline: { label: "Specialist visit", amount: "", citationIds: ["c1"] },
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects a headline with no label, since a bare number is ambiguous", () => {
+    const result = validateAnswerPayload({
+      ...base,
+      headline: { label: "", amount: "$10", citationIds: ["c1"] },
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects a headline that is not an object", () => {
+    expect(validateAnswerPayload({ ...base, headline: "$10" }).ok).toBe(false);
+  });
+
+  it("rejects a headline on a refusal, which asserts and declines at once", () => {
+    const result = validateAnswerPayload({
+      claims: [],
+      unanswered: [],
+      refusal: { trigger: "C-01", explanation: "no" },
+      headline: { label: "Specialist", amount: "$10", citationIds: ["c1"] },
+    });
+    expect(result.ok).toBe(false);
   });
 });

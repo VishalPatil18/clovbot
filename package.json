@@ -1,13 +1,13 @@
 {
   "name": "clovbot",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web",
     "corpus:discover": "node --experimental-strip-types src/corpus/cli.ts discover",
     "corpus:fetch": "node --experimental-strip-types src/corpus/cli.ts fetch",
     "corpus:convert": "node --experimental-strip-types src/corpus/cli.ts convert",
@@ -21,7 +21,9 @@
     "build:web": "vite build",
     "reproduce": "node --env-file=.env --experimental-strip-types src/ops.ts reproduce",
     "insights": "node --env-file=.env --experimental-strip-types src/ops.ts insights",
-    "deploy:api": "./scripts/deploy-api.sh"
+    "deploy:api": "./scripts/deploy-api.sh",
+    "seed:members": "node --env-file=.env --experimental-strip-types src/members/cli.ts seed",
+    "ask:member": "node --env-file=.env --experimental-strip-types src/members/cli.ts ask"
   },
   "devDependencies": {
     "@types/node": "26.5.0",
@@ -35,6 +37,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "4.2.0",
+    "framer-motion": "13.2.0",
     "pg": "8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

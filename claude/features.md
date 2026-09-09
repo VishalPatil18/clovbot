@@ -777,3 +777,695 @@ Two defects found while scoping, not asked about: **FR-27 feedback recorded noth
 
 **Not verified, and not claimed:** the deployed URL answering, the throttled latency numbers, and the accessibility criteria D-040 deferred. All three need the deploy and a real device.
 
+
+---
+
+## Feature: Second contract indexed (P2 Stage 1)
+
+| Field            | Value                |
+| ---------------- | -------------------- |
+| Shipped          | 2026-09-08           |
+| Cycle            | 10                   |
+| Stage of plan.md | `plan-p2.md` Stage 1 |
+| Owner            | user + claude        |
+| Requirements     | `srs-p2.md` FR-P2-01 to FR-P2-06 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Which second benefit package | H8010-002 Classic (HMO), same county. Distinct contract, distinct network type (D-048) |
+| 2 | How far the plan-identity change goes | A typed contract-and-plan pair throughout (D-049) |
+| 3 | How contract-wide documents are scoped | A contract wildcard mirroring the existing plan wildcard (D-056) |
+| 4 | Golden set schema | `plan: "004"` becomes a `planRef` object on all 50 cases |
+| 5 | Where the offerable plan list comes from | Derived from what is indexed (D-055) |
+| 6 | Which H8010 documents are indexed | All three - SB, EOC, ANOC - full parity with H5141 |
+| 7 | The paired golden questions | Four numeric pairs plus one structural pair |
+| 8 | Regression fixture size | Trimmed two-page, pages 10 and 11 |
+| 9 | Synthetic provider directory for the new plan | Yes, same generator |
+| 10 | Whether to verify the HMO layout before speccing | Yes, fetched to scratch first |
+
+**Verified during requirements, not assumed:**
+
+- H8010-002 carries EOC and ANOC under the same catalog keys as H5141. Its Summary of Benefits is `..._nj_002-003_...`, the same two-plan side-by-side shape, titled "New Jersey 2026 Summary of Benefits Plans 002 and 003".
+- The extractor **fails** on it. Root cause measured and recorded in D-057.
+- Paired-question material, read from both documents: out-of-pocket maximum $6,000 against $9,250, emergency care $130 against $115, urgently needed $25 against $35. Specialist ($10) and primary care ($0) **collide** between H8010-002 and H5141-004 and prove nothing. The HMO has no out-of-network column at all, so the fifth pair differs in shape rather than in digits.
+
+**Defects found while scoping, not asked about:**
+
+- `search_hybrid` filters `c.contract_id = p_contract_id` while corporate pages and the formulary are stamped with the single `CONTRACT_ID`. A session scoped to H8010 loses all six corporate pages and the whole formulary.
+- `src/server.ts` composes the turn log's `planContext` from a module constant, so a turn answered under a second contract would be logged under the first.
+- `/api/ask` never checks that a `planId` is indexed. An unknown plan returns zero rows and reads as a model refusal.
+- `connect()` builds a `pg.Client` but never dials, so the boot check throws only on a missing `DATABASE_URL` or unreadable CA. The comment claiming a broken environment fails to start is wrong.
+- `CORPUS_COUNTY_ID` is forwarded to Cloud Run by `scripts/deploy-api.sh` and read by no code.
+- The 004/007 Summary of Benefits is fetched twice; the dedupe is keyed on document id, which differs per plan.
+- `CallbackPanel.tsx` shows a member the raw string "H5141-004" under a heading reading "Plan".
+
+### Phase 2 - Architecting
+
+Four forks, each taken to the user with options. Full reasoning in D-053 through D-057.
+
+1. **Corpus scope shape.** Chosen: one typed `src/corpus/scope.ts` imported by all four current sources of truth. *Rejected:* a JSON descriptor, which adds a hand-rolled validator and a second untypechecked source; CLI flags, where a `fetch` run disagreeing with its `discover` run is undetectable.
+2. **PlanRef blast radius.** Chosen: `PlanRef` types the scope; rows keep flat fields; `planContext` stays text written by one formatter. *Rejected:* structured turn-log columns, which leave every existing row null or require the string-splitting D-049 forbids; nesting the pair into all 59 call sites, which collides with Stage 3's citation work.
+3. **Plan list derivation.** Chosen: the set from `chunks` at boot, display names from a typed code map. *Rejected:* the catalog snapshot, falsified - `data/` is gitignored and absent from the image; a `plan_name` column, which encodes the invariant only by accident; a `plans` table, which is right if names ever vary per deployment.
+4. **The column-gutter fix.** Chosen: inherit plan identity and header positions only, compute both gutters on the page being rendered, and search backward only. *Rejected:* histogram detection, which introduces silent truncation on prose pages; requiring headers everywhere, which converts neither document.
+
+### Phase 3 - Product Specs
+
+**UX flow, changed lines only:**
+
+1. Member asks a plan-scoped question with no plan set. Chips appear, now three, grouped by contract.
+2. Member picks one. The answer is scoped to that contract and plan.
+3. The chosen plan persists as chrome with a change control. Picking a different one re-scopes later answers and leaves earlier ones as they were.
+4. A process question still answers with no chips, unchanged from D-022.
+
+**Frontend entities:** `PlanOption` gains `contractId`; the chip list groups by contract and renders the display name, never a raw id. The same name map feeds `CallbackPanel`.
+
+**Backend entities:** `PlanRef { contractId, planId, planYear }` in `src/types.ts`. `PLANS` is replaced by a boot-time query over `chunks` joined to a typed name map. `/api/plans` returns display names with refs; `/api/ask` takes a ref and validates membership, returning 400 on an unknown one.
+
+**DB schema:** no new tables and no new columns. `search_hybrid` is replaced in place so its contract predicate accepts the wildcard. Parameters and return columns are unchanged.
+
+**Corpus:** `src/corpus/scope.ts` holds county, state, year and a plan-reference list. Contract-wide documents carry an empty contract, mapped to the wildcard at ingest from the one `CONTRACT_WIDE` list.
+
+### Phase 4 - Tech Specs
+
+- **Language and runtime:** unchanged. TypeScript strict, Node 26, native type stripping.
+- **Scope descriptor:** a typed module. *Rejected:* JSON plus validator, per Phase 2; this project has no `zod`, so every parsed file costs a hand-rolled validator.
+- **Migration:** one file, `create or replace function search_hybrid`. *Rejected:* `drop`/`create`, unnecessary since the signature does not change; adding an index on `(contract_id, plan_year, plan_id)`, unjustified at three plans and a few thousand rows.
+- **Plan name source:** a typed key-to-label map, matching the existing `KIND_LABEL` pattern. *Rejected:* a `plans` table, deferred until names need to vary per deployment.
+- **Fixture:** a trimmed two-page bbox XHTML, following the existing `sob-page1` and `sob-page4` precedent. *Rejected:* the full 12-page document at 458KB, five times the weight for one bug.
+- **New dependencies:** none.
+
+**Known cost, stated rather than discovered later:** `contextPrefix` embeds `contractId-planId` in the stored body, so moving corporate and formulary chunks to the contract wildcard makes `existingChunkContent` see roughly 500 chunks as changed. They re-embed once.
+
+### Phase 5 - Planning
+
+Eight sub-stages, 22.5h against Stage 1's M band of ~7h. The overrun is entirely decisions taken after that estimate: D-049, D-053, D-056, D-057. Every sub-stage is a commit point with the suite green.
+
+| # | Sub-stage | Deliverable | Effort |
+| --- | --- | --- | --- |
+| 1.1 | Scope module and PlanRef | One typed scope, four env vars gone, golden set on `planRef` | 3h |
+| 1.2 | Contract wildcard | Corporate and formulary reachable from any contract | 2.5h |
+| 1.3 | Fetch H8010-002 | Second contract on disk, SB conversion failing for the predicted reason | 2h |
+| 1.4 | Column-gutter bug cycle | H8010 SB converts; all four plan columns extract | 3h |
+| 1.5 | Ingest and leakage check | H8010 answerable at the CLI, leakage asserted | 3h |
+| 1.6 | Derived plan list and validation | `/api/plans` from the index, `/api/ask` 400 on an unknown ref | 3h |
+| 1.7 | Web plan chrome | Three chips grouped by contract, names not raw ids | 3h |
+| 1.8 | Paired golden cases | Five cross-plan pairs, full eval green | 3h |
+
+**Ordering correction, found while implementing 1.1.** Contract-wide documents (corporate pages, the formulary, the pharmacy directory) are stamped with a single contract id, which no longer exists once scope is a plan list. 1.1 replaces it with `soleContractId()`, which throws when the corpus spans more than one contract. That is a guard, not a landmine - it fails at boot with a readable message - but it means **the server and ingest must be migrated off a single contract before 1.3 adds H8010 to the scope.** The wildcard work in 1.2 does exactly that for ingest; the server's ref threading moves from 1.6 into 1.2 for the same reason. Only the boot-time database derivation stays in 1.6, since it needs an index holding two contracts.
+
+**Operator actions between sub-stages:** apply `migrations/005_contract_wildcard.sql` after 1.2; run the corpus commands after 1.3 and again after 1.4; run `npm run ingest` and the leakage check after 1.5.
+
+**Cost found by the planner, not by the brief.** `existingChunkContent` and `readGeneratedContext` are both keyed by snapshot id. A new corpus snapshot therefore re-embeds the entire index rather than the ~500 wildcard chunks, and regenerates every orphan context prefix from a non-deterministic model - which moves the answers the golden set is pinned to. `context-prefixes.json` is copied forward in 1.3. That copy is safe only because the H5141 documents are unchanged; a changed document would keep a stale prefix.
+
+**Coverage gaps, decided rather than discovered:**
+
+- Cross-plan leakage is asserted by `scripts/plan-scope-check.ts` against a live index, plus a pure unit test of the scope predicate in CI. The live half is not in `npm test`, which is the residual.
+- FR-P2-05, plan switching not altering prior answers, is verified by hand. No browser or component harness exists and adding one is a dependency decision deferred.
+- `srs-p2.md` amended to 1.0.1 so FR-P2-02 and FR-P2-03 match D-054 and D-056 rather than contradicting them.
+
+### Phase 6 - Writing Code
+
+**1.1 Scope module and PlanRef.** `src/corpus/scope.ts` became the only declaration of what the corpus covers, replacing module constants in `src/corpus/cli.ts` and three `CORPUS_*` environment variables read independently by `src/rag/cli.ts`, `src/server.ts` and `eval/harness/run.ts`. The dead `CORPUS_COUNTY_ID` went with them. `PlanRef` landed in `src/types.ts`; `Snapshot` moved from a contract plus a `"004+007"` string to a plan list. All 50 golden cases moved to `planRef` objects, guarded by a test that refuses any case referencing a plan the scope does not declare.
+
+**1.2 Contract wildcard.** Contract-wide documents carry `contractId: "*"` alongside the existing plan wildcard, mapped from the one `CONTRACT_WIDE` list and keyed on document kind rather than on what discover stamped. `migrations/005_contract_wildcard.sql` replaces `search_hybrid`; everything below the `scoped` CTE is byte-identical to 002, verified by diff. `citationLabel` was one branch away from printing **"Plan \*"** to a member and now names the document instead.
+
+The server migration was pulled forward from 1.6, because 1.1's `soleContractId()` guard throws once a second contract enters scope and the server would have been broken between 1.3 and 1.6. `planContext` is now written from the reference that answered the turn rather than from a module constant, and an unindexed plan returns 400 instead of retrieving nothing and reading as a refusal.
+
+**1.3 Fetch.** 17 documents discovered, 17 fetched. `context-prefixes.json` was copied forward before ingest, without which 36 generated prefixes would have been regenerated from a non-deterministic model and moved the answers the golden set is pinned to. The H8010 Summary of Benefits failed conversion with exactly the error D-057 predicted.
+
+**1.4 The column-gutter bug cycle.** Fixed as designed: `PlanHeaders` carries plan identity and header positions and is inherited; `columnsFor` computes both gutters on the page being rendered. `nearestHeaders` searches backward only. All 20 pre-existing column assertions still pass, including the H5141 page-15 inheritance case and the full-width prose that must not be cut.
+
+**Found while fixing it:** `convertAll` passes through any entry whose status is not `ok`, so a document that failed conversion is never retried and a fixed converter needs a full re-fetch to prove itself. Named, not fixed - it is outside this cycle's diff.
+
+**1.6 Derived plan list.** `PLANS` is populated at boot from `select distinct contract_id, plan_id, plan_year from chunks`, with display names from a typed map that raises rather than letting a contract number reach a member. `boot()` now actually connects and queries: `connect()` only constructs a `pg.Client`, so the previous boot check threw on a missing `DATABASE_URL` or unreadable CA and nothing else. A wrong password or an unindexed database used to start cleanly and 503 every question.
+
+**1.7 Web plan chrome.** `PlanOption` carries its contract, `ask()` sends both halves, and chips key on the pair. The chosen plan persists in the header with a Change plan control that re-opens the picker; answers already in the transcript keep the plan they were answered under. `CallbackPanel` showed a member the raw string "H5141-004" under a heading reading "Plan" and now shows the plan name, with the id kept on the stored record for operators.
+
+**`web/` had never been typechecked.** The root `tsconfig.json` include listed `src`, `tests`, `eval` and `scripts`, and Vite strips types without checking them. `web/tsconfig.json` now extends the root with `dom` and `jsx`, and `npm run typecheck` runs both projects, so CI gates the browser code for the first time. Three errors surfaced, all CSS side-effect imports.
+
+**1.8 Paired golden cases.** Ten cases as five pairs, each the same question under two plan references with different expected answers. Four numeric, one structural. Guarded by tests asserting at least five paired questions exist, that no pair expects the same answer from both halves, and that at least one pair crosses contracts.
+
+Specialist and primary-care copays **collide** between H8010-002 and H5141-004 at $10 and $0, so the specialist pair uses H5141-007 instead. Had the pairs been written from the plan document rather than from the converted corpus, two of the five would have proved nothing while appearing to pass.
+
+**Verified against the live index, not asserted:**
+
+- **1,801 chunks** indexed across three plans and two contracts, up from 1,476. The whole index re-embedded because both `existingChunkContent` and `readGeneratedContext` key on snapshot id.
+- **The exit signal.** "What is my out of pocket maximum" returns **$6,000** under H8010-002 and **$9,250** under H5141-004, each cited to its own plan's documents.
+- **The contract wildcard end to end.** "What tier is atorvastatin on" answers under H8010-002 citing `Drug List 2026 · ANTILIPEMICS, FIBRATES`, with no wildcard rendered.
+- **Leakage.** `scripts/plan-scope-check.ts` checked 300 rows across 3 plans and 10 questions: **0 leaks**. Inverting its predicate by hand reported 300, so the check is capable of failing rather than vacuously green.
+
+**Eval, 60 cases, all enforced:**
+
+| Metric | v1.0.0 | This stage |
+| --- | --- | --- |
+| Faithfulness | 1.000 | **1.000** |
+| Structural compliance | 100% | **100%** |
+| Refusal rate | 13.3% | **10.0%** |
+| Bucket A | 27/30 (90.0%) | **37/40 (92.5%)** |
+| Bucket B | 8/8 | **8/8** |
+| Bucket C | 10/10 | **10/10** |
+| Adversarial | 1/2 | **1/2** |
+
+The failing set is **identical before and after** - A-03, A-18, A-28, ADV-01 - so nothing regressed and nothing new broke. All ten paired cases pass. Written to `eval/results/2026-09-08T1755Z.json`.
+
+**Still not verified, and not claimed:** FR-P2-05, that switching plans mid-session leaves earlier answers untouched, is verified by reading the code rather than by running the browser. There is no component harness, and adding one is a dependency decision the user deferred. The leakage check needs a live index and does not run in CI; the pure predicate behind it does.
+
+---
+
+## Feature: Structured formulary lookup and the router (P2 Stage 2)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-08                       |
+| Cycle            | 11                               |
+| Stage of plan.md | `plan-p2.md` Stage 2             |
+| Owner            | user + claude                    |
+| Requirements     | `srs-p2.md` FR-P2-07 to FR-P2-12 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How the formulary is parsed | Bounding boxes, reusing the Summary of Benefits machinery (D-058) |
+| 2 | Where typed rows live | A `drugs` table populated at ingest (D-060) |
+| 3 | What decides the route | A drug name present in the typed table (D-061) |
+| 4 | How a both-halves question is handled | Paths are additive, not exclusive (D-062) |
+| 5 | Where the router's decision is recorded | Two columns on `turns` (D-063) |
+| 6 | Where the routing cases live | Their own file, run inside `npm run eval` (D-063) |
+| 7 | How a member's word matches a table row | Normalized name tokens, longest match wins |
+| 8 | What to do about the chunker heading bug | Fix inside this stage as a nested bug cycle (D-059) |
+
+**Measured before speccing, not assumed.** The SRS listed formulary parseability as an open question; it is now closed. The document holds **2,468 drug rows across 105 categories** on 85 of its 123 pages. Layout text captures every row but drops **564 strength continuations and 379 requirement continuations**, and one line carries both halves at once, so a drug would read as carrying a quantity limit when it also requires step therapy. Bounding boxes place the columns at Tier x=375 and Requirements x=410 on every table page, which makes a continuation's column a fact.
+
+**Defect found while probing, live in v1.0.0.** `FORMULARY_CLASS` admits no lowercase letter and no parentheses, so `ANTILIPEMICS, HMG-CoA REDUCTASE INHIBITORS` and `DISEASE-MODIFYING ANTI-RHEUMATIC DRUGS (DMARDS)` never match. Ten statins are indexed and cited under the preceding class. Visible in `eval/results/2026-09-08T0947Z.json`, where atorvastatin cites `...antilipemics-fibrates-001`.
+
+### Phase 2 - Architecting
+
+Four forks, each taken to the user. Full reasoning in D-058 through D-063.
+
+1. **Parse path.** Bounding boxes. *Rejected:* per-page column detection from the repeated header, and indentation thresholds - both re-derive from whitespace what the PDF already carries, and D-057 had just shown that assumption failing in this filer's documents.
+2. **Storage.** A `drugs` table at ingest. *Rejected:* a snapshot JSON artefact, which reads from a gitignored directory absent from the container; extra columns on `chunks`, which already carries wildcard scoping semantics.
+3. **Router.** Deterministic, keyed on indexed drug names. *Rejected:* an LLM classifier, because a zero-tolerance gate cannot depend on a probabilistic component; rules-plus-model, which doubles the thing under test.
+4. **Both halves.** Additive paths. *Rejected:* single selection with chaining, which introduces a "looks incomplete" judgement; always-both, which leaves no selection to measure.
+
+### Phase 3 - Product Specs
+
+**UX flow, changed lines only:**
+
+1. A member names a drug. The typed row answers the tier, cited to the row.
+2. A member asks a rules question. RAG answers, unchanged.
+3. A member asks both in one sentence. Both answer, each claim carrying its own citation kind.
+4. A drug the table does not hold falls through to RAG rather than failing.
+
+**Backend entities:** `DrugRow { name, normalizedName, form, strengths, tier, requirements, category, snapshotId }`. `RouteDecision { paths, reason }`.
+
+**DB schema:** a `drugs` table keyed on snapshot and normalized name; `turns` gains nullable `route` and `route_reason`.
+
+**Citation shape:** a row cites as `Drug List <year> · <drug name>`. The category travels in the chunk's section for prompt context, but `shortSection` renders only the last segment, and the drug name is the right leaf anyway - the formulary's own index is alphabetical by drug, so the name is what a member looks up.
+
+### Phase 4 - Tech Specs
+
+- **Parser:** `pdftotext -bbox-layout`, reusing `parseBboxPages`. *Rejected:* a new PDF library, since poppler is already a prerequisite and the bbox reader already exists.
+- **Matching:** normalized name tokens, longest match wins. *Rejected:* first-token exact match, which misses multi-word and combination drugs; `pg_trgm` fuzzy matching, which turns an exact gate into a threshold.
+- **Storage:** Postgres, same connection and migration path as every prior stage.
+- **New dependencies:** none.
+
+### Phase 5 - Planning
+
+Planned inline rather than by dispatching `spec-planner`: the four architectural forks were resolved before planning began, leaving sequencing with no open questions to explore.
+
+| # | Sub-stage | Deliverable |
+| --- | --- | --- |
+| 2.1 | Formulary parser | 2,468 typed rows from a committed bbox fixture, continuations joined |
+| 2.2 | Chunker heading fix | Both missed classes detected; regression test pins them by name |
+| 2.3 | Drugs table and ingest | Rows persisted in the same `npm run ingest` run |
+| 2.4 | Router and logging | Deterministic selection, recorded on every turn |
+| 2.5 | Structured answer path | Tier answers cited to a row, additive with RAG |
+| 2.6 | Routing set and eval | 30 hand-labelled cases, confusion matrix in the eval report |
+| 2.7 | Re-ingest and verify | Full eval, no P1 or Stage 1 regression |
+
+### Phase 6 - Writing Code
+
+**2.1 Formulary parser.** `src/corpus/formulary.ts` reads typed rows from bounding boxes, taking column boundaries from each page's own `Drug Name / Drug Tier / Requirements/Limits` header rather than inheriting them - the D-057 rule, applied to a second parser. 2,468 rows across 105 categories from the real document, none uncategorized.
+
+**2.2 Chunker heading fix.** `FORMULARY_CLASS` now admits lowercase and parentheses. Widening it alone broke the existing tests, because the old pattern had been excluding drug rows **by accident** - a row contains "15mg", whose lowercase disqualified it. The accident was doing real work. The discriminator is now explicit and matches the typed parser's own rule: a drug row carries a tier digit in its own column and a class heading never does.
+
+**2.3 Drugs table.** `migrations/006_drugs_and_routing.sql` adds `drugs` and two columns to `turns`. Populated inside the existing `npm run ingest` run.
+
+**2.4 Router.** `src/rag/router.ts` selects paths from the drug names actually indexed. A member types "atorvastatin" where the row reads "atorvastatin calcium", so any leading run of the name's words counts and the longest run wins - which also keeps a combination product from being read as one of its components, whose tier differs.
+
+**2.5 Structured answer path.** A drug row is projected into the same shape a retrieved chunk has, so it travels the existing prompt, citation, validation and cite-or-refuse machinery unchanged. That satisfies FR-P2-11 by construction rather than by a parallel implementation. An exact row scores above the confidence floor, so the gate needed no special case.
+
+**2.6 Routing set.** 32 hand-labelled cases in `eval/golden/routing-set.json`, scored inside `npm run eval` with a confusion matrix, an aggregate floor and a separate zero-tolerance count.
+
+**Two bugs I introduced and caught before they shipped:**
+
+- The page-furniture rule was `/^(PA - Prior|mail-order|\d+)\b/`, which matched the strength continuation `10 mg` as a page number and silently collapsed three distinct strengths of the same drug into one row. A page number is a bare integer alone on a line. Caught by a duplicate-name check, not by the parse succeeding.
+- `ROUTING_FLOOR` was declared below the top-level call that used it, so the router block threw a `ReferenceError` after all 60 answer cases had already run.
+
+**Two routing labels were wrong, and the corpus said so.** R-29 and R-30 expected "ozempic" and "mounjaro" to fall through to prose search on the assumption they were not covered. Both are on this formulary at Tier 3 with prior authorization. The labels were corrected against the table; the router was right.
+
+**Verified against the live index:**
+
+- **2,468 drug rows** ingested, 105 categories, none uncategorized. 1,632 distinct normalized names.
+- `what tier is atorvastatin on` returns **Tier 1**, cited `Drug List 2026 · atorvastatin calcium`, route recorded as `structured`.
+- `is eliquis covered and how do I appeal a denial` returns **Tier 3 from the row and the Level 1 appeal process from the Evidence of Coverage**, each with its own citation. Route recorded as `structured+rag`. FR-P2-10 and D-062 verified end to end.
+- Route and reason are written to `turns` on every answer.
+
+**Router, 32 cases:** accuracy **1.000** against a 0.90 floor, **0** drug questions reaching prose search alone. Confusion matrix is a clean diagonal: 12 structured, 12 rag, 8 both.
+
+**Eval, 60 cases:** faithfulness **1.000**, structural **100%**, refusal **10.0%**, bucket A **37/40**, B **8/8**, C **10/10**. Identical to the Stage 1 run, same four failing cases, despite the heading fix re-sectioning the formulary and re-embedding 675 chunks. Both reports come from one `npm run eval`, which satisfies FR-P2-51 ahead of Stage 8.
+
+**Not delivered, by decision:** provider search. D-051 narrowed D-007 because the directory is ten invented rows, and exact search over invented data produces a confident wrong answer about a member's own doctor. Provider questions keep the v1 refuse-and-route behaviour. Stage 2's first acceptance criterion in `plan-p2.md` is therefore **not met, deliberately**, and is marked as such rather than ticked.
+
+**Known limits:** the router cannot match a misspelled drug name; the fallback is prose search rather than a failure. Two rows collapse on the primary key - the same albuterol strength listed three times as the generic of three different brands, identical in tier and requirements.
+
+---
+
+## Feature: Answer card and freshness (P2 Stage 3)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-08, partially            |
+| Cycle            | 12                               |
+| Stage of plan.md | `plan-p2.md` Stage 3             |
+| Requirements     | `srs-p2.md` FR-P2-13 to FR-P2-17 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Where the amount comes from | Extend the answer contract with a cited headline (D-064) |
+| 2 | Which freshness date | Both: document date to members, ingest date to operators (D-066) |
+| 3 | What decides card versus prose | The headline's presence, one rule one source (D-065) |
+| 4 | Where the staleness warning appears | On every answer, with the citation block (D-067) |
+| 5 | Card layout and type scale | Label, amount at 40px, sentence, source (D-068) |
+| 6 | Where the document date is stored | A `corpus_snapshots` table (D-066) |
+| 7 | Staleness wording | Names both years, the consequence and the action (D-067) |
+
+### Phase 2 - Architecting
+
+Nothing in the system knew what "the amount" was: the payload returns claim sentences. Server- or client-side regex extraction was rejected because "there is no $0 deductible" yields `$0` and a two-amount sentence yields whichever comes first - a wrong number rendered at 40px is the most legible possible way to be wrong.
+
+### Phase 3 and 4 - Specs
+
+`AnswerPayload` gains `headline: { label, amount, citationIds } | null`, validated by the same hand-rolled parser that guards claims. `corpus_snapshots` holds both dates. `stalenessWarning(planYear, now)` takes the clock as a parameter so the boundary is tested rather than waited for. No new dependencies.
+
+### Phase 5 - Planning
+
+Contract, prompt, storage, API, web, verification. Planned inline; the forks were settled before sequencing began.
+
+### Phase 6 - Writing Code
+
+**Delivered and verified:**
+
+- **The contract field.** `headline` is validated like a claim: rejected without a citation, without a label, without an amount, and rejected outright on a refusal. A bare figure never renders, because "$10" alone does not say copay, deductible or maximum.
+- **Both corpus dates.** `migrations/007_corpus_snapshots.sql`, written at ingest, read at boot. The manifest that holds the document date lives under `data/`, gitignored and absent from the container - the 2026-09-08 outage class, avoided by storing it.
+- **Staleness.** Fires when the wall-clock year passes the corpus plan year, compared in **UTC**: the container runs UTC while members are in Eastern, and a local comparison would move the boundary with the deployment. Erring up to five hours early only tells a member to check sooner. Attached to the citation block and appended to the spoken answer, so it survives print, copy and speech.
+- **Citation completeness.** `citationLabel` throws rather than rendering a citation missing a plan year or contract, and a test asserts the browser builds no label itself, so the server rule cannot be bypassed.
+- **Card markup and CSS**, shipped dormant. Amount at `--text-heading` (40px) in forest ink on cream: **12.10:1**, past AA large-text (3:1) and normal-text (4.5:1).
+
+**Not delivered: FR-P2-13, the amount as the dominant element.** See D-069. Filling the headline needs an instruction in the system prompt, and the instruction is not free. Measured at temperature 0 against an identical index:
+
+| | Without | With the headline rule |
+| --- | --- | --- |
+| Faithfulness | 1.000 | 0.989 |
+| Bucket A | 37/40 | 36/40 |
+| A-22 faithfulness | 1.0 | 0.6 |
+| A-31, a pharmacy question D-036 says the corpus cannot answer | refused | **answered** |
+
+Seven standing rules became eight, and rule 4 is the refusal rule. Rewording it as display-only, explicitly stating it changes nothing about what is refused, did **not** help; only removing it did, isolated by changing that one line.
+
+**Then a second, smaller finding.** With the rule gone but the field still named in the declared JSON shape, A-22's faithfulness sat at 0.667 rather than 1.0, retrieval unchanged. Naming a field the model is never asked to fill still perturbs it. The field was removed from the shape, leaving `src/rag/payload.ts` byte-identical to Stage 2.
+
+**Recorded for every future prompt change:** adding to `SYSTEM` can weaken the rules already there. Measure against the golden set before keeping it.
+
+**Final verification, prompt byte-identical to Stage 2:** faithfulness **1.000**, structural **100%**, refusal **10.0%**, bucket A **37/40**, B **8/8**, C **10/10**, router **1.000** with zero structured misses. Failing set is the four known cases. A-22 back to 1.0. Written to `eval/results/2026-09-08T2050Z.json`. 479 tests pass.
+
+**Not covered by an automated test:** the plan asks for snapshot tests on three answer shapes. Two of the three - multi-part and prose-only - are the shipped path and are covered. The single-amount card cannot be snapshot-tested because nothing produces a headline, and there is still no component harness; that remains the deferred dependency decision from Stage 1.
+
+---
+
+## Feature: Session UX cluster and chat panel layout (P2 Stage 4)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-08                       |
+| Cycle            | 13                               |
+| Stage of plan.md | `plan-p2.md` Stage 4             |
+| Requirements     | `srs-p2.md` FR-P2-18 to FR-P2-23 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How contextual follow-up chips are generated | Not built (D-070) |
+| 2 | Help panel shape | Inline expandable region, not a dialog (D-071) |
+| 3 | What history stores and how much | Rendered turns, capped at 50 (FR-P2-18) |
+| 4 | Chat panel layout | Pinned header and composer, thread scrolls between (D-073) |
+| 5 | `start over` versus clearing history | Separate actions (D-072) |
+| 6 | Copy format | Plain text: answer, sources, plan, document date |
+| 7 | Print scope | Whole transcript, chrome stripped, sources expanded |
+
+**The follow-up question was settled by Stage 3's measurement.** D-069 recorded that adding one rule to the answering prompt moved faithfulness from 1.000 to 0.989 and turned a required refusal into an answer. Generating contextual follow-ups from that prompt is the same move, so it was not made.
+
+**A spec tension worth naming.** FR-P2-23 asks for a help panel that is keyboard reachable and does **not** trap focus. A dialog is defined by trapping focus. The requirement is describing a disclosure region, and that is what was built.
+
+### Phase 2 - Architecting
+
+Four forks, all to the user. D-070 through D-073.
+
+### Phase 3 and 4 - Specs
+
+`web/src/history.ts` owns storage; `web/src/copy.ts` owns the clipboard format. Both are pure and testable without a browser: storage is reached through `globalThis` rather than `window`, so the module compiles in the Node project the tests run under. The panel becomes a three-row grid. No new dependencies.
+
+### Phase 5 - Planning
+
+Storage, copy format, layout, help and chips, print, verification. Planned inline.
+
+### Phase 6 - Writing Code
+
+**Delivered:**
+
+- **History.** Restored on mount, written on every settled turn rather than on unload, which mobile browsers do not reliably fire. Capped at 50, newest kept. Pending turns are never stored.
+- **Storage failure.** Reads and writes are wrapped; a private window that throws on access yields an empty history and nothing else changes. Malformed stored content is ignored, and a stored turn missing its citations is **dropped** rather than restored - a restored claim with no source is cite-or-refuse broken by a page reload.
+- **Clearing** removes the storage key itself, so the acceptance criterion is verified by inspecting storage rather than by the interface reporting success.
+- **`start over`** empties the thread and forgets the plan, so the next question re-asks lazily per D-022. Clearing saved conversations is a separate control.
+- **Copy** puts the question, every claim, every source in full, any gap, any staleness notice, the plan name and the document date on the clipboard as plain text.
+- **Print** drops the launcher, chips, composer, feedback and icon controls, releases the scrolling region so the whole transcript prints rather than one clipped screenful, and keeps the citation list, which is the point of printing.
+- **Help** is an expandable region with `aria-expanded` and `aria-controls`, reachable from the header icon and the chip. Tab passes through and out; nothing is trapped.
+
+**The layout fix.** `.panel` was one scrolling column, so the header, the human path and the composer scrolled away with the thread - FR-13 requires that path present in every state, and it was not present in the state where a member most needs it. The panel is now a three-row grid: pinned header, scrolling thread, pinned foot. `min-height: 0` on the scroll row is what lets a grid row actually shrink. The close control is an icon-only **X at the top right** on the title row, beside a help toggle, both 44px with screen-reader names, in a `flex-shrink: 0` corner so they do not move as the header reflows.
+
+**Verified:** `/api/plans` serves three plans and both corpus dates (`documentsFetchedAt` 2026-09-08, `ingestedAt` 2026-09-08). Web build succeeds. 503 tests pass.
+
+**Answer metrics unchanged by construction:** this stage's diff touches `web/`, tests and ADRs only. No server, prompt, migration or eval change, so faithfulness, the router and the golden set cannot have moved.
+
+**Not delivered:** contextual follow-up chips (D-070). `docs/ideas.md` P2-01 returns to unbuilt.
+
+**Not covered by an automated test:** history surviving an actual browser reload, and the print output's rendered appearance. The storage layer and the stylesheet are asserted; the browser behaviour needs the component harness that remains a deferred dependency decision from Stage 1.
+
+---
+
+## Feature: Interface pass on the assistant panel (P2 Stage 4b)
+
+| Field            | Value              |
+| ---------------- | ------------------ |
+| Shipped          | 2026-09-08         |
+| Cycle            | 14                 |
+| Stage of plan.md | not a plan stage; a user-requested interface pass |
+
+### Phase 1 - Requirements
+
+Thirteen items from the user. Seven were unambiguous and were implemented directly. Six needed a decision, and three of those turned out to conflict with something the product already guarantees.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Animation library | Framer Motion 13.2.0 (D-074) |
+| 2 | Overlay behaviour | Full overlay, focus held inside (D-075) |
+| 3 | A closed panel with text in the box | Keep the draft, restore on reopen (D-076) |
+| 4 | Progress messages | Follow real stages, timed fallback within a stage (D-077) |
+| 5 | Focus ring on the input | Drawn inside the field (D-078) |
+| 6 | Footer wording | Keep the medical line, add the coverage clause back |
+| 7 | Chip size | Look smaller, stay 44px tall |
+| 8 | Header | Two rows: title with icons, then one context line |
+
+**Three requests could not be done as written, and were resolved rather than silently reinterpreted:**
+
+- **"Make the focus ring go away when typing."** `:focus-visible` matches on **every** focus of a text field, mouse click included - browsers do this deliberately, because a text field must show where typing lands. So it cannot be keyboard-only, and removing it fails `NFR-A11Y-04` and a passing test. What made it ugly was a 3px hard rectangle sitting 2px *outside* a rounded pill. Drawn inside with `outline-offset: -2px` plus a soft halo, it becomes part of the control.
+- **"Backdrop, locked page, click outside to close."** That is a modal. Built as one, focus included: a dialog that visually covers the page must cover it for the keyboard too, or a Tab lands on controls hidden behind the dark layer. `FR-P2-23`'s no-trap rule governs the help region, not the panel.
+- **"Make the chips smaller."** `NFR-A11Y-02` requires 44px targets and a test enforces it. Side padding halved and type reduced, so they read as smaller; the height a finger has to hit is unchanged.
+
+### Phase 2 - Architecting
+
+D-074 through D-078.
+
+### Phase 3 to 5 - Specs and plan
+
+New modules: `web/src/progress.ts` for the staged messages. `App.tsx` gains the backdrop, the focus loop, the scroll lock and ownership of the draft. Planned inline; the forks were closed before sequencing.
+
+### Phase 6 - Writing Code
+
+| # | Request | Done |
+| --- | --- | --- |
+| 1 | Header decluttered, Open full page icon-only, tighter padding | Two rows; four icon controls at 44px with zero padding |
+| 2 | Talk to a person out of the header, icon on the bottom one | Moved to the pinned foot with a phone icon |
+| 3 | Help out of the bottom | Header only |
+| 4 | Shorter, smaller, centred footer line | 13 words, caption size, centred, 75% opacity |
+| 5 | Input, mic and Ask the same height | All three at 52px |
+| 6 | Staged progress messages | Five lines across two real stages, cross-faded |
+| 7 | Motion on panel and controls | Panel spring, backdrop fade, message cross-fade; the mic was already CSS-animated and reduced-motion aware, so it was left alone |
+| 8 | Copy as an icon beside the feedback buttons | Icon-only, right of the row, turns to a tick when copied |
+| 9 | Multiline to four lines, 3000 characters, no outer ring | Textarea, Enter sends and Shift+Enter breaks the line |
+| 10 | Thin, quiet scrollbars | 8px, transparent until hover or focus, styled for both engines |
+| 11 | Scroll the transcript while the answer is spoken | Root cause: the voice stage sat in the pinned foot at full height and squeezed the thread to a sliver. Capped at 42vh |
+| 12 | Backdrop, locked page, click outside to close | With the focus loop D-075 requires |
+| 13 | Consistent, lighter spacing, better borders and shadows | Panel shadow, tightened gaps throughout |
+
+**Cost, stated rather than buried:** the bundle went from **78KB gzipped to 119KB**, a 41KB increase, all Framer Motion. On a slow phone connection that is real, for an audience that mostly reads.
+
+**Verified:** 520 tests pass, both typecheck projects clean, web build succeeds. Twelve new assertions cover the focus loop, the scroll lock and its release, the three-way close, the preserved draft, reduced motion, the matched heights, the inside-drawn focus, the four-line cap, the hover-only scrollbars, the capped voice stage, one-control-per-job, and that the footer still says both things FR-15 needs.
+
+**Four tests were brittle rather than wrong.** Your reformatting had wrapped strings like `Reading this answer aloud` across lines, and the assertions matched exact whitespace. They now normalise whitespace instead. One real source bug was found this way: a second `prefers-reduced-motion` block made the first unreachable to anything reading the last occurrence, so the two were merged.
+
+---
+
+## Feature: Grouped long answers (readability pass)
+
+| Field            | Value                      |
+| ---------------- | -------------------------- |
+| Shipped          | 2026-09-08                 |
+| Cycle            | 15                         |
+| Stage of plan.md | not a plan stage; a readability pass |
+
+### Phase 1 - Requirements
+
+Brainstormed against measured evidence rather than an impression. On the last eval run: median answer 2 claims and 392 characters; 9 of 36 carry 3+ claims, 3 carry 5+. The longest, A-24 at 1,370 characters, is nine sentences at identical visual weight - the wall is uniformity, not a lack of bold and italic.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Markdown, or something else | Group claims by the source they cite (D-079) |
+| 2 | What to do about near-duplicate claims | Leave them visible; the application does not edit cited answers |
+
+**Markdown was ruled out on three counts**, all recorded in D-079: it contradicts FR-32, it needs the prompt change D-069 priced, and it renders model output as markup on a corpus of scraped text.
+
+### Phase 2 - Architecting
+
+Four alternatives weighed in D-079. Bulleting was rejected for reading as a sequence when the claims are not one; doing nothing was a genuine candidate at 8% of answers and was rejected because those answers are the process questions where a member most needs to find one part again.
+
+### Phase 3 and 4 - Specs
+
+`web/src/claims.ts` exposes `groupClaims(claims, citations)`, pure and testable without a browser. A group's heading is the section of its first citation, read off the label `citationLabel` already builds. No new dependency, no server change, no prompt change.
+
+### Phase 5 - Planning
+
+One stage: the pure function with its tests, then the renderer, then styling.
+
+### Phase 6 - Writing Code
+
+Grouping applies only at three or more claims, and only when neighbouring claims actually share sources - one group per claim is the same wall with headings on it, so that falls back to flat rendering. Claim order is never changed.
+
+**Nine assertions on the function**, covering the short-answer fallback, that neighbours sharing a source group together, that non-neighbours never merge, that a different set of sources starts a new group, that order is preserved, that an unknown source yields no heading, and that no claim is dropped or duplicated.
+
+**Three on the renderer**, including that it contains no `dangerouslySetInnerHTML` and no markdown library - FR-32 asserted at the render layer, not just intended.
+
+**Verified:** 555 tests pass, both typecheck projects clean, build succeeds.
+
+**Left alone deliberately:** A-24 opens with two claims saying nearly the same thing. Grouping makes that more obvious rather than less. Suppressing one would put the application in charge of which cited claims a member sees, which is a line this product has not crossed.
+
+---
+
+## Feature: Synthetic member records (P2 Stage 5)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-09                       |
+| Cycle            | 16                               |
+| Stage of plan.md | `plan-p2.md` Stage 5             |
+| Requirements     | `srs-p2.md` FR-P2-24 to FR-P2-29 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How a record field becomes citable | The Stage 2 projection, plus a third router path (D-080) |
+| 2 | Part D stage: derived or stored | Derived from spend against per-plan thresholds (D-081) |
+| 3 | What a record citation reads as | `Your member record · Claim CLM-0031 · What you owe` (D-082) |
+| 4 | Where the five members live | A typed seed module applied by a command (D-083) |
+
+### Phase 2 - Architecting
+
+D-080 through D-083. The shape was already proven: Stage 2 projected a drug row into the retrieved-chunk shape so it travelled the existing prompt, citation and cite-or-refuse path. A record field does the same, so cite-or-refuse binds record claims with no new code and **no prompt change** - D-069's cost is not paid again.
+
+### Phase 3 and 4 - Specs
+
+`migrations/008_member_records.sql` creates five tables. `src/members/` holds the typed seed, the derived stage, and the member-scoped queries. `RoutePath` gains `member`. `CitableKind` widens the citation layer only - a record has no byte floor, no snapshot and no plan year of its own, so `DocumentKind` stays a corpus concept. No new dependency.
+
+### Phase 5 - Planning
+
+Derived stage, schema, seed, queries and projection, router path, commands, verification.
+
+### Phase 6 - Writing Code
+
+**Verified live:**
+
+- `npm run ask:member -- --id=1 "what did my last claim cost"` returns **$210 billed, $200 plan paid, $10 owed**, cited `Your member record · Claim CLM-0031 · What you owe`.
+- The prior authorisation question returns **in review, no decision yet**, cited to `Prior authorisation PA-0114 · Status`.
+- **FR-P2-29 verified**: "what is my dental allowance left and what does the plan cover for dental" returns one answer citing the member record **and four plan documents**, each attributed to its own source.
+- `scripts/member-scope-check.ts`: 5 records, **0 leaks**, and inverting its predicate reports 100, so the check can fail.
+- The derivation covers all three drug stages across the five members, asserted rather than assumed.
+
+**Thresholds read from the corpus, not recalled:** H5141-004 deducts $150 on tiers 3-5, H5141-007 deducts $220, both reach catastrophic coverage at $2,100. **No seeded member is on H8010-002** - its Part D deductible is not stated in the converted Evidence of Coverage, and rule 6 forbids inventing it.
+
+**Two defects found in my own code:** `Promise.all` over one `pg` client issues overlapping queries, which pg deprecates and will remove in 9.0 - the reads are sequential now. And extending the corpus `DocumentKind` broke `BYTE_FLOORS`, which was the type system correctly refusing: a member record has no byte floor. Only the citation layer widened.
+
+**Eval: faithfulness 1.000, structural 100%, refusal 10.0%, bucket A 37/40, router 1.000 with zero structured misses.** Four known failures, nothing new. 596 tests pass.
+
+**One golden case was mis-specified and is now fixed.** PAIR-05a asked what an out-of-network specialist costs on the HMO and matched a phrasing. Across three runs the model gave three *different, all correct, all cited* answers: the network rule, the authorised exception, and the unavailable-specialist exception. The case now asserts the **absence of an out-of-network price**, which is the structural difference the pair exists to show, rather than one wording of it.
+
+**Eval noise, now quantified rather than assumed.** At temperature 0, two borderline cases moved between runs with no code change: PAIR-05a above, and A-21, where the judge scored 0 for a clause the model added - "before the drug will be covered" - that is not literally in the cited chunk. A-21 still passed its own assertion. This is the first time run-to-run variance has been measured, and it means a single failing run is not by itself proof of a regression.
+
+---
+
+## Feature: Email OTP authentication (P2 Stage 6)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-09                       |
+| Cycle            | 17                               |
+| Stage of plan.md | `plan-p2.md` Stage 6             |
+| Requirements     | `srs-p2.md` FR-P2-30 to FR-P2-41 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Is there a Resend key and a verified domain | Key added mid-cycle; `v-ai.org` verified; delivery confirmed |
+| 2 | Where Stage 6 ends and Stage 7 begins | Stage 6 builds the structural guard, Stage 7 adds the classifier |
+| 3 | Which member gets a real address | All five, one address each |
+| 4 | How a session is bound | A separate cookie, minted fresh on sign-in (D-084) |
+| 5 | How five members share one person's inbox | Five distinct addresses in the environment (D-086) |
+| 6 | What the code arrives from | `Clovbot <clovbot@v-ai.org>` - not the Clover name, per FR-30 |
+
+**One answer contradicted the schema and was resolved rather than forced.** "All five point at your address" collided with `members.email` being unique, and more importantly a code sent to one address cannot say which of five members is signing in. Five distinct addresses solve both.
+
+### Phase 2 - Architecting
+
+D-084 through D-086. The security-shaped decisions were taken as defaults rather than put to the user, and are recorded with their reasoning: scrypt over a fast hash, rotation over reuse, an identical reply for an unknown address, and expiry checked before correctness.
+
+### Phase 3 and 4 - Specs
+
+`migrations/009_member_login.sql` adds `login_codes` and `member_sessions`. `src/auth/` holds the OTP rules, the session lifetime rules, Resend delivery and the store - the first two pure and tested without a database or a network. Rate limiting reuses `rate_events` and `checkRate` unchanged. **No new dependency:** Resend is called over `fetch`.
+
+### Phase 5 - Planning
+
+OTP core, session rules, schema, delivery, store, routes, the structural guard, the web surface, verification.
+
+### Phase 6 - Writing Code
+
+**Verified over HTTP, not just in tests:**
+
+- A known and an unknown address return **byte-identical replies**, so the endpoint cannot be used to discover who is enrolled.
+- A wrong code, a reused code and a successful sign-in each return the right plain-language outcome.
+- `/api/session` reports the signed-in member; sign-out ends the row and the next call reports nobody.
+- **The guard holds both ways.** Signed out, "what did my last claim cost" refuses. Signed in, the same question answers **"$210, the plan paid $200, and you owed $10"**, cited `Your member record · Claim CLM-0031 · What you owe`. The turn log records `rag` and `rag+member` respectively.
+- A real server log contains **no six-digit sequence** anywhere.
+
+**The member id reaches the answer path from a session row and from nowhere else.** That is FR-P2-45's structural half, built now rather than in Stage 7, so the classifier Stage 7 adds cannot cause a disclosure by being wrong.
+
+**Eval: bucket A 37/40, router 1.000 with zero structured misses, four known failures, no new ones.** Faithfulness read 0.9722 because A-21 scored 0 again - the model adds "before the drug will be covered", which is not literally in the cited chunk. A-21 still passes its own assertion, this stage's diff does not touch `src/rag/`, and the same case behaved the same way in Stage 5. Recorded as a known answer-quality issue rather than chased.
+
+**Not done: the keyboard and screen-reader pass over the login flow.** It needs the browser tooling D-040 deferred to P3. `plan-p2.md` calls this the highest-friction surface in the product for a 65+ audience, so it is the most costly place for that gap to sit.
+
+---
+
+## Feature: Login detection and member answering (P2 Stage 7)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-09                       |
+| Cycle            | 18                               |
+| Stage of plan.md | `plan-p2.md` Stage 7             |
+| Requirements     | `srs-p2.md` FR-P2-42 to FR-P2-48 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | How the decision is made | Deterministic rules, like the guardrails and the router (D-087) |
+| 2 | What a gated turn is | A fourth outcome, `needs_login` (D-087) |
+| 3 | Signed in but the record has no such field | Refuse and offer a person, as cite-or-refuse requires |
+| 4 | Where the cases live and how the gate is expressed | Its own file, scored in `npm run eval` beside the router |
+
+### Phase 2 - Architecting
+
+D-087. Half of this stage was already built: Stage 6 made the member id reachable only from a session row, so the classifier decides what to **offer**, never what is **permitted**. A miss cannot disclose anything.
+
+### Phase 3 and 4 - Specs
+
+`src/auth/login-required.ts` holds one rule per record topic with an `unless` for the phrasing that looks the same but is answerable from documents. `eval/golden/login-set.json` holds 34 hand-labelled cases. The outcome union gains a fourth value at six sites. No new dependency, no prompt change, no migration - `turns.outcome` has no check constraint.
+
+### Phase 5 - Planning
+
+Classifier, outcome, turn wiring, web offer and resume, eval set and gate, verification.
+
+### Phase 6 - Writing Code
+
+**Verified over HTTP:**
+
+| | Outcome |
+| --- | --- |
+| Signed out, "what did my last claim cost" | `needs_login` - "That answer is in your own record, so I need to know who you are first." |
+| Signed out, "what is my specialist copay" | `answered` - $10, from the plan documents |
+| Signed in, "what did my last claim cost" | `answered`, cited `Your member record · Claim CLM-0031 · What you owe` |
+
+**Gates: 0 false negatives against zero tolerance, 0 false positives against a 95% floor**, over 34 cases split 17 and 17. Reported separately, never aggregated, because the two directions cost different things. Router 1.000, bucket A 37/40, faithfulness 1.000, four known failures.
+
+**The rules needed adjacency, not proximity.** Two bugs in the first draft, both from matching a possessive anywhere in the sentence: "what is my copay for a specialist **visit**" was gated as an appointment, and "what is the status of **my prior authorization**" was let through because the general-phrasing exception swallowed it. Requiring the possessive to sit directly on the noun fixes both, and both are now cases in the set.
+
+**A mistake I had already made once and repeated.** `LOGIN_FALSE_POSITIVE_FLOOR` was declared below the top-level call that reads it, so the eval ran all 60 cases and then threw - exactly the `ROUTING_FLOOR` fault from Stage 2, which is recorded in `learnings.md`. Reading my own learnings file would have been faster than rediscovering it.
+
+---
+
+## Feature: Auth-tier eval and deploy (P2 Stage 8)
+
+| Field            | Value                            |
+| ---------------- | -------------------------------- |
+| Shipped          | 2026-09-09, minus the deployed check |
+| Cycle            | 19                               |
+| Stage of plan.md | `plan-p2.md` Stage 8             |
+| Requirements     | `srs-p2.md` FR-P2-49 to FR-P2-53 |
+
+### Phase 1 - Requirements
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Topics the record cannot answer | Do not gate them; a login that ends in a refusal is worse |
+| 2 | Who deploys | The user; I prepare the runbook and verify everything else |
+| 3 | Public login exposure | Ship it, the rate limit is the control |
+| 4 | How to gate a P1 regression given measured variance | One case below the baseline, with the measurement recorded (D-088) |
+
+### Phase 2 to 5
+
+D-088. Bucket B splits: five cases now expect `needs_login` with their record topic; three stay refusals because no refill date, ID card or payment record is stored, so a login would not help. That is a stated narrowing of FR-P2-42 to fields actually held.
+
+### Phase 6 - Writing Code
+
+**One run now prints four reports**, satisfying FR-P2-51:
+
+| Report | Result |
+| --- | --- |
+| Answers | faithfulness 0.963, structural 100%, refusal 10.0%, A 37/40, B **8/8**, C 10/10 |
+| Router | 1.000, zero drug questions reaching prose alone |
+| Login detection | 34 cases, **0 false negatives**, **0 false positives** |
+| Regression gate | every P1 metric at or above its floor |
+
+Bucket B at 8/8 is the live proof of Stage 7: five member questions gated, three refused, all matching hand-pinned expectations.
+
+**CI already runs the eval, so the gates bind.** The harness exits non-zero on a routing breach, a login breach, or a P1 regression, and `.github/workflows/ci.yml` runs it on every pull request. `scripts/deploy-api.sh` now forwards the three login secrets inside the separator-safe loop - forgetting one would deploy a login that silently cannot send mail.
+
+**The faithfulness dips are not noise.** A-21 has scored 0 in three of six runs and PAIR-03b scored 0.667 once. Both add a clause the cited chunk does not state. The judge is doing its job; this is recorded as an answer-quality issue, and the gate was set to tolerate one such case rather than to hide them.
+
+**Not verified: FR-P2-53.** The deployed signed-out to signed-in to answered flow needs migrations 005 through 009 applied to production and a deploy, both of which are the user's to run. The runbook is in `README.md`. The same flow is verified locally over HTTP.

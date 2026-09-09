@@ -149,3 +149,41 @@ describe("extractPlanColumn, right-hand column", () => {
     expect(left).not.toEqual(right);
   });
 });
+
+describe("column geometry is per page, not inherited [D-057]", () => {
+  const hmo = readFileSync("tests/fixtures/corpus/live/h8010-sob-pages10-11.bbox.xhtml", "utf8");
+
+  // Page 11 carries a two-column benefits table with no "(Plan NNN)" header row,
+  // and the document alternates recto and verso margins. Inheriting page 10's
+  // absolute gutter cuts a word in half on page 11.
+  it("converts a headerless table page whose margins differ from the page above", () => {
+    expect(() => extractPlanColumn(hmo, "002")).not.toThrow();
+    expect(() => extractPlanColumn(hmo, "003")).not.toThrow();
+  });
+
+  it("keeps each plan's column separate on the headerless page", () => {
+    const left = extractPlanColumn(hmo, "002");
+    const right = extractPlanColumn(hmo, "003");
+    expect(left).toContain("$400 a year in LiveHealthy");
+    expect(right).toContain("$400 a year in LiveHealthy");
+    // Amounts belonging only to 002 must not bleed into 003's column.
+    expect(left).toContain("$135 copay");
+    expect(right).not.toContain("$135 copay");
+  });
+
+  // A table before any header cannot be attributed to plans the document has not
+  // introduced. Inheriting forward would guess; failing loudly is D-031's rule.
+  it("refuses a two-column money table appearing before the first header page", () => {
+    const money = (y: number): string =>
+      `<word xMin="60" yMin="${y}" xMax="90" yMax="${y + 8}">$10</word>` +
+      `<word xMin="400" yMin="${y}" xMax="430" yMax="${y + 8}">$20</word>` +
+      `<word xMin="200" yMin="${y}" xMax="300" yMax="${y + 8}">spanning</word>`;
+    const header = (y: number): string =>
+      `<word xMin="100" yMin="${y}" xMax="140" yMax="${y + 8}">(Plan</word>` +
+      `<word xMin="145" yMin="${y}" xMax="180" yMax="${y + 8}">004)</word>` +
+      `<word xMin="400" yMin="${y}" xMax="440" yMax="${y + 8}">(Plan</word>` +
+      `<word xMin="445" yMin="${y}" xMax="480" yMax="${y + 8}">007)</word>`;
+    const doc = `<page a="1">${money(100)}</page><page a="2">${header(50)}${money(100)}</page>`;
+    expect(() => extractPlanColumn(doc, "004")).toThrow(/no plan header anywhere|cannot be attributed/);
+  });
+});

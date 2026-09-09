@@ -11,7 +11,14 @@ export interface Claim {
   citationIds: string[];
 }
 
+export interface Headline {
+  label: string;
+  amount: string;
+  citationIds: string[];
+}
+
 export interface PlanOption {
+  contractId: string;
   id: string;
   name: string;
 }
@@ -24,10 +31,13 @@ export type AskEvent =
       answer: string;
       /** The answer without citation markers or the source list. Read aloud. */
       spokenAnswer?: string;
-      outcome: "answered" | "refused" | "upstream_failure";
+      outcome: "answered" | "refused" | "upstream_failure" | "needs_login";
       claims: Claim[];
       unanswered: string[];
       refusal: { trigger: string; explanation: string } | null;
+      headline: Headline | null;
+      /** Non-null once the calendar has passed the corpus plan year. FR-P2-17. */
+      staleness: string | null;
       citations: Citation[];
       /** Cited chunk id to display number, including ids merged onto one source. */
       claimCitationNumbers?: Record<string, number>;
@@ -39,6 +49,7 @@ export type AskEvent =
       type: "offer_callback";
       question: string;
       planContext: string;
+      planName: string;
       documentsSearched: string[];
       refusalTrigger: string | null;
     }
@@ -47,6 +58,7 @@ export type AskEvent =
 export interface CallbackDraft {
   question: string;
   planContext: string;
+  planName: string;
   documentsSearched: string[];
   refusalTrigger: string | null;
 }
@@ -81,17 +93,35 @@ export async function sendFeedback(turnId: string, resolved: boolean): Promise<b
   }
 }
 
+export interface PlansResponse {
+  plans: PlanOption[];
+  planYear: number;
+  corpus: { documentsFetchedAt: string; ingestedAt: string; planYear: number } | null;
+}
+
+/** What the corpus covers and when it was collected. FR-P2-16. */
+export async function fetchPlans(): Promise<PlansResponse | null> {
+  try {
+    const response = await fetch("/api/plans");
+    if (!response.ok) return null;
+    return (await response.json()) as PlansResponse;
+  } catch {
+    // The picker still works from the needs_plan event; only the date is lost.
+    return null;
+  }
+}
+
 /** Reads the server-sent stream one event at a time. */
 export async function ask(
   question: string,
-  planId: string | null,
+  plan: PlanOption | null,
   onEvent: (event: AskEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const response = await fetch("/api/ask", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ question, planId }),
+    body: JSON.stringify({ question, planId: plan?.id ?? null, contractId: plan?.contractId ?? null }),
     ...(signal === undefined ? {} : { signal }),
   });
 
@@ -119,4 +149,52 @@ export async function ask(
       }
     }
   }
+}
+
+export interface SessionState {
+  signedInAs: string | null;
+}
+
+/** FR-P2-37. Asked on load so the indicator is right in every state. */
+export async function fetchSession(): Promise<SessionState> {
+  try {
+    const response = await fetch("/api/session");
+    if (!response.ok) return { signedInAs: null };
+    return (await response.json()) as SessionState;
+  } catch {
+    return { signedInAs: null };
+  }
+}
+
+/** The reply is the same whether or not the address is enrolled. */
+export async function requestLoginCode(email: string): Promise<{ ok: boolean; error?: string }> {
+  const response = await fetch("/api/login/request", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (response.ok) return { ok: true };
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  return { ok: false, error: body.error ?? "Could not send a code. Try again in a moment." };
+}
+
+export async function verifyLoginCode(
+  email: string,
+  code: string,
+): Promise<{ ok: boolean; signedInAs?: string; error?: string }> {
+  const response = await fetch("/api/login/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    signedInAs?: string;
+    error?: string;
+  };
+  if (response.ok) return { ok: true, ...(body.signedInAs === undefined ? {} : { signedInAs: body.signedInAs }) };
+  return { ok: false, error: body.error ?? "That did not work. Ask for a new code." };
+}
+
+export async function signOut(): Promise<void> {
+  await fetch("/api/logout", { method: "POST" }).catch(() => undefined);
 }

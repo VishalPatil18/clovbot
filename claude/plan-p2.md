@@ -40,15 +40,15 @@
 - **Scope in:** Ingest a second plan benefit package - the HMO contract or a second PPO service area. Plan-scoped retrieval filtering. Plan switcher in the interface. Golden set extended with paired questions that differ only by plan.
 - **Scope out:** Full eleven-state expansion. That is P4.
 - **Acceptance criteria:**
-  - [ ] Both plans are indexed with distinct contract identifiers.
-  - [ ] The same question asked under each plan returns different, individually correct amounts, hand-verified against both source documents.
-  - [ ] Retrieval never returns a chunk from a plan other than the one in session context, asserted directly.
-  - [ ] Switching plans mid-session re-scopes subsequent answers and does not retroactively alter prior ones.
-  - [ ] The golden set contains at least five paired cross-plan questions.
+  - [x] Both plans are indexed with distinct contract identifiers. H5141-004, H5141-007 and H8010-002.
+  - [x] The same question asked under each plan returns different, individually correct amounts, hand-verified against both source documents. $6,000 against $9,250.
+  - [x] Retrieval never returns a chunk from a plan other than the one in session context, asserted directly. `scripts/plan-scope-check.ts`, 300 rows, 0 leaks, and shown capable of failing.
+  - [~] Switching plans mid-session re-scopes subsequent answers and does not retroactively alter prior ones. Built and read; not covered by an automated test, because no component harness exists.
+  - [x] The golden set contains at least five paired cross-plan questions. Five pairs, four numeric and one structural.
 - **Test plan:** Paired integration tests per question, asserting both correctness and difference. A negative test asserting cross-plan leakage never occurs - this is the one that matters, because leakage produces a confidently wrong copay.
 - **Effort:** M
 - **Exit signal:** Asking the same copay question under two plans returns two different correct numbers.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-08. Effort ran 22.5h against the M band's ~7h; the overrun is D-049, D-053, D-056 and D-057, all decided after this plan was written.
 
 ---
 
@@ -58,17 +58,17 @@
 - **Scope in:** Structured ingest of the provider directory and formulary into typed tables. Typed query functions for provider search and formulary tier lookup. A router selecting between structured lookup and RAG. Router decisions logged on every turn.
 - **Scope out:** Structured ingest of anything else. Cost-sharing tables stay in RAG for now.
 - **Acceptance criteria:**
-  - [ ] Provider search returns exact matches from typed data, not semantic approximations.
-  - [ ] Formulary tier lookup for a named drug returns the tier from a table row, with the row cited.
-  - [ ] The router logs its selection and reasoning on every turn.
-  - [ ] A held-out set of 30 routing cases achieves at least 90% correct selection.
-  - [ ] Misrouting a tier question to RAG is detected by test, since silent degradation to prose search is the exact failure D-007 exists to prevent.
-  - [ ] A question that is genuinely both - "is this drug covered and what is the appeal process" - is handled without dropping either half.
-  - [ ] Structured answers carry citations in the same format as RAG answers.
+  - [-] Provider search returns exact matches from typed data. **Not built, by decision (D-051):** the directory is ten invented rows, so exact search over it would produce a confident wrong answer about a member's own doctor. Provider questions keep the v1 refuse-and-route behaviour.
+  - [x] Formulary tier lookup for a named drug returns the tier from a table row, with the row cited. `Drug List 2026 · atorvastatin calcium`, Tier 1.
+  - [x] The router logs its selection and reasoning on every turn. `turns.route` and `turns.route_reason`.
+  - [x] A held-out set of 30 routing cases achieves at least 90% correct selection. 32 cases, 1.000.
+  - [x] Misrouting a tier question to RAG is detected by test. Counted separately and gated at zero, not folded into the aggregate.
+  - [x] A question that is genuinely both is handled without dropping either half. Verified live on "is eliquis covered and how do I appeal a denial".
+  - [x] Structured answers carry citations in the same format as RAG answers. A row is projected into the retrieved-chunk shape, so it travels the same path.
 - **Test plan:** A 30-case routing set with hand-labelled expected paths, run as a classification test with a reported confusion matrix. Separate correctness tests per path. The both-halves case is its own test.
 - **Effort:** L
 - **Exit signal:** A drug tier question returns a table row, a rules question returns prose, and the router's confusion matrix is on record.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-08. Provider search deliberately not delivered (D-051); everything else met.
 
 **Highest-uncertainty stage in P2.** D-007's rationale is strong on the split and silent on the routing, per comment T-3. Failing here early is the point of its position in the order.
 
@@ -81,17 +81,17 @@
 - **Scope in:** Answer card format - one-sentence direct answer, the amount in large type, source line beneath. Plan year and document version on every citation. Corpus ingestion date recorded and surfaced. Stale-document warning when the plan year rolls over.
 - **Scope out:** Appearance customization. That is P4.
 - **Acceptance criteria:**
-  - [ ] A cost answer renders the amount as the visually dominant element.
-  - [ ] Every citation displays document, plan year and section.
-  - [ ] A citation missing a plan year fails rendering rather than displaying incomplete, asserted by test.
-  - [ ] The corpus ingestion date is visible from the interface.
-  - [ ] With the system clock advanced past a plan-year boundary, a staleness warning appears.
-  - [ ] Card format degrades to readable prose when the answer is not a single amount.
-  - [ ] Accessibility scan stays clean on the new format, and the large amount still meets contrast requirements.
+  - [-] A cost answer renders the amount as the visually dominant element. **Not delivered (D-069):** filling the headline needs a system-prompt rule, and that rule measurably weakened the refusal rule - a pharmacy question D-036 says the corpus cannot answer began answering, and faithfulness fell to 0.989. Card markup and CSS ship dormant.
+  - [x] Every citation displays document, plan year and section. Already true since Stage 6; now asserted at the render layer too.
+  - [x] A citation missing a plan year fails rendering rather than displaying incomplete, asserted by test. Also asserted that the browser builds no label itself.
+  - [x] The corpus ingestion date is visible from the interface. Both dates recorded; the document date is served on `/api/plans`.
+  - [x] With the system clock advanced past a plan-year boundary, a staleness warning appears. Clock is a parameter, compared in UTC.
+  - [x] Card format degrades to readable prose when the answer is not a single amount. The degradation path is the shipped path.
+  - [x] Accessibility scan stays clean on the new format, and the large amount still meets contrast requirements. 12.10:1, computed.
 - **Test plan:** Snapshot tests on three answer shapes - single amount, multi-part, prose-only. Clock-manipulation test for staleness. Accessibility regression scan.
 - **Effort:** M
 - **Exit signal:** A copay answer reads as a card with the number prominent and its plan year visible.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [~] partial, 2026-09-08. Freshness, staleness and citation completeness delivered. The card is built but never populated: D-069 records the measurement that stopped it.
 
 ---
 
@@ -102,17 +102,18 @@
 - **Scope in:** Conversation history persisted locally, restored on return, clearable. Export, print stylesheet, and copy or email of an answer or transcript. Quick-reply chips and basic commands. Static help panel listing what can be asked.
 - **Scope out:** Server-side history. Without auth there is no identity to key it to.
 - **Acceptance criteria:**
-  - [ ] History survives a page reload and a browser restart.
-  - [ ] Clearing history removes it from storage, verified by inspection rather than by the interface reporting success.
-  - [ ] Print output renders the transcript legibly with citations intact and no interface chrome.
-  - [ ] Export produces a file containing the answers and their citations.
-  - [ ] Quick-reply chips meet the 44x44 target requirement.
-  - [ ] The help panel is reachable by keyboard and does not trap focus.
-  - [ ] History is absent when storage is unavailable, with no crash and no error surfaced to the member.
+  - [x] History survives a page reload and a browser restart. Restored on mount, written on every settled turn. Storage layer tested; the browser reload itself is not, for want of a component harness.
+  - [x] Clearing history removes it from storage, verified by inspection rather than by the interface reporting success. The test asserts the key is absent.
+  - [x] Print output renders the transcript legibly with citations intact and no interface chrome. Chrome dropped, the scroll region released, citations kept and page-break protected.
+  - [x] Export produces a file containing the answers and their citations. Browser print-to-PDF is the export path, decided in Stage 1's requirements pass.
+  - [x] Quick-reply chips meet the 44x44 target requirement. Asserted, as are the icon-only close and help controls.
+  - [x] The help panel is reachable by keyboard and does not trap focus. Built as a disclosure region rather than a dialog, since a dialog traps focus by definition (D-071).
+  - [x] History is absent when storage is unavailable, with no crash and no error surfaced to the member.
+  - [-] Quick-reply chips include contextual follow-ups. **Not delivered (D-070):** generating them needs the answering prompt, and D-069 measured that cost. The three commands ship; P2-01 returns to unbuilt.
 - **Test plan:** Persistence integration tests across reload. Print stylesheet snapshot. Storage-unavailable test simulating a private window, since that path silently breaks in most implementations.
 - **Effort:** M
 - **Exit signal:** You can close the tab, return, see your prior conversation, and print it with citations intact.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-08, minus contextual follow-up chips (D-070). Also fixed the panel layout: header and composer are pinned and the close control is an X at the top right (D-073).
 
 ---
 
@@ -122,16 +123,16 @@
 - **Scope in:** Schema and seed for five synthetic members: enrollment, benefit accumulators, past appointments, assigned providers, at least one claim and one prior authorization each. Member-scoped query functions. A CLI taking a member id and a question. Records labelled synthetic in schema and seed.
 - **Scope out:** Authentication, sessions, login detection. Stages 6 and 7. Row-level security is P3.
 - **Acceptance criteria:**
-  - [ ] `npm run ask:member --id=<n> "what is the status of my prior authorization"` returns a correct answer from that member's record.
-  - [ ] Answers cite the record and field, not a document.
-  - [ ] A combined question returns both a plan-document citation and a record citation, each attributed to its own source.
-  - [ ] Querying member 1 never returns data belonging to member 2, asserted directly.
-  - [ ] Every seeded record is deep enough to answer at least four distinct question types.
-  - [ ] The synthetic label is present in the schema and visible in any output.
+  - [x] `npm run ask:member -- --id=<n> "..."` returns a correct answer from that member's record. Verified for a claim and a prior authorisation.
+  - [x] Answers cite the record and field, not a document. `Your member record · Claim CLM-0031 · What you owe`.
+  - [x] A combined question returns both a plan-document citation and a record citation, each attributed to its own source. Verified live: one answer citing the record and four plan documents.
+  - [x] Querying member 1 never returns data belonging to member 2, asserted directly. `scripts/member-scope-check.ts`, 5 records, 0 leaks, and shown capable of failing.
+  - [x] Every seeded record is deep enough to answer at least four distinct question types. Claim, prior authorisation, allowances and assigned provider, asserted per member.
+  - [x] The synthetic label is present in the schema and visible in any output. A check constraint refuses a non-synthetic row, and every fact carries the label in its text.
 - **Test plan:** Per-member integration tests over the four question types. A cross-member isolation test, which is the precursor to the P3 row-level security work. A combined-source test asserting two citation kinds in one answer.
 - **Effort:** M
 - **Exit signal:** A terminal command answers "what did my last claim cost" from a seeded record, with the field cited.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-09. No seeded member is on H8010-002: its Part D deductible is not stated in the converted corpus and D-081 refuses to invent one.
 
 ---
 
@@ -141,20 +142,21 @@
 - **Scope in:** Resend integration. Six-digit code, short expiry, single-use, rate-limited. Session bound to a member row. Inline login inside the chat panel - email field, then code field, no page navigation. Session visibility indicator and one-tap sign out. Automatic expiry with a plain-language explanation.
 - **Scope out:** Row-level security and audit logging. Both are P3.
 - **Acceptance criteria:**
-  - [ ] Entering a seeded member's email delivers a six-digit code.
-  - [ ] The code is pasteable, satisfying WCAG 3.3.8, asserted by test.
-  - [ ] An expired code is rejected with a clear message.
-  - [ ] A reused code is rejected.
-  - [ ] Repeated requests for the same address are rate-limited.
-  - [ ] Login completes without navigating away, and the conversation is intact afterward.
-  - [ ] The signed-in indicator is visible in every state.
-  - [ ] Sign out clears the session, and a subsequent member question requires login again.
-  - [ ] Session expiry produces a plain-language message, not a silent failure.
-  - [ ] No credential or code appears in any log.
+  - [x] Entering a seeded member's email delivers a six-digit code. Resend accepted a real send on the verified `v-ai.org` domain.
+  - [x] The code is pasteable, satisfying WCAG 3.3.8, asserted by test. `autoComplete="one-time-code"`, numeric keypad, no paste handler, and spaces tolerated in the comparison.
+  - [x] An expired code is rejected with a clear message.
+  - [x] A reused code is rejected. Verified over HTTP.
+  - [x] Repeated requests for the same address are rate-limited. Ten per address and thirty per IP an hour, on the existing `rate_events` mechanism.
+  - [x] Login completes without navigating away, and the conversation is intact afterward.
+  - [x] The signed-in indicator is visible in every state.
+  - [x] Sign out clears the session, and a subsequent member question requires login again. Verified over HTTP: signed out the same question refuses, signed in it answers from the record.
+  - [x] Session expiry produces a plain-language message, not a silent failure.
+  - [x] No credential or code appears in any log. Asserted by test and checked against a real server log.
+  - [-] Keyboard-only and screen-reader pass over the login flow. **Not done.** It needs the browser tooling D-040 deferred to P3, and the plan calls this the highest-friction surface in the product for this audience.
 - **Test plan:** Integration tests over the full OTP lifecycle including both rejection paths. Log inspection asserting codes never appear. Keyboard-only and screen-reader pass over the login flow, since it is the highest-friction surface in the product for this audience.
 - **Effort:** M
 - **Exit signal:** You receive a code by email, paste it into the chat panel, and stay in the same conversation.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-09, minus the keyboard and screen-reader pass, which needs P3's browser tooling. Delivery is confirmed as accepted by Resend; arrival in the inbox is the user's to verify.
 
 ---
 
@@ -164,18 +166,18 @@
 - **Scope in:** Classifier deciding whether a question needs member data. Plain-language explanation of why login is required. Inline login offer. Automatic answering of the original question after successful login. Member-scoped answering with per-source citation. Cite-or-refuse applied to record-sourced claims.
 - **Scope out:** Nothing deferred. This completes the authenticated tier's behaviour.
 - **Acceptance criteria:**
-  - [ ] A member-specific question from a signed-out member offers login rather than refusing or guessing.
-  - [ ] A public question is never gated behind login, asserted across the bucket A golden set.
-  - [ ] A member-specific question is never answered without a session, asserted directly.
-  - [ ] The original question is answered automatically after login, without re-typing.
-  - [ ] Record-sourced claims carry record and field citations.
-  - [ ] Combined answers cite each source separately.
-  - [ ] Classifier accuracy is measured in both directions and reported, with false negatives - answering a member question without auth - treated as the severe failure.
-  - [ ] Cross-member access is impossible at the application layer, pending P3's database enforcement.
+  - [x] A member-specific question from a signed-out member offers login rather than refusing or guessing. A fourth outcome, `needs_login`, decided before retrieval.
+  - [x] A public question is never gated behind login. 17 public cases in the login set, zero gated, and bucket A unchanged at 37/40.
+  - [x] A member-specific question is never answered without a session, asserted directly. Structural since Stage 6: the member id comes from a session row and nowhere else.
+  - [x] The original question is answered automatically after login, without re-typing.
+  - [x] Record-sourced claims carry record and field citations. `Your member record · Claim CLM-0031 · What you owe`.
+  - [x] Combined answers cite each source separately. Verified in Stage 5 and unchanged.
+  - [x] Classifier accuracy is measured in both directions and reported, never aggregated. **0 false negatives** against a zero-tolerance gate, **0 false positives** against a 95% floor.
+  - [x] Cross-member access is impossible at the application layer, pending P3's database enforcement. `scripts/member-scope-check.ts`, 0 leaks.
 - **Test plan:** Both-direction classification tests over an extended golden set, with false negatives reported separately rather than folded into an aggregate accuracy number. Session-boundary integration tests. Auto-answer-on-return test.
 - **Effort:** M
 - **Exit signal:** Asking "what is my deductible balance" while signed out offers login, and answers itself once you are in.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Status:** [x] done, 2026-09-09. Verified over HTTP in both directions.
 
 ---
 
@@ -185,29 +187,29 @@
 - **Scope in:** Golden set extended with bucket B questions and both classifier directions. Router accuracy folded into the eval report. CI gates updated. Deployment of the full P2 surface.
 - **Scope out:** Nothing.
 - **Acceptance criteria:**
-  - [ ] The golden set covers bucket B drivers with expected record sources pinned by hand.
-  - [ ] Classifier accuracy in both directions is a reported and gated metric.
-  - [ ] Router accuracy from Stage 2 is reported in the same output.
-  - [ ] Faithfulness on the extended set stays at or above 0.90.
-  - [ ] CI fails on any regression in the P1 metrics.
-  - [ ] The deployed system completes a full signed-out to signed-in to answered flow.
+  - [x] The golden set covers bucket B drivers with expected record sources pinned by hand. Five now expect `needs_login` with their record topic; three stay refusals because no such field is stored, and a login would not help.
+  - [x] Classifier accuracy in both directions is a reported and gated metric. 0 false negatives against zero tolerance, 0 false positives against a 95% floor, 34 cases, never aggregated.
+  - [x] Router accuracy from Stage 2 is reported in the same output. 1.000, zero structured misses.
+  - [x] Faithfulness on the extended set stays at or above 0.90. Measured 0.963.
+  - [x] CI fails on any regression in the P1 metrics. A regression gate set one case below the measured baseline, with the measurement recorded beside it.
+  - [-] The deployed system completes a full signed-out to signed-in to answered flow. **Not verified.** Migrations and the deploy are the user's to run; the runbook is in `README.md`. The flow is verified locally over HTTP.
 - **Test plan:** Full eval against the deployed system. Regression assertion that P1 numbers did not degrade, since the added surface area is where regressions hide.
 - **Effort:** S
-- **Exit signal:** One eval run reports P1 and P2 metrics together, and all gates are green.
-- **Status:** [ ] not started · [ ] in progress · [ ] done
+- **Exit signal:** One eval run reports P1 and P2 metrics together, and all gates are green. Met: one run prints the answer report, the router report, the login report and the regression gate.
+- **Status:** [x] done, 2026-09-09, except the deployed verification, which waits on the user running the migrations and the deploy.
 
 ---
 
 ## Completion Checklist
 
-- [ ] Stage 1 - Second plan indexed
-- [ ] Stage 2 - Structured lookup and router
-- [ ] Stage 3 - Answer card and freshness
-- [ ] Stage 4 - Session UX cluster
-- [ ] Stage 5 - Synthetic member records
-- [ ] Stage 6 - Email OTP authentication
-- [ ] Stage 7 - Login detection and member answering
-- [ ] Stage 8 - Auth-tier eval and deploy
+- [x] Stage 1 - Second plan indexed
+- [x] Stage 2 - Structured lookup and router
+- [~] Stage 3 - Answer card and freshness (card not delivered, D-069)
+- [x] Stage 4 - Session UX cluster (follow-up chips not delivered, D-070)
+- [x] Stage 5 - Synthetic member records
+- [x] Stage 6 - Email OTP authentication (accessibility pass outstanding)
+- [x] Stage 7 - Login detection and member answering
+- [x] Stage 8 - Auth-tier eval and deploy (deployed verification outstanding)
 
 ---
 

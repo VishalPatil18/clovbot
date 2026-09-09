@@ -86,6 +86,14 @@ export function pdfToPlanColumn(path: string, planId: string): string {
   return extractPlanColumn(xhtml, planId);
 }
 
+/** Word-level coordinates, so a table's columns are read rather than inferred. */
+export function pdfToBbox(path: string): string {
+  return execFileSync("pdftotext", ["-bbox-layout", path, "-"], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
 export function pdfPageCount(path: string): number | null {
   const info = execFileSync("pdfinfo", [path], { encoding: "utf8" });
   const pages = /^Pages:\s+(\d+)$/m.exec(info)?.[1];

@@ -1,13 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import { parseCatalog, parseCounties, selectPlanDocuments } from "./discover.ts";
 import { fetchDocuments, isPathAllowed } from "./fetch.ts";
-import { extractHtmlText, meetsByteFloor, pdfPageCount, pdfToPlanColumn, pdfToText } from "./convert.ts";
+import { extractHtmlText, meetsByteFloor, pdfPageCount, pdfToBbox, pdfToPlanColumn, pdfToText } from "./convert.ts";
 import { buildSyntheticProviderDirectory } from "./synthetic.ts";
+import { CORPUS_SCOPE } from "./scope.ts";
 import { renderReport } from "./report.ts";
 import {
   catalogPath,
   documentsPath,
   latestSnapshotId,
+  bboxPath,
   markdownPath,
   mergeEntries,
   newSnapshotId,
@@ -24,13 +26,8 @@ const ORIGIN = "https://www.cloverhealth.com";
 const UA = "clovbot-casestudy/0.1 (Clover Health interview case study; contact via repository)";
 const DELAY_MS = 1_500;
 
-const COUNTY_ID = "34017";
-const ZIPCODE = "07302";
-const CONTRACT_ID = "H5141";
-const PLAN_IDS = ["004", "007"] as const;
-const PLAN_YEAR = 2026;
-const STATE = "NJ";
-const COUNTY_NAME = "Hudson County";
+const { countyId: COUNTY_ID, zipcode: ZIPCODE, planYear: PLAN_YEAR } = CORPUS_SCOPE;
+const { stateAbbrev: STATE, countyName: COUNTY_NAME } = CORPUS_SCOPE;
 
 /** Public prose pages. FR-01 includes corporate and investor-relations content. */
 const CORPORATE_PAGES = [
@@ -65,8 +62,8 @@ async function discover(): Promise<void> {
   const raw = await (await get(`${ORIGIN}/api/plans/document-search?county_id=${COUNTY_ID}&year=${PLAN_YEAR}`)).json();
   const plans = parseCatalog(raw, { planYear: PLAN_YEAR, stateAbbrev: STATE });
 
-  const documents: SourceDocument[] = PLAN_IDS.flatMap((planId) =>
-    selectPlanDocuments(plans, { contractId: CONTRACT_ID, planId }),
+  const documents: SourceDocument[] = CORPUS_SCOPE.plans.flatMap((ref) =>
+    selectPlanDocuments(plans, ref),
   );
 
   documents.push(...(await discoverFilerDocuments()));
@@ -75,7 +72,7 @@ async function discover(): Promise<void> {
       id: `corporate${path.replace(/\//g, "-")}`,
       kind: "corporate" as const,
       url: `${ORIGIN}${path}`,
-      contractId: CONTRACT_ID,
+      contractId: "",
       planId: "",
       planYear: PLAN_YEAR,
       language: "english" as const,
@@ -109,10 +106,10 @@ async function discoverFilerDocuments(): Promise<SourceDocument[]> {
     for (const { kind, pattern } of FILER_DOCUMENTS) {
       if (!pattern.test(target) || found.some((d) => d.kind === kind)) continue;
       found.push({
-        id: `${CONTRACT_ID}-${PLAN_YEAR}-${kind}`,
+        id: `${PLAN_YEAR}-${kind}`,
         kind,
         url: target,
-        contractId: CONTRACT_ID,
+        contractId: "",
         planId: "",
         planYear: PLAN_YEAR,
         language: "english",
@@ -152,8 +149,7 @@ async function fetchAll(): Promise<void> {
     createdAt: new Date().toISOString(),
     countyId: COUNTY_ID,
     planYear: PLAN_YEAR,
-    contractId: CONTRACT_ID,
-    planId: PLAN_IDS.join("+"),
+    plans: CORPUS_SCOPE.plans,
     entries: results.map((r) => r.entry),
   });
   report(results.map((r) => r.entry));
@@ -185,6 +181,8 @@ function convertAll(): void {
           ? pdfToPlanColumn(source, entry.planId)
           : pdfToText(source);
       writeFile(markdownPath(id, entry.documentId), text);
+      // The formulary's tiers are a table, and typed extraction needs coordinates.
+      if (entry.kind === "formulary") writeFile(bboxPath(id, entry.documentId), pdfToBbox(source));
 
       const convertedBytes = Buffer.byteLength(text, "utf8");
       updated.push({
@@ -204,11 +202,9 @@ function convertAll(): void {
     }
   }
 
-  for (const planId of PLAN_IDS) {
+  for (const ref of CORPUS_SCOPE.plans) {
     const synthetic = buildSyntheticProviderDirectory({
-      contractId: CONTRACT_ID,
-      planId,
-      planYear: PLAN_YEAR,
+      ...ref,
       countyName: COUNTY_NAME,
     });
     writeFile(markdownPath(id, synthetic.entry.documentId), synthetic.markdown);

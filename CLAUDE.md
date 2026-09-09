@@ -11,7 +11,7 @@ Read this before every prompt. It is the contract.
 
 1. **Spec before code.** No production code without a spec entry in `claude/srs.md` or `claude/features.md`. Asked to build something unspecced: stop, say which spec is missing, offer to write it.
 2. **TDD, no exceptions.** Failing test, then implementation, then refactor. Asked for implementation directly: push back once, then follow the decision.
-3. **Zero PHI in v1.** No member auth, no claims, no prior-auth status, nothing member-specific. A feature that needs to know who the member is goes to the v2 roadmap, not the build.
+3. **Zero real PHI, ever.** No real member data enters this system at any version. Member identity, claims and prior-auth status are permitted from v1.1 over synthetic records only, labelled synthetic in schema, seed and output. A feature that would need a real member's data does not get built. See D-047, which amends D-001.
 4. **Cite or refuse.** Every bot answer cites its source document, or it declines and offers a human. No third path.
 5. **Design forks go to the user.** Two or three real options, tradeoffs stated, my lean and why, then stop and wait. User decides. After the call, append an ADR to `claude/design-decisions.md`.
 6. **No invented facts** about Clover, Medicare, or CMS. Only `docs/research/` and the scraped corpus. Missing a fact: say so.

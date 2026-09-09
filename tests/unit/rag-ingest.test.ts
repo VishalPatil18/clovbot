@@ -28,8 +28,10 @@ const snapshot = (entries: ManifestEntry[]): Snapshot => ({
   createdAt: "2026-09-07T00:00:00.000Z",
   countyId: "34017",
   planYear: 2026,
-  contractId: "H5141",
-  planId: "004+007",
+  plans: [
+    { contractId: "H5141", planId: "004", planYear: 2026 },
+    { contractId: "H5141", planId: "007", planYear: 2026 },
+  ],
   entries,
 });
 
@@ -168,5 +170,45 @@ describe("planIngest [FR-01]", () => {
       markdown,
     );
     expect(new Set(chunks.map((c) => c.id)).size).toBe(chunks.length);
+  });
+});
+
+describe("contract-wide documents [D-056]", () => {
+  const wide = (kind: DocumentKind): ManifestEntry => entry(`x-2026-${kind}`, kind);
+
+  // Keyed on kind, not on what discover happened to stamp, so an older manifest
+  // converges on the same scoping as a fresh one.
+  it("scopes the formulary to every contract and plan", () => {
+    const { chunks } = planIngest(snapshot([wide("formulary")]), 2026, markdown);
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(chunk.contractId).toBe("*");
+      expect(chunk.planId).toBe("*");
+    }
+  });
+
+  it("scopes corporate pages the same way", () => {
+    // Corporate chunks below MIN_CORPORATE_CHARS are dropped, so this body is long
+    // enough to survive chunking and reach the scoping assertion.
+    const prose = () => `# About Clover\n\n${"Clover Health is a Medicare Advantage plan. ".repeat(12)}`;
+    const { chunks } = planIngest(snapshot([wide("corporate")]), 2026, prose);
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(chunk.contractId).toBe("*");
+      expect(chunk.planId).toBe("*");
+    }
+  });
+
+  it("leaves a plan document scoped to its own contract and plan", () => {
+    const document = entry("H8010-002-2026-summary_of_benefits", "summary_of_benefits", {
+      contractId: "H8010",
+      planId: "002",
+    });
+    const { chunks } = planIngest(snapshot([document]), 2026, markdown);
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(chunk.contractId).toBe("H8010");
+      expect(chunk.planId).toBe("002");
+    }
   });
 });

@@ -2,12 +2,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { markdownPath } from "../corpus/snapshot.ts";
 import type { DocumentKind, Snapshot } from "../corpus/types.ts";
 import { chunkDocument, type CorpusChunk } from "./chunk.ts";
-import { ALL_PLANS, isAllowedPlanYear } from "./provenance.ts";
+import { ALL_CONTRACTS, ALL_PLANS, isAllowedPlanYear } from "./provenance.ts";
 
 /** D-007 defers structured lookup to P2; as prose these are noise that swamps lexical search. */
 export const EXCLUDED_KINDS: DocumentKind[] = ["pharmacy_directory"];
 
-/** Documents covering the whole contract rather than one plan benefit package. */
+/**
+ * Documents belonging to no single plan or contract. Scoped by kind rather than by
+ * what discover stamped, so an older manifest converges on the same scoping. D-056.
+ */
 const CONTRACT_WIDE: DocumentKind[] = ["formulary", "corporate"];
 
 export interface RejectedDocument {
@@ -62,7 +65,7 @@ export function planIngest(
         text,
         kind: entry.kind,
         documentId: entry.documentId,
-        contractId: entry.contractId,
+        contractId: CONTRACT_WIDE.includes(entry.kind) ? ALL_CONTRACTS : entry.contractId,
         planId: CONTRACT_WIDE.includes(entry.kind) ? ALL_PLANS : entry.planId,
         planYear,
         snapshotId: snapshot.id,
